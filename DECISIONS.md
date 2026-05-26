@@ -218,4 +218,60 @@ R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를
 
 ---
 
+## 2026-05-26 — 시간 단축 옵션 전체 매트릭스 (vision dispatcher 후보)
+
+**문제:** 현재 ClaudeCliDispatcher가 매 호출 30-50초 (다운스케일 후 15-25초 예상). dogfooding 사이클 답답. "무료 + 빠른" 옵션 시장 조사.
+
+**옵션 (2026-05 시점 시장 fact-check):**
+
+| # | 옵션 | 비용 | inference 속도 | vision 정확도 | 무료 한도 | dispatcher 신규? | SPEC 룰 6 위반 |
+| -- | --- | --- | --- | --- | --- | --- | --- |
+| A | **claude CLI subprocess** (현재) | $0 (Pro/Max 구독 활용) | 15-25초 (다운스케일 후 추정) | ★★★★★ sonnet-4-6 | 구독 정액 안 | 기존 | 회색 (Anthropic 자체) |
+| B | **API key + sonnet-4-6** | ~$0.02/호출, 월 $10 (10회/일) | 10-15초 (추정) | ★★★★★ | 신규 가입 무료 크레딧만 | 기존 (한 줄 swap) | 위반 X |
+| C | **Gemini 2.5 Flash API** | $0 | 5-15초 (Google TPU, 추정) | ★★★★ Flash | **250 RPD**, 10 RPM, 250K TPM | 신규 GeminiDispatcher | **위반** |
+| C′ | Gemini 2.5 Flash-Lite | $0 | C와 비슷 | ★★★ Flash-Lite | **1,000 RPD**, 15 RPM | 같음 | **위반** |
+| D | **Groq + Llama 3.2 11B Vision** | $0 | **1-5초** (LPU, sub-200ms TTFT + 300-1000 tps) | ★★★ 11B 모델 | **1,000 RPD**, 30 RPM | 신규 GroqDispatcher | **위반** |
+| E | **Ollama 로컬 Llama 3.2 11B Vision** | $0 | 추정 15-40초 (M3 Pro 텍스트 8B = 28-35 tok/s; vision 11B는 더 느림, 정확 데이터 없음) | ★★★ | 무제한 (RAM 한정) | 신규 OllamaDispatcher | 위반 + Ollama 셋업 |
+
+**검증된 fact (sources):**
+- Gemini free tier RPM/RPD: ai.google.dev/gemini-api/docs/rate-limits
+- Groq Llama 3.2 Vision available: groq.com/blog (2024-09 출시), Llama 3.2 11B Vision $0.18/1M paid tier
+- Groq free tier: console.groq.com/docs/rate-limits — 30 RPM / 1000 RPD / 6K TPM
+- Groq LPU latency: console.groq.com/docs (sub-200ms TTFT, 300-1000 tps)
+- Apple Silicon Llama text inference: 28-35 tok/s on M2 Air for 3B, 28-35 tok/s on M3 Pro for 8B (llama.cpp/Metal)
+
+**검증 안 된/추정:**
+- Llama 3.2 11B Vision (Ollama 로컬)의 정확한 tok/s — vision 모델은 텍스트보다 느림이 일반적, 그러나 specific Apple Silicon benchmark는 검색 결과에서 못 찾음. 5-15 tok/s 추정.
+- C/D의 한국어 instruction 처리 정확도 — fixture 측정 없이는 모름. v0.1 dogfooding 자체가 측정대.
+
+**Trade-off 축:**
+
+| 축 | 가중치 | 평가 메모 |
+| --- | --- | --- |
+| 호출당 시간 (사용자 체감) | **높음** | 매일 5+회 사용에 사이클 길면 안 씀 |
+| 무료성 | **높음** | 사용자 명시 |
+| 정확도 | **중간** | dogfooding은 "버튼 어디" 수준이면 충분. fixture로 측정 필요 |
+| dispatcher 구현 시간 | 낮음 | trait 추상화 덕에 일관 |
+| SPEC 룰 6 위반 | 낮음 | 룰 의도("Anthropic 묶음")는 v0.1 구조 안정화 목적. dogfooding 마찰 해소가 더 우선 |
+| 신뢰성 | 중간 | 무료 RPD 도달 시 503/quota → fallback chain 필요 |
+
+**선택 후보:**
+- 1순위 추천 **D (Groq + Llama 3.2 11B Vision)**: 압도적 속도 (1-5초). 무료 1000 RPD. dogfooding 가속 효과 최대. 정확도 손실은 fixture로 측정 후 결정.
+- 2순위 **C (Gemini Flash)**: Google 인프라 안정성. 250-1000 RPD. vision multimodal 자연스러움.
+- 3순위 **A 유지 + B fallback**: claude CLI 그대로 + 무료 한도 안 들면 API key로 fallback (월 $10). 정확도 ★★★★★ 보존.
+
+**미선택 + 근거:**
+- E (Ollama 로컬): 인터넷 끊겨도 동작 매력적지만 (a) 모델 다운로드 4-12GB (b) vision 11B의 M Mac latency 미검증 (c) Ollama 셋업이 v0.1 외부 의존. v0.7 LLM Sovereignty 단계 본격 후보.
+- D′ (Groq + Llama 4 Scout/Maverick): vision 지원 정보 검색에서 명확 X. Llama 3.2 11B Vision만 vision 명확.
+
+**미해결:**
+- 한국어 vision 지시 처리 정확도 측정 (A vs C vs D). fixture 3개로 동일 input 보내 next_action 결과 비교. v0.1 dogfooding 진입 전 1회 측정 권장.
+- Fallback chain 설계: D 무료 한도 도달 → C로 fallback → A로 fallback. dispatcher trait의 `Vec<Box<dyn LLMDispatcher>>`로 chain 구현 가능 (1-2시간).
+
+**선택:** **사용자 결정 대기** (Groq vs Gemini vs claude 그대로).
+
+**되돌리기 비용:** 어느 옵션도 dispatcher trait 그대로 활용. 새 Dispatcher struct 하나 추가하고 lib.rs::analyze에서 한 줄 swap. 기존 ClaudeCliDispatcher/AnthropicDispatcher는 보존. 1-2시간 구현 + fixture 측정 30분.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
