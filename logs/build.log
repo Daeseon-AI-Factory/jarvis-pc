@@ -47,3 +47,6 @@
 2026-05-26T00:13:30Z | Phase 3.1 | commit | 4969cf4 + ef49841 (SCRATCHPAD dedupe).
 2026-05-26T00:14:00Z | Phase 3.2 | global hotkey | tauri-plugin-global-shortcut 2 plugin. register_default()로 Alt+Space → TRIGGER_EVENT emit. setup hook에서 등록.
 2026-05-26T00:14:15Z | Phase 3.2 | verify | cargo check 4.42s 통과. runtime은 npm run tauri dev + 단축키 누름 (사용자 manual).
+2026-05-26T00:14:30Z | Phase 3.2 | commit | ea1ef43: hotkey register + TRIGGER_EVENT emit.
+2026-05-26T00:15:00Z | Phase 3.3 | tray | tauri features=["tray-icon"]. install() (Trigger now / Settings / Quit). setup hook.
+2026-05-26T00:15:15Z | Phase 3.3 | verify | cargo check 7.63s 통과 (tray-icon 0.23 첫 빌드).

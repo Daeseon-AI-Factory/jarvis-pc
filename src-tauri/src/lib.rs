@@ -3,6 +3,7 @@ pub mod dispatcher;
 pub mod fixtures;
 pub mod hotkey;
 pub mod prompts;
+pub mod tray;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -145,6 +146,9 @@ pub fn run() {
         .setup(|app| {
             if let Err(e) = hotkey::register_default(app.handle()) {
                 tracing::error!(target: "hotkey", "register failed: {e}");
+            }
+            if let Err(e) = tray::install(app.handle()) {
+                tracing::error!(target: "tray", "install failed: {e}");
             }
             Ok(())
         })
