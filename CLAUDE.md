@@ -22,6 +22,8 @@ ScreenBridge — macOS 데스크톱 도구. AI가 시키는 추상적 지시를 
 - **STATE.md** — 현재 상태. 매 commit과 함께 갱신.
 - **SCRATCHPAD.md** — 막힌 곳, 사용자에게 물어볼 질문.
 - **logs/build.log** — append-only 결정 로그. 절대 truncate 금지.
+- **TROUBLESHOOTING.md** — 발견된 버그/이슈와 해결 과정. **모든 디버그 narrative가 가는 곳**. 학습 자산.
+- **DECISIONS.md** — trade-off 있는 선택의 기록. 무엇을 골랐고 왜, 무엇을 안 골랐고 왜.
 
 ## 회복력 규칙 핵심 (전체는 SPEC.md R1-R7)
 
@@ -32,6 +34,8 @@ ScreenBridge — macOS 데스크톱 도구. AI가 시키는 추상적 지시를 
 - **R5**: 함수 body가 `todo!()`이거나 컴파일 안 되면 commit 금지. Blockers에만 기록.
 - **R6**: 사용량 캡 가까울 때 새 큰 작업 시작 금지. atomic까지만 마무리, 아니면 stash.
 - **R7**: Phase 완료 시 commit 메시지 = `Phase X.Y COMPLETE: <설명>`.
+- **R8 (Troubleshoot-or-Forget)**: 디버그하는 동안 *어디서 막혔고 어떤 가설을 세웠고 무엇이 진짜 원인이었는지* 발견 즉시 `TROUBLESHOOTING.md`에 4-파트(증상/가설·시도/원인/해결+학습) 엔트리 추가. 미루지 말 것 — 다음 세션 자신에게 가장 값진 자산이다. 사후 정리 X, 디버그 끝나면 같은 commit에 포함.
+- **R9 (Trade-off Trail)**: 두 개 이상의 합리적 선택지가 있고 그 사이에서 골랐다면 `DECISIONS.md`에 (선택지/Trade-off/선택/근거/되돌리기 비용) 5-파트 엔트리 추가. crate 선택, 모듈 위치, 디자인 패턴, 에러 처리 방식, 모델/dispatcher swap 등 전부. "그냥 더 깔끔해서"는 근거 X — 시간/돈/유지보수/학습 중 하나 이상의 축으로 justify할 것.
 
 ## 절대 규칙
 
@@ -77,4 +81,6 @@ SCRATCHPAD.md 형식:
 ## 한 줄 요약
 
 PRODUCT.md = 왜. SPEC.md = 어떻게. STATE.md = 어디까지. SCRATCHPAD.md = 막힌 곳.
-이 네 개로 본인이 매 세션 자기 위치 파악.
+TROUBLESHOOTING.md = 무엇이 왜 깨졌고 어떻게 고쳤나. DECISIONS.md = 왜 이렇게 결정했나.
+
+처음 네 개로 위치, 뒤 두 개로 학습. 매 세션 자체 보전.

@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import {
+  PhysicalPosition,
+  PhysicalSize,
+  currentMonitor,
+  getCurrentWindow,
+} from "@tauri-apps/api/window";
 import {
   AnalysisResult,
   FeedbackValue,
@@ -8,7 +13,7 @@ import {
   recordFeedback,
 } from "../lib/ipc";
 
-const OVERLAY_SHOW_EVENT = "screenbridge://overlay/show";
+const OVERLAY_SHOW_EVENT = "sb-overlay-show";
 
 export default function Overlay() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -22,6 +27,17 @@ export default function Overlay() {
     listen<AnalysisResult>(OVERLAY_SHOW_EVENT, async (event) => {
       setResult(event.payload);
       setFeedback(null);
+      // Stretch to cover the active monitor *before* showing so the user
+      // never sees a 1×1 dot resize itself.
+      const monitor = await currentMonitor();
+      if (monitor) {
+        await win.setPosition(
+          new PhysicalPosition(monitor.position.x, monitor.position.y)
+        );
+        await win.setSize(
+          new PhysicalSize(monitor.size.width, monitor.size.height)
+        );
+      }
       await win.show();
       await win.setFocus();
       // Stop passthrough while the user is actively reading; clicks should
@@ -49,6 +65,8 @@ export default function Overlay() {
     const win = getCurrentWindow();
     await win.setIgnoreCursorEvents(true);
     await win.hide();
+    // Shrink back so the next show() doesn't get a "remembered" big rect.
+    await win.setSize(new PhysicalSize(1, 1));
     void logBackend("info", "overlay hidden");
   }
 

@@ -1,0 +1,164 @@
+# DECISIONS
+
+R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를 골랐다면 즉시 5-파트 엔트리.
+
+엔트리 형식:
+```markdown
+## YYYY-MM-DD — <결정 제목>
+**선택지:** A / B / C 각각 한 줄.
+**Trade-off:** 시간/돈/복잡도/유지보수/학습/리스크 등 어떤 축으로 평가했는지.
+**선택:** A.
+**근거:** 왜 A인지. "더 깔끔" 같은 모호한 근거 금지.
+**되돌리기 비용:** 미래에 B로 swap하면 무엇이 깨지나. 어떤 commit/파일 만져야 하나.
+```
+
+---
+
+## 2026-05-26 — Dispatcher: AnthropicDispatcher (API key) vs ClaudeCliDispatcher (CLI subprocess)
+
+**선택지:**
+- **A. AnthropicDispatcher** — `reqwest`로 `api.anthropic.com/v1/messages` 직접. `ANTHROPIC_API_KEY` 필요.
+- **B. ClaudeCliDispatcher** — `tokio::process::Command::new("claude")` subprocess + `--print` 모드. 사용자의 Claude Code Pro/Max 구독 사용.
+- C. ~~OpenAI / Gemini 등 다른 vendor~~ — PRODUCT.md "Anthropic API" 명시로 즉시 탈락.
+- D. ~~로컬 vision (Ollama)~~ — v0.7 LLM Sovereignty 단계, 너무 일찍.
+
+**Trade-off:**
+
+| 축 | A (API key) | B (claude CLI) |
+| --- | --- | --- |
+| 호출당 시간 | 10-20초 | 15-40초 (Node 부팅 + Read tool overhead) |
+| 호출당 비용 | ~$0.03 (vision sonnet) | $0 (구독 정액 안에서) |
+| 월 비용 (10회/일) | ~$10-15 | $0 |
+| 에러 가시성 | 401/403 명확 | subprocess silent fail 가능 |
+| 인증 복잡도 | `.env` 한 줄 | subprocess env_remove 필요, keychain OAuth |
+| 코드 단순도 | reqwest direct | subprocess + temp file + cleanup |
+| SPEC 일치도 | PRODUCT.md "Anthropic API" 직접 | "Anthropic 자체"지만 CLI subprocess 회색 |
+| dogfooding 사이클 영향 | 매번 -20초 빠름 | 매번 +20초 느림 |
+
+**선택:** **B (현재 활성)**.
+
+**근거:**
+- v0.1은 dogfooding 검증 단계. 매일 5회 자발적 사용이 v0.2 진입 조건 → 월 ~150회 × $0.03 = $4.5. 적지만 user 입장에서 "추가 결제 등록"이라는 마찰이 사용 빈도를 줄일 수 있다. **습관 형성에 결제 마찰 = 치명적**.
+- 사용자가 이미 Claude Code 구독 보유. sunk cost를 활용하는 게 합리적.
+- 시간 trade-off (+20초)는 "이미지 다운스케일"로 일부 보상 가능 (v0.2 후보 1순위).
+- B의 silent fail 리스크는 `dispatcher` target tracing 로그 (begin / ok / fail)로 완화 — 이번에 dispatcher.rs에 박은 패턴.
+
+**되돌리기 비용:** 1줄. `lib.rs::analyze()`의 `dispatcher::ClaudeCliDispatcher::new()`를 `dispatcher::AnthropicDispatcher::new()?`로 치환만 하면 swap. 두 dispatcher 모두 `LLMDispatcher` trait 구현해 둠. `AnthropicDispatcher` 코드는 dispatcher.rs에 그대로 살아있음 (제거 X) — 미래 swap을 위한 단가.
+
+**미해결 관심사:** B는 매 호출당 Node 부팅 (~1-2초)이 누적. v0.2에 `claude` CLI를 daemon 모드로 띄워두고 stdin pipe로 재사용하는 방안 검토 (`--input-format stream-json`).
+
+---
+
+## 2026-05-26 — 통합 테스트 위치: `screenbridge/tests/` vs `src-tauri/tests/`
+
+**선택지:**
+- **A. SPEC tree 그대로** — `screenbridge/tests/dispatcher_tests.rs` (프로젝트 루트).
+- **B. Cargo 표준 위치** — `src-tauri/tests/dispatcher_tests.rs` (crate 루트).
+
+**Trade-off:**
+
+| 축 | A (SPEC 위치) | B (Cargo 표준) |
+| --- | --- | --- |
+| `cargo test --manifest-path src-tauri/Cargo.toml` 자동 발견 | ❌ 못 찾음 | ✅ |
+| SPEC.md 디렉토리 트리 일치 | ✅ | ❌ (SPEC 위반 1건) |
+| 추가 cargo config 필요 | yes (workspace 등 셋업) | no |
+
+**선택:** **B (Cargo 표준)**.
+
+**근거:** `cargo test`가 자동으로 찾는 위치 = `<crate>/tests/`. A는 workspace로 묶거나 별도 path 지정해야 발견 — 학습 비용 ↑ + maintenance 비용 ↑. SPEC tree 위반 1줄이지만 SPEC.md의 의도("integration test 한 묶음")는 지켜짐. SCRATCHPAD에 위반 1줄 기록.
+
+**되돌리기 비용:** mid. `mv src-tauri/tests/dispatcher_tests.rs tests/` + Cargo.toml에 `[[test]] path = "../tests/dispatcher_tests.rs"` 추가. 그러나 별 이득 없으므로 되돌릴 일 없음.
+
+---
+
+## 2026-05-26 — 에러 enum: `thiserror` crate vs 손수 impl
+
+**선택지:**
+- **A. `thiserror`** — `#[derive(thiserror::Error)] enum FixtureError { #[error("io: {0}")] Io(#[from] std::io::Error), ... }`.
+- **B. 손수 impl** — `enum FixtureError { Io(...) }` + `impl Display` + `impl Error` + `impl From<...>` 직접.
+
+**Trade-off:**
+
+| 축 | A | B |
+| --- | --- | --- |
+| 코드 라인 | 5-6줄 | 25-30줄 (boilerplate) |
+| crate dep 추가 | +1 | 0 |
+| 학습 가치 | 매크로 magic 뒤에 가려짐 | impl 자체가 학습 |
+
+**선택:** **B (손수 impl)**.
+
+**근거:** SPEC v0.1은 학습 dogfooding 우선. `thiserror`가 깔끔하긴 한데 매크로가 모든 trait impl을 자동 생성해서 "Display vs Error trait 차이"가 안 보임. v0.1 단계에선 boilerplate 한 번 손으로 써보는 게 미래 디버깅 자산. SPEC 룰 4 ("새 디렉토리/패키지 임의 생성 금지")의 정신과도 일치.
+
+**되돌리기 비용:** 작음. 각 error enum에 `#[derive(thiserror::Error)]` 추가 + variant마다 `#[error("...")]` annotation. Cargo.toml에 `thiserror = "1"`. 30분.
+
+---
+
+## 2026-05-26 — Settings UI v0.1 scope: 풀 UI vs 트레이 한 항목
+
+**선택지:**
+- **A. 풀 Settings 윈도우** — 단축키 재바인딩 / 세션 wipe / 자동 시작 / 모델 선택.
+- **B. 트레이 메뉴 "Open sessions folder" 한 항목만**.
+
+**Trade-off:**
+
+| 축 | A | B |
+| --- | --- | --- |
+| v0.1 작업 시간 | ~2-3시간 | 5분 |
+| dialog plugin 의존 (wipe confirm) | 필요 | 불필요 |
+| dogfooding 사이클 단축 효과 | 미미 (이 단계에서 단축키 바꿀 일 거의 없음) | OK |
+| 사용자 입장 기능 누락 | 단축키 충돌 시 불편 | "필요해지면 직접 코드로" |
+
+**선택:** **B**.
+
+**근거:** "v0.1 = dogfooding 진입까지 최단거리"가 SPEC.md의 정신. 자기 자신이 사용자라 단축키 충돌 시 코드 한 줄 (`hotkey.rs::register_default`)에서 바꾸는 게 더 빠름. wipe는 Finder에서 직접 폴더 삭제. **풀 Settings UI는 v0.2의 진입 조건(주 5회 자발적 사용)을 만난 다음 합리**.
+
+**되돌리기 비용:** small. `tauri-plugin-dialog` 추가 + Settings 윈도우 컴포넌트. SPEC.md Phase 6.3에 명시되어 있어 v0.2 첫 작업.
+
+---
+
+## 2026-05-26 — Overlay 윈도우 생성 시점: tauri.conf static vs WebviewWindowBuilder dynamic
+
+**선택지:**
+- **A. `tauri.conf.json`에 정적 정의** — `visible:false`로 부팅 시 생성, listen 등록도 부팅 시.
+- **B. dynamic 생성** — 첫 analyze 결과 받았을 때 `WebviewWindowBuilder`로 생성.
+
+**Trade-off:**
+
+| 축 | A | B |
+| --- | --- | --- |
+| 부팅 비용 | webview 두 개 띄움 | trigger 하나 |
+| 첫 결과 표시 latency | <100ms | 500ms+ (window 생성 + React mount + listen 등록) |
+| 코드 복잡도 | 낮음 (선언적) | 중간 (state 관리, race condition 가능) |
+| macOS visible/fullscreen 충돌 (TROUBLESHOOTING 21:55 참조) | 노출됨 | 회피 가능 |
+
+**선택:** **A**.
+
+**근거:** 첫 결과 표시 latency가 사용자 경험에 더 큰 영향. dynamic은 `analyze` 결과 받은 직후 윈도우 만들고 React mount까지 기다리면 추가 500ms+ — claude CLI 35초 호출 끝나고 한 번 더 0.5초 = 체감 더 답답. macOS 충돌은 1회성 디버그로 해결됨 (TROUBLESHOOTING 참조).
+
+**되돌리기 비용:** mid-high. `tauri.conf.json` overlay 윈도우 제거 + `Overlay.tsx` listen 위치를 backend로 옮김 + dynamic creation 로직 추가. ~1시간.
+
+---
+
+## 2026-05-26 — Trigger Panel result 표시: panel 안 vs overlay 전환
+
+**선택지:**
+- **A. Trigger Panel 안에 result 표시** (Phase 4.2 상태).
+- **B. Panel 닫고 별도 overlay에 표시** (Phase 5 상태, 현재).
+
+**Trade-off:**
+
+| 축 | A | B |
+| --- | --- | --- |
+| 좌표 박스 표시 | 어려움 (panel은 작은 윈도우) | 자연스러움 (fullscreen transparent) |
+| 사용자 focus | panel 자체에 stuck | 화면 + 가이드 동시 |
+| 코드 복잡도 | 낮음 | 중간 (두 윈도우 + 이벤트) |
+
+**선택:** **B**.
+
+**근거:** PRODUCT.md "AI 지시 ↔ 내 실제 화면 사이 번역 레이어"의 핵심 가치 = *실제 화면 위에 가이드 표시*. 좌표 박스는 fullscreen transparent overlay 없이는 불가. A는 핵심 가치 자체를 못 살림.
+
+**되돌리기 비용:** 매우 높음 — 사실상 v0.1 자체를 못 만드는 결정. 본 결정은 *revertable이 아닌* SPEC.md Phase 5의 전제.
+
+---
+
+(다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

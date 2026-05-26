@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "trigger",
@@ -32,7 +33,8 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": false,
-        "fullscreen": true,
+        "width": 1,
+        "height": 1,
         "shadow": false
       }
     ],

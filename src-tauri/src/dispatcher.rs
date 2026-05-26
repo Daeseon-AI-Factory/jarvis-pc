@@ -196,6 +196,100 @@ impl LLMDispatcher for AnthropicDispatcher {
     }
 }
 
+/// Free-via-subscription alternative to AnthropicDispatcher: shells out to the
+/// `claude` CLI (Claude Code) in --print mode. Reuses the user's Pro/Max
+/// subscription so no API key is needed; ANTHROPIC_API_KEY is explicitly
+/// unset before spawn so a stale key in the shell env doesn't override the
+/// subscription credential.
+pub struct ClaudeCliDispatcher {
+    binary: String,
+    model: String,
+}
+
+impl ClaudeCliDispatcher {
+    pub fn new() -> Self {
+        Self {
+            binary: "claude".to_string(),
+            model: VISION_MODEL.to_string(),
+        }
+    }
+
+    pub fn with_binary(mut self, b: impl Into<String>) -> Self {
+        self.binary = b.into();
+        self
+    }
+}
+
+#[async_trait]
+impl LLMDispatcher for ClaudeCliDispatcher {
+    async fn analyze(
+        &self,
+        image_bytes: Vec<u8>,
+        instruction: String,
+    ) -> Result<AnalysisResult, DispatchError> {
+        // 1. Drop the PNG to a temp file. claude's Read tool wants a real
+        //    filesystem path — there's no inline base64 path on the CLI.
+        let temp_dir = std::env::temp_dir();
+        let temp_name = format!("sb-{}.png", uuid::Uuid::new_v4());
+        let temp_path = temp_dir.join(&temp_name);
+        tokio::fs::write(&temp_path, &image_bytes)
+            .await
+            .map_err(|e| DispatchError::Other(format!("temp png write: {e}")))?;
+
+        let temp_path_str = temp_path.to_string_lossy().to_string();
+        let prompt = format!(
+            "다음 화면 캡처 이미지를 Read 도구로 읽고, 그 아래에 적힌 AI 지시를 현재 사용자 화면에 맞게 번역해서 JSON으로 응답해.\n\n이미지: {}\n\nAI 지시:\n{}",
+            temp_path_str,
+            instruction.trim()
+        );
+
+        tracing::info!(
+            target: "dispatcher",
+            "claude-cli analyze begin: image_bytes={}, instr_len={}, model={}",
+            image_bytes.len(),
+            instruction.len(),
+            self.model
+        );
+
+        let allow_dir = temp_dir.to_string_lossy().to_string();
+        let result = tokio::process::Command::new(&self.binary)
+            // The shell's ANTHROPIC_API_KEY (which is currently invalid)
+            // would otherwise force claude into API-key mode and 401.
+            .env_remove("ANTHROPIC_API_KEY")
+            .arg("--print")
+            .arg("--model").arg(&self.model)
+            .arg("--output-format").arg("text")
+            .arg("--system-prompt").arg(crate::prompts::SYSTEM_PROMPT)
+            .arg("--add-dir").arg(&allow_dir)
+            .arg("--allowed-tools").arg("Read")
+            .arg("--dangerously-skip-permissions")
+            .arg(&prompt)
+            .output()
+            .await;
+
+        let _ = tokio::fs::remove_file(&temp_path).await;
+
+        let output = result.map_err(|e| DispatchError::Other(format!("claude spawn: {e}")))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+            let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+            return Err(DispatchError::Other(format!(
+                "claude exit {:?}; stderr={}; stdout={}",
+                output.status.code(),
+                stderr.chars().take(400).collect::<String>(),
+                stdout.chars().take(400).collect::<String>()
+            )));
+        }
+        let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        tracing::info!(
+            target: "dispatcher",
+            "claude-cli analyze ok: raw_len={}",
+            raw.len()
+        );
+        Ok(parse_analysis(raw))
+    }
+}
+
 fn strip_code_fences(s: &str) -> String {
     let s = s.trim();
     let body = s

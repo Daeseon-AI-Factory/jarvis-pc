@@ -3,8 +3,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
 import { AnalysisResult, invokeAnalyze, logBackend } from "../lib/ipc";
 
-const TRIGGER_EVENT = "screenbridge://trigger";
-const OVERLAY_SHOW_EVENT = "screenbridge://overlay/show";
+const TRIGGER_EVENT = "sb-trigger";
+const OVERLAY_SHOW_EVENT = "sb-overlay-show";
 
 export default function TriggerPanel() {
   const [instruction, setInstruction] = useState("");
@@ -17,15 +17,30 @@ export default function TriggerPanel() {
   // move the cursor into the textarea so the user can paste immediately.
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    const label = getCurrentWindow().label;
+    void logBackend("info", `trigger panel useEffect on label=${label}`);
     listen(TRIGGER_EVENT, async () => {
-      const win = getCurrentWindow();
-      await win.show();
-      await win.setFocus();
-      requestAnimationFrame(() => inputRef.current?.focus());
-      void logBackend("info", "trigger panel shown");
-    }).then((fn) => {
-      unlisten = fn;
-    });
+      void logBackend("info", `trigger panel listen FIRED on label=${label}`);
+      try {
+        const win = getCurrentWindow();
+        await win.show();
+        void logBackend("info", "trigger panel after show()");
+        await win.setFocus();
+        void logBackend("info", "trigger panel after setFocus()");
+        requestAnimationFrame(() => inputRef.current?.focus());
+        void logBackend("info", "trigger panel shown");
+      } catch (e) {
+        const msg = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+        void logBackend("error", `trigger panel show failed: ${msg}`);
+      }
+    })
+      .then((fn) => {
+        unlisten = fn;
+        void logBackend("info", `trigger panel listen REGISTERED on label=${label}`);
+      })
+      .catch((e) => {
+        void logBackend("error", `trigger panel listen FAILED on label=${label}: ${e}`);
+      });
     return () => {
       unlisten?.();
     };

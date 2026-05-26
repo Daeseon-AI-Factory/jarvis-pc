@@ -79,3 +79,299 @@
 2026-05-26T21:32:04.488050000Z | runtime | info:frontend | phase-1.1 smoke-frontend
 2026-05-26T00:24:00Z | hotfix | sessions test | AnalysisResult struct literal에 session_dir 빠뜨림. ..Default::default() 추가. Phase 6.2 cargo check만 돌려서 test profile에서 못 잡았던 것.
 2026-05-26T00:24:15Z | hotfix | verify | cargo test 전체 통과 (7 unit + 3 integration + 1 ignored capture smoke).
+2026-05-26T21:36:05.329317000Z | runtime | info:backend | phase-1.1 smoke-backend
+2026-05-26T21:36:05.329346000Z | runtime | info:frontend | phase-1.1 smoke-frontend
+2026-05-26T21:37:55.638381000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:37:55.955887000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:37:55.979160000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:37:58.713199000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:37:58.713560000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:38:49.830779000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:38:50.116205000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:38:50.127841000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:38:50.788098000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:38:50.788569000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:39:06.744978000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:39:06.837200000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:39:07.742812000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:39:09.550228000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:39:10.917743000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:39:39.891158000Z | runtime | info:tray | trigger clicked
+2026-05-26T21:39:43.387245000Z | runtime | info:tray | opened sessions: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions"
+2026-05-26T21:40:11.355762000Z | runtime | info:backend | phase-1.1 smoke-backend
+2026-05-26T21:40:11.355791000Z | runtime | info:frontend | phase-1.1 smoke-frontend
+2026-05-26T21:42:45.138965000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:42:45.457400000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:42:45.469014000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:42:46.143175000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:42:46.144252000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:44:07.755722000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:44:09.027515000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:44:53.887083000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:44:54.165822000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:44:54.177319000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:44:54.878942000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:44:54.879465000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:44:58.814194000Z | runtime | info:tray | trigger clicked
+2026-05-26T21:45:02.853162000Z | runtime | info:tray | opened sessions: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions"
+2026-05-26T21:45:27.314309000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:45:27.599863000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:45:27.612723000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:45:27.949006000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:45:27.949441000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:45:54.533526000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:45:54.840042000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:45:54.852194000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:45:55.790095000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:45:55.790490000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:46:41.921185000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:46:42.241820000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:46:42.258626000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:46:42.570836000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:46:42.572708000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:55:16.560611000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:55:16.899051000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:55:16.910218000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:55:18.079863000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:55:18.083260000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:56:47.040166000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:56:47.390647000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:56:47.401744000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:56:48.582975000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:56:48.583358000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:56:58.654961000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:56:58.953080000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:56:58.965220000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:56:59.192625000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:56:59.204825000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:57:10.407181000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:57:12.717782000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:57:15.140285000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:57:16.184940000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:57:23.176818000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:57:26.006358000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:57:26.471481000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:57:49.925931000Z | runtime | info:backend | screenbridge starting
+2026-05-26T21:57:50.199063000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T21:57:50.212123000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T21:57:50.901181000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:57:50.901521000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T21:58:01.783217000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:58:04.020132000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:58:05.441747000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:58:10.707231000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T21:58:12.782022000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:02:53.264444000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:02:53.581456000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:02:53.594889000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:02:54.444478000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:02:54.444974000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:03:10.502927000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:03:31.006862000Z | runtime | info:tray | trigger clicked
+2026-05-26T22:05:49.924846000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:05:50.223585000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:05:50.234186000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:05:51.074647000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:05:51.075108000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:05:51.098972000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:05:51.099535000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:05:51.100926000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:05:51.101117000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:06:33.251840000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:06:33.526729000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:06:33.537680000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:06:34.424095000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:06:34.845802000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:06:34.846228000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:06:34.870319000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:06:34.870890000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:06:34.871876000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:06:34.872047000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:06:36.993015000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:06:36.995682000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:06:36.997034000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:06:41.608364000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:06:41.614475000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:06:41.615330000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:06:42.355529000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:06:42.357963000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:06:42.359099000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:06:42.970938000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:06:42.972442000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:06:42.973521000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:07:31.942648000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:07:32.385436000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:07:32.399400000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:07:32.882321000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:07:32.899811000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:07:32.910109000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:07:32.910424000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:07:32.912189000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:07:32.912409000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:07:37.402236000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-26T22:07:37.407044000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:07:37.409067000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:15:21.144837000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:15:21.437760000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:15:21.447384000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:15:21.957854000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:15:21.958219000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:15:21.977397000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:15:21.977748000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:15:21.979818000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:15:21.979992000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:15:25.559926000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:15:25.565889000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:15:25.566781000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:15:26.450290000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-26T22:15:26.452639000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:15:26.454050000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:15:26.487211000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:15:26.490157000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:15:26.491581000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:12.539003000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:16:12.834531000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:16:12.847829000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:16:13.083136000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:16:13.083486000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:16:13.104499000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:16:13.104940000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:16:13.105704000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:16:13.105913000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:16:17.851099000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-26T22:16:17.861341000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:17.861995000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:19.264756000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:19.268158000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:19.269435000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:20.397750000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:20.400188000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:20.401331000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:21.268954000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:21.270915000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:21.272122000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:22.316824000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:22.318946000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:22.320188000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:24.040664000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:24.042773000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:24.044298000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:26.075859000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:26.078355000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:26.079138000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:26.456501000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:26.458074000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:26.459398000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:26.761651000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:26.764049000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:26.765514000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:28.987991000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:16:28.991877000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:16:28.993611000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:30.757775000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:18:31.035509000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:18:31.048067000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:18:31.716982000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:18:31.717331000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:18:31.736464000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:18:31.736855000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:18:31.737918000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:18:31.738126000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:18:33.552277000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:18:33.555217000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:33.556470000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:33.557550000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:33.558051000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:35.560008000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:18:35.567406000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:35.567937000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:35.568962000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:35.569295000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:36.050646000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-26T22:18:36.053216000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:36.055135000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:36.057179000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:36.057458000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:37.104228000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:18:37.106130000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:37.107461000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:37.109598000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:37.110142000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:37.401652000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:18:37.403427000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:37.404477000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:37.406367000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:37.406821000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:37.924127000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:18:37.925662000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:37.926763000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:18:37.928409000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:18:37.928856000Z | runtime | error:frontend | trigger panel show failed: window.show not allowed. Permissions associated with this command: core:window:allow-show
+2026-05-26T22:19:24.870786000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:19:25.215308000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:19:25.229061000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:19:25.814234000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:19:25.815302000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:19:25.868021000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:19:25.868469000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:19:25.869540000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:19:25.869699000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:19:30.231516000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-26T22:19:30.235447000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:19:30.236382000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:19:30.241676000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T22:19:30.242047000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T22:19:30.249436000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T22:19:30.272700000Z | runtime | info:frontend | trigger panel shown
+2026-05-26T22:19:30.273555000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T22:19:30.273817000Z | runtime | info:frontend | trigger panel shown
+2026-05-26T22:19:53.276409000Z | runtime | info:frontend | analyze submit: 594 chars
+2026-05-26T22:19:53.276913000Z | runtime | info:analyze | begin: instr_len=812
+2026-05-26T22:19:57.733388000Z | runtime | info:capture | captured: bytes=10434083, 3456x2234
+2026-05-26T22:19:57.793094000Z | runtime | info:dispatcher | analyze begin: model=claude-sonnet-4-6, image_bytes=10434083, instr_len=812
+2026-05-26T22:19:58.765097000Z | runtime | warn:dispatcher | analyze fail: status=401, body_len=130
+2026-05-26T22:19:58.770805000Z | runtime | error:frontend | analyze failed: auth: {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011CbRxXT8wU2yjLNDuyXgp2"}
+2026-05-26T22:46:46.276052000Z | runtime | info:backend | screenbridge starting
+2026-05-26T22:46:46.643763000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T22:46:46.655885000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T22:46:47.341476000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:46:47.341969000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T22:46:47.376709000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:46:47.377169000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T22:46:47.379044000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:46:47.379700000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T22:46:48.175519000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-26T22:46:48.177507000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:46:48.178383000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:46:48.227066000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T22:46:48.227697000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T22:46:48.240510000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T22:46:48.240762000Z | runtime | info:frontend | trigger panel shown
+2026-05-26T22:46:48.240941000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T22:46:48.241113000Z | runtime | info:frontend | trigger panel shown
+2026-05-26T22:46:51.658941000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-26T22:46:51.661470000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:46:51.663051000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T22:46:51.665438000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T22:46:51.665768000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T22:46:51.683016000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T22:46:51.683305000Z | runtime | info:frontend | trigger panel shown
+2026-05-26T22:46:51.683489000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T22:46:51.683942000Z | runtime | info:frontend | trigger panel shown
+2026-05-26T22:46:55.313385000Z | runtime | info:frontend | analyze submit: 1180 chars
+2026-05-26T22:46:55.314524000Z | runtime | info:analyze | begin: instr_len=1490
+2026-05-26T22:46:59.039472000Z | runtime | info:capture | captured: bytes=3291784, 3456x2234
+2026-05-26T22:46:59.041659000Z | runtime | info:dispatcher | claude-cli analyze begin: image_bytes=3291784, instr_len=1490, model=claude-sonnet-4-6
+2026-05-26T22:47:40.437455000Z | runtime | info:dispatcher | claude-cli analyze ok: raw_len=1324
+2026-05-26T22:47:40.437852000Z | runtime | info:analyze | done: state=Some("ScreenBridge Trigger 패널이 화면 중앙에 열려 있고, 패널 안에 dispatcher 로그 출력이 보임. 'info:dispatcher | claude-cli analyze begin:', 'info:dispatcher | claude-cli analyze ok: raw_len=...' 형태의 로그 라인이 표시되어 있고, 하단에 분석 결과 텍스트가 overlay에 출력된 상태. 우측 하단 터미널에는 cargo 빌드/컴파일 출력이 남아 있음. dev 서버는 실행 중."), next=Some("화면 중앙 ScreenBridge 패널 안의 로그 내용과 하단 결과 텍스트를 AI에게 그대로 복사해서 붙여넣기. 패널 텍스트 전체를 드래그 선택(Cmd+A 또는 마우스 드래그)한 뒤 복사(Cmd+C)해서 Claude 채팅창에 붙여넣기. 401 에러가 없고 'claude-cli analyze ok' 라인이 보이면 ClaudeCliDispatcher 정상 동작 확인됨."), coords=Some([334, 155, 370, 220])
+2026-05-26T22:47:40.443407000Z | runtime | info:sessions | saved: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-26/12696166-2e36-480c-832d-acf62472f5b4"
+2026-05-26T22:47:40.446838000Z | runtime | info:frontend | analyze done: next=화면 중앙 ScreenBridge 패널 안의 로그 내용과 하단 결과 텍스트를 AI에게 그대로 복사해서 붙여넣
+2026-05-26T22:47:40.598081000Z | runtime | info:frontend | overlay shown
+2026-05-26T22:47:40.606285000Z | runtime | info:frontend | overlay shown
+2026-05-26T22:47:49.885034000Z | runtime | info:sessions | feedback=up for "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-26/12696166-2e36-480c-832d-acf62472f5b4"
+2026-05-26T22:47:49.888053000Z | runtime | info:frontend | feedback recorded: up
+2026-05-26T22:47:50.523870000Z | runtime | info:sessions | feedback=down for "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-26/12696166-2e36-480c-832d-acf62472f5b4"
+2026-05-26T22:47:50.524999000Z | runtime | info:frontend | feedback recorded: down
+2026-05-26T22:47:51.150479000Z | runtime | info:sessions | feedback=down for "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-26/12696166-2e36-480c-832d-acf62472f5b4"
+2026-05-26T22:47:51.151278000Z | runtime | info:frontend | feedback recorded: down
+2026-05-26T22:47:51.362532000Z | runtime | info:frontend | overlay hidden

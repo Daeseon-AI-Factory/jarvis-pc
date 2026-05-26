@@ -149,7 +149,7 @@ async fn analyze(
         .await
         .map_err(|e| format!("capture task join: {e}"))?
         .map_err(|e| format!("capture: {e}"))?;
-    let dispatcher = dispatcher::AnthropicDispatcher::new().map_err(|e| e.to_string())?;
+    let dispatcher = dispatcher::ClaudeCliDispatcher::new();
     let result = dispatcher
         .analyze(image.clone(), instruction.clone())
         .await
@@ -192,12 +192,36 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
+            use tauri::{Emitter, Manager};
+            // Belt + suspenders: tauri.conf.json visible:false is sometimes
+            // not honored on first paint in dev mode, so we explicitly hide
+            // both windows here. The overlay is also forced into
+            // cursor-passthrough so a stray click can't dismiss it before
+            // it ever has a payload to render.
+            if let Some(w) = app.get_webview_window("trigger") {
+                let _ = w.hide();
+            }
+            if let Some(w) = app.get_webview_window("overlay") {
+                let _ = w.hide();
+                let _ = w.set_ignore_cursor_events(true);
+            }
             if let Err(e) = hotkey::register_default(app.handle()) {
                 tracing::error!(target: "hotkey", "register failed: {e}");
             }
             if let Err(e) = tray::install(app.handle()) {
                 tracing::error!(target: "tray", "install failed: {e}");
             }
+            // Self-test (dev only): 5s after boot, fire sb-trigger so we can
+            // see in build.log whether the React listener is wired without
+            // the user having to press the hotkey.
+            let handle_for_test = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                tracing::info!(target: "selftest", "emitting sb-trigger after 5s");
+                if let Err(e) = handle_for_test.emit("sb-trigger", ()) {
+                    tracing::warn!(target: "selftest", "emit failed: {e}");
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -1,7 +1,7 @@
 use tauri::{AppHandle, Emitter};
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-pub const TRIGGER_EVENT: &str = "screenbridge://trigger";
+pub const TRIGGER_EVENT: &str = "sb-trigger";
 
 /// Register the v0.1 default shortcut (Opt/Alt + Space). Returns a boxed
 /// error so the plugin's error type and tauri::Error can both flow through
