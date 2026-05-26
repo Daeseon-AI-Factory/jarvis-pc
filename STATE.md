@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 6.3
-**Last completed:** Phase 6.3 — tray menu 확장 ("Open sessions folder" + 구분선). macOS `open` 명령으로 Finder 열기. 단축키/wipe는 SCRATCHPAD에 v0.2 이월 기록.
-**Last commit:** f3a4224 (Phase 6.2 feedback)
-**Next step:** Phase 6.4 — README.md (설치/실행/권한/한계) + BUILD_REPORT.md (Phase 완료 목록 + SCRATCHPAD 요약 + 첫 확인 명령). Phase 6 COMPLETE.
-**Blockers:** fixture PNG 없음. runtime e2e manual.
-**Last updated:** 2026-05-26T00:22:00Z
+**Phase:** 6.4
+**Last completed:** **v0.1 빌드 종료** — Phase 6 COMPLETE. README.md (설치/실행/권한/한계) + BUILD_REPORT.md (Phase 완료 매트릭스 + SCRATCHPAD 요약 + 첫 확인 명령 + v0.2 후보) 작성. tsc 통과.
+**Last commit:** ca52d97 (Phase 6.3 settings minimal)
+**Next step:** 사용자 검증 — `cargo check`, `cargo test`, `npm run tauri dev` 후 ⌥+Space 1회. dogfooding 단계 진입.
+**Blockers:** 없음 (코드 차원). fixture PNG / Screen Recording 권한 다이얼로그는 사용자 manual.
+**Last updated:** 2026-05-26T00:23:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -31,7 +31,7 @@
 - [x] Phase 5.3 end-to-end flow → Phase 5 COMPLETE (36c195e)
 - [x] Phase 6.1 session save (0e2282d)
 - [x] Phase 6.2 feedback (f3a4224)
-- [x] Phase 6.3 settings UI (this commit, minimal)
-- [ ] Phase 6.4 README.md → Phase 6 COMPLETE
+- [x] Phase 6.3 settings UI (ca52d97, minimal)
+- [x] Phase 6.4 README.md → Phase 6 COMPLETE (this commit) → **v0.1 빌드 완료**
 
 ## SCRATCHPAD 미해결: 3

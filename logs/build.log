@@ -71,3 +71,7 @@
 2026-05-26T00:21:30Z | Phase 6.2 | commit | f3a4224: AnalysisResult.session_dir + record_feedback + overlay 👍/👎.
 2026-05-26T00:22:00Z | Phase 6.3 | settings minimal | tray "Open sessions folder" 추가 (macOS open). 단축키 변경/wipe는 v0.2.
 2026-05-26T00:22:15Z | Phase 6.3 | verify | cargo check 2.03s 통과.
+2026-05-26T00:22:30Z | Phase 6.3 | commit | ca52d97: tray Open sessions folder + 단축키/wipe v0.2 이월.
+2026-05-26T00:23:00Z | Phase 6.4 | docs | README.md (셋업/실행/한계) + BUILD_REPORT.md (Phase 매트릭스 + SCRATCHPAD 요약 + 사용자 확인 명령 + v0.2 후보).
+2026-05-26T00:23:15Z | Phase 6.4 | verify | tsc --noEmit 통과.
+2026-05-26T00:23:30Z | v0.1 | COMPLETE | 26 commits, Phase 0-6 모두 완료. 사용자 manual smoke (npm run tauri dev + Alt+Space) 대기.
