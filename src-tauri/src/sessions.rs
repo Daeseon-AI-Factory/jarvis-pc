@@ -119,6 +119,7 @@ mod tests {
             coordinates: Some([10, 20, 30, 40]),
             reasoning: None,
             raw: "{...}".into(),
+            ..Default::default()
         };
         let dir =
             save_session(&base, b"\x89PNG\r\n\x1a\n_fake_", "hello", &result).expect("save");
