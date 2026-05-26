@@ -38,3 +38,6 @@
 2026-05-26T00:10:30Z | Phase 2.2 | commit | 796b4cd: dispatcher trait + AnalysisResult + DispatchError.
 2026-05-26T00:11:00Z | Phase 2.3 | anthropic dispatcher | reqwest 0.12 (rustls-tls) + base64 0.22 + tokio. VISION_MODEL const. parse_analysis (markdown fence tolerant). tracing 로깅.
 2026-05-26T00:11:15Z | Phase 2.3 | verify | cargo check 2m35s (first reqwest build). cargo test dispatcher::tests 4/4 pass (16s).
+2026-05-26T00:11:30Z | Phase 2.3 | commit | 6ecb6da: AnthropicDispatcher + parse_analysis + 4 unit tests.
+2026-05-26T00:12:00Z | Phase 2.4 | fixture loop | tokio::test analyze_each_fixture_yields_expected_keywords. is_api_key_available + image_path.exists 가드.
+2026-05-26T00:12:15Z | Phase 2.4 | verify | integration tests 3/3 pass. 3 fixtures image-missing skip. 0 live API call.

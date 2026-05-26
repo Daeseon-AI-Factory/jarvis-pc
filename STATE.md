@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 2.3
-**Last completed:** Phase 2.3 — AnthropicDispatcher + parse_analysis (markdown-fence-tolerant). VISION_MODEL/TEXT_MODEL const. reqwest 0.12 + base64 0.22 + tokio 1. tracing 로깅. 4 unit tests pass.
-**Last commit:** 796b4cd (Phase 2.2 dispatcher trait)
-**Next step:** Phase 2.4 — dispatcher_tests.rs에 fixture loop: image_bytes + ai_instruction → analyze() → expected_keywords가 next_action에 포함되는지. 키/이미지 없으면 skip.
-**Blockers:** fixture PNG 없음 (Phase 2.4 가드로 skip).
-**Last updated:** 2026-05-26T00:11:00Z
+**Phase:** 2.4
+**Last completed:** Phase 2 COMPLETE — analyze_each_fixture_yields_expected_keywords tokio::test가 3 fixtures 전부 image-missing skip 통과. 라이브 호출 0회. 가드는 (a) is_api_key_available, (b) image_path.exists(). 사용자가 fixtures/{vercel_dashboard,aws_console,github_repo}.png 추가하면 자동 활성.
+**Last commit:** 6ecb6da (Phase 2.3 AnthropicDispatcher)
+**Next step:** Phase 3.1 — screen capture (xcap / screencapturekit-rs / scap 중 macOS 13+ 호환 crate 선택). capture_active_screen() -> Result<Vec<u8>, CaptureError>. Permission dialog는 첫 호출 시.
+**Blockers:** fixture PNG 없음 (Phase 5 e2e 또는 사용자가 캡처해줄 때 풀림).
+**Last updated:** 2026-05-26T00:12:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -19,8 +19,8 @@
 - [x] Phase 1.3 config (426b2bb)
 - [x] Phase 2.1 prompts (c39faba)
 - [x] Phase 2.2 LLMDispatcher trait (796b4cd)
-- [x] Phase 2.3 AnthropicDispatcher (this commit)
-- [ ] Phase 2.4 fixture tests → Phase 2 COMPLETE
+- [x] Phase 2.3 AnthropicDispatcher (6ecb6da)
+- [x] Phase 2.4 fixture tests → Phase 2 COMPLETE (this commit)
 - [ ] Phase 3.1 screen capture
 - [ ] Phase 3.2 global hotkey
 - [ ] Phase 3.3 tray menu → Phase 3 COMPLETE
