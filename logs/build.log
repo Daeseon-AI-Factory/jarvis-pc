@@ -2,3 +2,6 @@
 2026-05-26T00:00:30Z | Phase 0.0 | bootstrap commit | 7775b8e: STATE/SCRATCHPAD/.gitignore/logs/build.log, instructions.json → fixtures/
 2026-05-26T00:00:45Z | Phase 0.1 | tauri scaffold | npm create tauri-app@latest react-ts (Tauri 2), merged via rsync, .vscode ignored, .gitignore consolidated
 2026-05-26T00:01:00Z | Phase 0.1 | verify | npm install (72 pkg) + cargo check (Tauri 2.11.2 deps) + tsc --noEmit 모두 통과
+2026-05-26T00:01:30Z | Phase 0.1 | commit | 600d430: tauri scaffold (rsync merge + src-tauri/.gitignore restore)
+2026-05-26T00:02:00Z | Phase 0.2 | structure stubs | 11 placeholder files (3 TS, 8 Rust mod, 1 integration test). lib.rs는 변경 없음, mod 선언은 각 Phase에서.
+2026-05-26T00:02:15Z | Phase 0.2 | verify | cargo check 1.37s 통과, tsc --noEmit 통과. SCRATCHPAD에 tests/ 위치 변경 1건 추가.

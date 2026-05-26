@@ -12,6 +12,13 @@
 - 그때까지 모든 라이브 호출 의존 코드는 build/check 통과해야 하고, 테스트는 `#[ignore]` 또는 `is_api_key_available()` 가드.
 **사용자 답 필요:** 사용자가 본인 페이스에 맞춰 키 추가. 빌드는 계속.
 
+## [2026-05-26] Phase 0.2 — tests/ 위치 SPEC와 다름
+**SPEC.md 구조 트리:** `screenbridge/tests/dispatcher_tests.rs` (프로젝트 루트).
+**실제 채택:** `src-tauri/tests/dispatcher_tests.rs`.
+**이유:** Cargo integration tests는 crate 루트 (`src-tauri/Cargo.toml` 옆) 의 `tests/` 디렉토리에서 자동 발견. 루트에 두면 `cargo test --manifest-path src-tauri/Cargo.toml`이 못 찾는다.
+**처리:** SPEC 위반 1건. 작동 우선. Phase 2.4 verify는 `cargo test --manifest-path src-tauri/Cargo.toml` 로 실행.
+**사용자 답 필요:** 없음 (자체 결정, 사용자 권한 변경 시 알림).
+
 ## [2026-05-26] Phase 1.2 / Phase 2.4 — fixture 이미지 부재
 **시도한 것:** `fixtures/instructions.json`은 있음 (3개 항목: vercel_dashboard, aws_console, github_repo).
 **막힌 지점:** 매칭되는 `.png` 파일 0개. dispatcher live 통합 테스트가 이미지 바이트 필요.

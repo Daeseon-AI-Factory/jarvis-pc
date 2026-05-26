@@ -1,16 +1,16 @@
 # Current State
 
-**Phase:** 0.1
-**Last completed:** Phase 0.1 — Tauri 2 React-TS scaffold (npm install 72 pkg + cargo check (Tauri 2.11.2) + tsc --noEmit 통과)
-**Last commit:** 7775b8e (Phase 0.0 bootstrap)
-**Next step:** Phase 0.2 — SPEC 구조에 따른 stub 파일 생성 (src/components/{TriggerPanel,Overlay}.tsx, src/lib/ipc.ts, src-tauri/src/{capture,dispatcher,prompts,hotkey,tray,overlay,sessions,fixtures}.rs)
-**Blockers:** API 키 placeholder (Phase 2.4 라이브 호출만 영향). fixture PNG 없음 (Phase 1.2/2.4 시점에 사용자 답 필요).
-**Last updated:** 2026-05-26T00:01:00Z
+**Phase:** 0.2
+**Last completed:** Phase 0.2 — structure stubs (TriggerPanel/Overlay/ipc + 8 Rust modules + dispatcher_tests under src-tauri/tests/)
+**Last commit:** 600d430 (Phase 0.1 tauri scaffold)
+**Next step:** Phase 0.3 — .gitignore audit. 현재 root .gitignore가 SPEC 7줄 + scaffold 보강 union 상태. SPEC와 차이 정리 후 commit.
+**Blockers:** API 키 placeholder. fixture PNG 없음. (둘 다 후속 Phase 시점 처리)
+**Last updated:** 2026-05-26T00:02:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
-- [x] Phase 0.1 Tauri scaffold (this commit)
-- [ ] Phase 0.2 structure stubs
+- [x] Phase 0.1 Tauri scaffold (600d430)
+- [x] Phase 0.2 structure stubs (this commit)
 - [ ] Phase 0.3 .gitignore audit
 - [ ] Phase 0.4 API key verify (deferred)
 - [ ] Phase 0.5 macOS permissions → Phase 0 COMPLETE
@@ -34,4 +34,4 @@
 - [ ] Phase 6.3 settings UI
 - [ ] Phase 6.4 README.md → Phase 6 COMPLETE
 
-## SCRATCHPAD 미해결: 2
+## SCRATCHPAD 미해결: 3
