@@ -1,3 +1,5 @@
+pub mod fixtures;
+
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use time::format_description::well_known::Iso8601;

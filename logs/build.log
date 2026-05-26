@@ -19,3 +19,6 @@
 2026-05-26T00:05:30Z | Phase 0.5 | commit | da020d9: Info.plist (NSScreenCaptureUsageDescription) → Phase 0 COMPLETE
 2026-05-26T00:06:00Z | Phase 1.1 | logging | tracing 0.1 + tracing-subscriber 0.3 + tracing-appender 0.2 + time 0.3. BarFormatter로 `<ISO> | runtime | <lvl>:<tgt> | <msg>` 출력. log_event command. ipc.ts logBackend. main.tsx 호출.
 2026-05-26T00:06:15Z | Phase 1.1 | verify | cargo test logging_tests 통과 (양쪽 2 라인 append 확인), tsc --noEmit 통과. 위 4줄 runtime 출력은 검증 흔적.
+2026-05-26T00:06:30Z | Phase 1.1 | commit | 7417314: tracing wiring + log_event command + logBackend frontend helper.
+2026-05-26T00:07:00Z | Phase 1.2 | fixture loader | fixtures.rs (Fixture struct + load_fixtures + FixtureError, serde Deserialize). pub mod 등록.
+2026-05-26T00:07:15Z | Phase 1.2 | verify | cargo test load_fixtures_returns_at_least_one 통과 (3 entries from instructions.json).
