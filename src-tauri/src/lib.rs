@@ -1,3 +1,4 @@
+pub mod capture;
 pub mod dispatcher;
 pub mod fixtures;
 pub mod prompts;

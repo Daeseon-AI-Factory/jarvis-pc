@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 2.4
-**Last completed:** Phase 2 COMPLETE — analyze_each_fixture_yields_expected_keywords tokio::test가 3 fixtures 전부 image-missing skip 통과. 라이브 호출 0회. 가드는 (a) is_api_key_available, (b) image_path.exists(). 사용자가 fixtures/{vercel_dashboard,aws_console,github_repo}.png 추가하면 자동 활성.
-**Last commit:** 6ecb6da (Phase 2.3 AnthropicDispatcher)
-**Next step:** Phase 3.1 — screen capture (xcap / screencapturekit-rs / scap 중 macOS 13+ 호환 crate 선택). capture_active_screen() -> Result<Vec<u8>, CaptureError>. Permission dialog는 첫 호출 시.
-**Blockers:** fixture PNG 없음 (Phase 5 e2e 또는 사용자가 캡처해줄 때 풀림).
-**Last updated:** 2026-05-26T00:12:00Z
+**Phase:** 3.1
+**Last completed:** Phase 3.1 — xcap 0.8 + image 0.25 (png only). capture.rs::capture_active_screen() returns PNG bytes. CaptureError enum. #[ignore]-가드 smoke test (`cargo test ... -- --ignored` 사용자 수동). cargo check 통과.
+**Last commit:** 324dc63 (Phase 2 COMPLETE)
+**Next step:** Phase 3.2 — tauri-plugin-global-shortcut 2 추가. 기본 ⌥+Space 등록. 누르면 이벤트 emit. hotkey.rs.
+**Blockers:** fixture PNG 없음. Screen Recording 권한 다이얼로그는 사용자 수동 승인 대기.
+**Last updated:** 2026-05-26T00:13:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -20,8 +20,8 @@
 - [x] Phase 2.1 prompts (c39faba)
 - [x] Phase 2.2 LLMDispatcher trait (796b4cd)
 - [x] Phase 2.3 AnthropicDispatcher (6ecb6da)
-- [x] Phase 2.4 fixture tests → Phase 2 COMPLETE (this commit)
-- [ ] Phase 3.1 screen capture
+- [x] Phase 2.4 fixture tests → Phase 2 COMPLETE (324dc63)
+- [x] Phase 3.1 screen capture (this commit, runtime smoke deferred)
 - [ ] Phase 3.2 global hotkey
 - [ ] Phase 3.3 tray menu → Phase 3 COMPLETE
 - [ ] Phase 4.1 Trigger Panel window
@@ -34,4 +34,4 @@
 - [ ] Phase 6.3 settings UI
 - [ ] Phase 6.4 README.md → Phase 6 COMPLETE
 
-## SCRATCHPAD 미해결: 1
+## SCRATCHPAD 미해결: 2
