@@ -1,8 +1,25 @@
+# Env
 .env
+
+# Node
 node_modules/
+
+# Rust / Tauri build
 target/
+
+# Frontend build
 dist/
-.DS_Store
+dist-ssr/
+
+# Logs (allow build.log)
 *.log
 !logs/build.log
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Fixtures (override if generic *.png added later)
 !fixtures/*.png

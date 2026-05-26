@@ -1,15 +1,15 @@
 # Current State
 
-**Phase:** 0.0
-**Last completed:** session bootstrap files created (pre-commit)
-**Last commit:** (pending — Phase 0.0 commit)
-**Next step:** Phase 0.1 — Tauri 프로젝트 스캐폴드 (`npm create tauri-app@latest`)
-**Blockers:** ANTHROPIC_API_KEY placeholder (사용자가 추후 .env 수정 예정). Phase 2.4 라이브 호출 테스트는 skip 처리.
-**Last updated:** 2026-05-26T00:00:00Z
+**Phase:** 0.1
+**Last completed:** Phase 0.1 — Tauri 2 React-TS scaffold (npm install 72 pkg + cargo check (Tauri 2.11.2) + tsc --noEmit 통과)
+**Last commit:** 7775b8e (Phase 0.0 bootstrap)
+**Next step:** Phase 0.2 — SPEC 구조에 따른 stub 파일 생성 (src/components/{TriggerPanel,Overlay}.tsx, src/lib/ipc.ts, src-tauri/src/{capture,dispatcher,prompts,hotkey,tray,overlay,sessions,fixtures}.rs)
+**Blockers:** API 키 placeholder (Phase 2.4 라이브 호출만 영향). fixture PNG 없음 (Phase 1.2/2.4 시점에 사용자 답 필요).
+**Last updated:** 2026-05-26T00:01:00Z
 
 ## Phase 완료 현황
-- [ ] Phase 0.0 bootstrap (진행 중)
-- [ ] Phase 0.1 Tauri scaffold
+- [x] Phase 0.0 bootstrap (7775b8e)
+- [x] Phase 0.1 Tauri scaffold (this commit)
 - [ ] Phase 0.2 structure stubs
 - [ ] Phase 0.3 .gitignore audit
 - [ ] Phase 0.4 API key verify (deferred)

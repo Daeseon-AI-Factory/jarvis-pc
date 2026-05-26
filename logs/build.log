@@ -1,1 +1,4 @@
 2026-05-26T00:00:00Z | bootstrap | session start | first session — Phase 0.0 시작, spec docs untracked
+2026-05-26T00:00:30Z | Phase 0.0 | bootstrap commit | 7775b8e: STATE/SCRATCHPAD/.gitignore/logs/build.log, instructions.json → fixtures/
+2026-05-26T00:00:45Z | Phase 0.1 | tauri scaffold | npm create tauri-app@latest react-ts (Tauri 2), merged via rsync, .vscode ignored, .gitignore consolidated
+2026-05-26T00:01:00Z | Phase 0.1 | verify | npm install (72 pkg) + cargo check (Tauri 2.11.2 deps) + tsc --noEmit 모두 통과
