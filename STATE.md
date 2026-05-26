@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 3.3
-**Last completed:** Phase 3 COMPLETE — tray.rs::install() (Trigger now / Settings / Quit). tauri tray-icon feature. setup에서 install. trigger 클릭 시 TRIGGER_EVENT emit (hotkey와 동일 채널). quit는 app.exit. settings는 Phase 6.3에서 wired.
-**Last commit:** ea1ef43 (Phase 3.2 hotkey)
-**Next step:** Phase 4.1 — TriggerPanel 윈도우 (텍스트 입력 + Analyze/Cancel 버튼). tauri.conf.json multi-window 또는 dynamic window.
-**Blockers:** fixture PNG 없음. runtime smoke 사용자 manual.
-**Last updated:** 2026-05-26T00:15:00Z
+**Phase:** 4.1
+**Last completed:** Phase 4.1 — tauri.conf.json main window를 trigger panel로 (label=trigger, visible:false, alwaysOnTop, 520x280). TriggerPanel.tsx listens TRIGGER_EVENT → show/focus, ESC → hide. App.tsx 교체. App.css 새 스타일. tsc 통과.
+**Last commit:** bf8702d (Phase 3 COMPLETE)
+**Next step:** Phase 4.2 — analyze #[tauri::command] (capture + AnthropicDispatcher.analyze). frontend invoke + 결과 표시 (next_action, reasoning) + loading state.
+**Blockers:** fixture PNG 없음. runtime smoke manual.
+**Last updated:** 2026-05-26T00:16:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -23,8 +23,8 @@
 - [x] Phase 2.4 fixture tests → Phase 2 COMPLETE (324dc63)
 - [x] Phase 3.1 screen capture (4969cf4 + ef49841 cleanup, runtime smoke deferred)
 - [x] Phase 3.2 global hotkey (ea1ef43, runtime smoke deferred)
-- [x] Phase 3.3 tray menu → Phase 3 COMPLETE (this commit)
-- [ ] Phase 4.1 Trigger Panel window
+- [x] Phase 3.3 tray menu → Phase 3 COMPLETE (bf8702d)
+- [x] Phase 4.1 Trigger Panel window (this commit)
 - [ ] Phase 4.2 IPC flow → Phase 4 COMPLETE
 - [ ] Phase 5.1 overlay window
 - [ ] Phase 5.2 overlay content

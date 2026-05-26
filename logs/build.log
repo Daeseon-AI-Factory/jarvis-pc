@@ -50,3 +50,6 @@
 2026-05-26T00:14:30Z | Phase 3.2 | commit | ea1ef43: hotkey register + TRIGGER_EVENT emit.
 2026-05-26T00:15:00Z | Phase 3.3 | tray | tauri features=["tray-icon"]. install() (Trigger now / Settings / Quit). setup hook.
 2026-05-26T00:15:15Z | Phase 3.3 | verify | cargo check 7.63s 통과 (tray-icon 0.23 첫 빌드).
+2026-05-26T00:15:30Z | Phase 3.3 | commit | bf8702d: tray install + features=["tray-icon"]. Phase 3 COMPLETE.
+2026-05-26T00:16:00Z | Phase 4.1 | trigger panel | tauri.conf.json main window 변경 (520x280, alwaysOnTop, visible:false). TriggerPanel.tsx textarea + Cancel/Analyze + listen(TRIGGER_EVENT) + ESC hide.
+2026-05-26T00:16:15Z | Phase 4.1 | verify | tsc --noEmit 통과. 실제 등장/단축키는 사용자 manual.

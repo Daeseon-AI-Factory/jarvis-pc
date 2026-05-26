@@ -12,9 +12,16 @@
   "app": {
     "windows": [
       {
-        "title": "screenbridge",
-        "width": 800,
-        "height": 600
+        "label": "trigger",
+        "title": "ScreenBridge — Trigger",
+        "width": 520,
+        "height": 280,
+        "visible": false,
+        "resizable": false,
+        "alwaysOnTop": true,
+        "decorations": true,
+        "focus": true,
+        "center": true
       }
     ],
     "security": {
