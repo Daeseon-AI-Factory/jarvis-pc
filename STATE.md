@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 5.3
-**Last completed:** Phase 5 COMPLETE — Overlay listens screenbridge://overlay/show, renders red-pulse coordinate box + dark bubble (action / reasoning / raw fallback) + hint. setIgnoreCursorEvents toggles between show (false) and hide (true). TriggerPanel analyze 성공 → emit overlay → hide self + reset. ESC/클릭 close. cargo check (전 phase) + tsc 통과.
-**Last commit:** ce3fe24 (Phase 5.1 overlay window)
-**Next step:** Phase 6.1 — sessions.rs: ~/Library/Application Support/ScreenBridge/sessions/<date>/<uuid>/{screen.png, instruction.txt, response.json, meta.json}. analyze command이 그 디렉토리에 저장.
-**Blockers:** fixture PNG 없음. runtime e2e 사용자 manual.
-**Last updated:** 2026-05-26T00:19:00Z
+**Phase:** 6.1
+**Last completed:** Phase 6.1 — sessions.rs (save_session + record_feedback). analyze command이 app_data_dir/sessions/<YYYY-MM-DD>/<uuid>/에 4 files 저장 (best-effort, 실패해도 결과 반환). uuid 1 dep 추가. 2 unit tests pass.
+**Last commit:** 36c195e (Phase 5 COMPLETE)
+**Next step:** Phase 6.2 — overlay에 👍/👎 버튼. invoke로 record_feedback 호출. 현재 세션 dir 추적.
+**Blockers:** fixture PNG 없음. runtime e2e manual.
+**Last updated:** 2026-05-26T00:20:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -28,8 +28,8 @@
 - [x] Phase 4.2 IPC flow → Phase 4 COMPLETE (8db9f81)
 - [x] Phase 5.1 overlay window (ce3fe24)
 - [x] Phase 5.2 overlay content (this commit)
-- [x] Phase 5.3 end-to-end flow → Phase 5 COMPLETE (this commit)
-- [ ] Phase 6.1 session save
+- [x] Phase 5.3 end-to-end flow → Phase 5 COMPLETE (36c195e)
+- [x] Phase 6.1 session save (this commit)
 - [ ] Phase 6.2 feedback
 - [ ] Phase 6.3 settings UI
 - [ ] Phase 6.4 README.md → Phase 6 COMPLETE

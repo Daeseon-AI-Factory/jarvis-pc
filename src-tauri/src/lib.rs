@@ -3,6 +3,7 @@ pub mod dispatcher;
 pub mod fixtures;
 pub mod hotkey;
 pub mod prompts;
+pub mod sessions;
 pub mod tray;
 
 use std::path::PathBuf;
@@ -137,8 +138,12 @@ fn log_event(level: String, msg: String) {
 }
 
 #[tauri::command]
-async fn analyze(instruction: String) -> Result<dispatcher::AnalysisResult, String> {
+async fn analyze(
+    app: tauri::AppHandle,
+    instruction: String,
+) -> Result<dispatcher::AnalysisResult, String> {
     use dispatcher::LLMDispatcher;
+    use tauri::Manager;
     tracing::info!(target: "analyze", "begin: instr_len={}", instruction.len());
     let image = tauri::async_runtime::spawn_blocking(capture::capture_active_screen)
         .await
@@ -146,7 +151,7 @@ async fn analyze(instruction: String) -> Result<dispatcher::AnalysisResult, Stri
         .map_err(|e| format!("capture: {e}"))?;
     let dispatcher = dispatcher::AnthropicDispatcher::new().map_err(|e| e.to_string())?;
     let result = dispatcher
-        .analyze(image, instruction)
+        .analyze(image.clone(), instruction.clone())
         .await
         .map_err(|e| e.to_string())?;
     tracing::info!(
@@ -156,6 +161,17 @@ async fn analyze(instruction: String) -> Result<dispatcher::AnalysisResult, Stri
         result.next_action.as_deref(),
         result.coordinates
     );
+    // Best-effort persistence; logging is enough on failure so the user
+    // still gets the analysis result back.
+    match app.path().app_data_dir() {
+        Ok(base) => {
+            let sessions_dir = base.join("sessions");
+            if let Err(e) = sessions::save_session(&sessions_dir, &image, &instruction, &result) {
+                tracing::warn!(target: "sessions", "save failed: {e}");
+            }
+        }
+        Err(e) => tracing::warn!(target: "sessions", "app_data_dir unresolved: {e}"),
+    }
     Ok(result)
 }
 
