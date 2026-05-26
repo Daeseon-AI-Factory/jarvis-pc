@@ -45,10 +45,7 @@ impl From<serde_json::Error> for FixtureError {
 }
 
 pub fn fixtures_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("CARGO_MANIFEST_DIR has a parent")
-        .join("fixtures")
+    crate::project_root().join("fixtures")
 }
 
 pub fn load_fixtures() -> Result<Vec<Fixture>, FixtureError> {
@@ -59,17 +56,13 @@ pub fn load_fixtures() -> Result<Vec<Fixture>, FixtureError> {
 }
 
 impl Fixture {
+    /// image_path inside instructions.json is repo-root-relative
+    /// ("fixtures/foo.png"); resolve absolute so callers can ignore cwd.
     pub fn absolute_image_path(&self) -> PathBuf {
-        // image_path is repo-root-relative ("fixtures/foo.png"); resolve it
-        // from the project root so callers don't need to know the cwd.
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .expect("CARGO_MANIFEST_DIR has a parent")
-            .to_path_buf();
         if self.image_path.is_absolute() {
             self.image_path.clone()
         } else {
-            root.join(&self.image_path)
+            crate::project_root().join(&self.image_path)
         }
     }
 }

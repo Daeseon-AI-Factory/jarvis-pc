@@ -38,15 +38,61 @@ where
     }
 }
 
-// SPEC puts logs/build.log at the repo root; the crate lives in src-tauri/, so
-// resolve relative to CARGO_MANIFEST_DIR at compile time. Dev-mode only —
-// bundled macOS releases will need a different path (deferred to Phase 6).
-fn build_log_path() -> PathBuf {
+// Crate lives in src-tauri/; the repo root (where .env, fixtures/, logs/ all
+// sit) is its parent. Dev-mode only — bundled macOS releases will need a
+// different path (deferred to Phase 6).
+pub fn project_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .expect("CARGO_MANIFEST_DIR has a parent")
-        .join("logs")
-        .join("build.log")
+        .to_path_buf()
+}
+
+fn build_log_path() -> PathBuf {
+    project_root().join("logs").join("build.log")
+}
+
+fn parse_env_file_key(path: &std::path::Path, key: &str) -> Option<String> {
+    let text = std::fs::read_to_string(path).ok()?;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let (k, v) = line.split_once('=')?;
+        if k.trim() == key {
+            let v = v.trim().trim_matches(|c: char| c == '"' || c == '\'');
+            return Some(v.to_string());
+        }
+    }
+    None
+}
+
+fn is_real_api_key(s: &str) -> bool {
+    // Same placeholder taxonomy verify_key.sh uses.
+    !s.is_empty()
+        && s != "placeholder"
+        && !s.contains("여기")
+        && !s.contains("YOUR")
+        && !s.contains("your-api-key")
+}
+
+/// Resolve ANTHROPIC_API_KEY from process env first, falling back to .env at
+/// the repo root. Returns None for empty / placeholder values so callers can
+/// gate on the result without re-checking the string.
+pub fn anthropic_api_key() -> Option<String> {
+    if let Ok(v) = std::env::var("ANTHROPIC_API_KEY") {
+        if is_real_api_key(&v) {
+            return Some(v);
+        }
+    }
+    let env_path = project_root().join(".env");
+    parse_env_file_key(&env_path, "ANTHROPIC_API_KEY").filter(|v| is_real_api_key(v))
+}
+
+/// Cheap check callers use to skip live API tests when the key is missing.
+pub fn is_api_key_available() -> bool {
+    anthropic_api_key().is_some()
 }
 
 fn init_logging() {
