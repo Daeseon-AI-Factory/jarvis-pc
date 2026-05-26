@@ -1,5 +1,10 @@
+use image::imageops::FilterType;
 use std::io::Cursor;
 use xcap::Monitor;
+
+/// Claude's vision tile is 1568×1568; anything larger gets split into multiple
+/// tiles (more tokens, more latency). Downscale before send.
+const MAX_DIMENSION: u32 = 1568;
 
 #[derive(Debug)]
 pub enum CaptureError {
@@ -34,17 +39,31 @@ pub fn capture_active_screen() -> Result<Vec<u8>, CaptureError> {
         .capture_image()
         .map_err(|e| CaptureError::XCap(e.to_string()))?;
 
-    let (w, h) = (img.width(), img.height());
+    let (orig_w, orig_h) = (img.width(), img.height());
+
+    let scaled = if orig_w > MAX_DIMENSION || orig_h > MAX_DIMENSION {
+        // Lanczos3 keeps small UI text legible better than Triangle/Nearest.
+        let dyn_img = image::DynamicImage::ImageRgba8(img);
+        let resized = dyn_img.resize(MAX_DIMENSION, MAX_DIMENSION, FilterType::Lanczos3);
+        resized.to_rgba8()
+    } else {
+        img
+    };
+
+    let (sent_w, sent_h) = (scaled.width(), scaled.height());
     let mut bytes = Vec::new();
-    img.write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)
+    scaled
+        .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)
         .map_err(|e| CaptureError::Encode(e.to_string()))?;
 
     tracing::info!(
         target: "capture",
-        "captured: bytes={}, {}x{}",
-        bytes.len(),
-        w,
-        h
+        "captured: orig={}x{}, sent={}x{}, bytes={}",
+        orig_w,
+        orig_h,
+        sent_w,
+        sent_h,
+        bytes.len()
     );
 
     Ok(bytes)

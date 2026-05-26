@@ -161,4 +161,61 @@ R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를
 
 ---
 
+## 2026-05-26 — Capture 해상도: 원본 vs 1568×1568 cap vs 더 작게
+
+**선택지:**
+- **A. 원본 그대로** — Retina/HiDPI 풀해상도 (예: 3456×2234, 3.3MB PNG).
+- **B. 1568×1568 cap (Lanczos3)** — claude vision tile base에 맞춤.
+- C. 1024×1024 또는 더 작게.
+
+**Trade-off:**
+
+| 축 | A (원본) | B (1568 cap) | C (1024) |
+| --- | --- | --- | --- |
+| 호출당 latency | 30-50초 | 15-25초 | 12-20초 |
+| 토큰/비용 (API key 모드 가정) | ~$0.04 | ~$0.015 | ~$0.008 |
+| 작은 글자(<10px) 가독성 | best | good (Lanczos3로 보존) | poor |
+| 큰 UI 요소 (버튼/메뉴/탭) 인식 | 동일 | 동일 | 동일 |
+| 캡처 자체 시간 | <0.1s | +0.05s (resize) | +0.05s |
+| 정확도 영향 | baseline | 미미 (대부분 큰 UI) | 글자 인식 실패 잦음 |
+
+**선택:** **B (1568×1568 cap)**.
+
+**근거:** claude vision tile이 1568×1568이라 그 이하면 1 tile로 들어가서 입력 토큰과 inference 시간 동시에 줄어듦. dogfooding 대상이 거의 항상 큰 UI 요소(클릭할 버튼, 선택할 메뉴 등) → 작은 글자 가독성 손실은 무시 가능. Lanczos3 필터로 다운스케일 품질도 보장.
+
+**되돌리기 비용:** `capture.rs` `MAX_DIMENSION` 상수 1줄 변경 (1568 → 다른 값) 또는 다운스케일 분기 자체 제거. 10초.
+
+**미해결 관심사:** 향후 폰트 작은 사이드바 메뉴 같은 케이스에서 가독성 떨어지면 multi-tile (원본 그대로) fallback 옵션 추가 검토. fixture로 비교 측정.
+
+---
+
+## 2026-05-26 — R8/R9 강제 강도: rule만 vs hook reminder vs pre-commit 차단
+
+**선택지:**
+- A. **CLAUDE.md rule만** — R8 R9 문서화. LLM이 매 작업 시 자체 적용.
+- B. **+ .claude/settings.json hook** — Stop/PostToolUse 이벤트에 메시지 inject.
+- **C. + .git/hooks/pre-commit** — 코드 변경 staged인데 TROUBLESHOOTING/DECISIONS 변경 없으면 commit 차단.
+
+**Trade-off:**
+
+| 축 | A | B | C (현재) |
+| --- | --- | --- | --- |
+| 강제력 | 약함 — LLM 무시 가능 | 중간 — reminder만 | 강함 — commit 자체 막힘 |
+| 회피 비용 | 없음 | 없음 | `--no-verify` 의식적 |
+| 셋업 시간 | 0분 | 5분 | 15분 |
+| portable (다른 머신 clone) | yes (git tracked) | yes (.claude/ tracked) | **no** (.git/ untracked) |
+| 오탐 (false positive) | n/a | 가벼움 | 단순 오타도 차단 → `--no-verify` 자주 |
+
+**선택:** **C (A+B+C 다 활성)**.
+
+**근거:** 사용자가 명시적으로 "확실히 hook"이라 요청. rule + reminder만으로는 이번 세션 후반에 *실제로* forgetting 발생 ("우리 트러블슈팅 기록되고 있나?" 사용자 직접 지적). commit 차단이 강제력 가장 큼. 단순 오타 commit은 `--no-verify` 우회 — 매번 의식하면 R8/R9 정신에 맞음.
+
+**되돌리기 비용:** 두 파일 삭제. `.claude/settings.json`은 hook 부분만 제거하면 됨, `.git/hooks/pre-commit`은 파일 단위 삭제. 3분.
+
+**미해결 관심사:**
+- `.git/hooks/`는 git tracked X. 다른 환경에서 clone 시 hook 자동 설치 안 됨. scripts/setup-hooks.sh로 symlink 셋업 스크립트 추후 추가 후보 (SCRATCHPAD에 기록).
+- pre-commit 차단이 너무 빈번하면 R8/R9 의미가 ritual로 변질될 수 있음 — 일주일 dogfooding 후 false positive 빈도 측정 후 룰 완화 여부 결정.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

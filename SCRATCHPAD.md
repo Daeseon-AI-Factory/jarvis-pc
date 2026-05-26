@@ -4,6 +4,14 @@
 
 ---
 
+## [2026-05-26] git pre-commit hook은 portable X
+**상태:** `.git/hooks/pre-commit`이 R8/R9 강제용으로 박혀있음. 코드 변경 staged인데 TROUBLESHOOTING.md / DECISIONS.md 변경 없으면 commit 차단.
+**막힌 지점:** `.git/`은 git에 트래킹 안 됨. 다른 머신/clone 시 hook 사라짐.
+**가능한 해결책:**
+- `scripts/setup-hooks.sh`로 `git config core.hooksPath ./scripts/git-hooks` 또는 symlink. scripts/git-hooks/ 디렉토리 tracked.
+- 또는 husky 같은 도구 (Node dep 추가).
+**사용자 답 필요:** v0.2 또는 다른 환경 clone 시점에 결정.
+
 ## [2026-05-26] Phase 6.3 — Settings v0.1엔 minimal
 **처리:** tray menu에 "Open sessions folder" 만. 단축키 변경 / 세션 wipe / Settings 윈도우는 v0.2로 이월.
 **이유:** v0.1은 dogfooding 목적. 단축키 기본값 Alt+Space로 충분, wipe는 Finder에서 직접 쉬움 (Open sessions folder 클릭 후 수동 삭제). dialog plugin 추가도 회피.

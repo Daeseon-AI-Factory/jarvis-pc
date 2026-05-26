@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '⚑ R8/R9 check — 이번 세션에서 디버그/이슈가 있었으면 TROUBLESHOOTING.md, 두 개 이상 선택지 사이에서 결정했으면 DECISIONS.md에 엔트리 추가했는지 확인. 없다면 그게 정말 맞는지 한 번 더 점검.' >&2"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '⚑ 파일 수정됨 — 디버그 narrative 또는 trade-off 결정이 동반되면 TROUBLESHOOTING.md / DECISIONS.md에 같은 commit에 박을 것 (R8/R9). 사후 정리 금지.' >&2"
+          }
+        ]
+      }
+    ]
+  }
+}

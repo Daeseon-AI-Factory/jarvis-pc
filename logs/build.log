@@ -375,3 +375,21 @@
 2026-05-26T22:47:51.150479000Z | runtime | info:sessions | feedback=down for "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-26/12696166-2e36-480c-832d-acf62472f5b4"
 2026-05-26T22:47:51.151278000Z | runtime | info:frontend | feedback recorded: down
 2026-05-26T22:47:51.362532000Z | runtime | info:frontend | overlay hidden
+2026-05-26T23:11:40.192383000Z | runtime | info:backend | screenbridge starting
+2026-05-26T23:11:40.838682000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-26T23:11:40.866286000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-26T23:11:41.223672000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T23:11:41.224018000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-26T23:11:41.252447000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T23:11:41.252911000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-26T23:11:41.253785000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T23:11:41.253988000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-26T23:11:45.868566000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-26T23:11:45.875512000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T23:11:45.876469000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-26T23:11:45.883484000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T23:11:45.884020000Z | runtime | info:frontend | trigger panel after show()
+2026-05-26T23:11:45.943066000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T23:11:45.943358000Z | runtime | info:frontend | trigger panel shown
+2026-05-26T23:11:45.945136000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-26T23:11:45.945422000Z | runtime | info:frontend | trigger panel shown

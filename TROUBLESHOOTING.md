@@ -159,4 +159,22 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-26 22:50 — claude vision 호출이 매번 30-50초 (사용자 dogfooding 마찰)
+
+**증상:** ⌥+Space → 텍스트 → Analyze → 41초 대기. 매번 비슷. 사용자가 "뒤지게 오래 걸리네"라 함.
+
+**가설 / 시도:**
+1. cold start만 그렇고 두 번째부터 빠를 거 — 부분 틀림. 두 번째도 35-40초.
+2. (정답) PNG 사이즈가 압도적 원인. 3.3MB / 3456×2234 retina full-res는 claude vision tile 1568×1568를 여러 장으로 쪼개서 토큰/시간 폭증.
+
+**원인:** claude vision API는 입력 이미지를 1568×1568 tile 단위로 처리. retina 풀해상도(3456×2234)는 4-6개 tile로 split → 토큰 ~5배 증가 + inference 시간 동시 증가. 추가로 Read tool 인코딩 시간도 사이즈에 비례.
+
+**해결 + 학습:**
+- Fix: `capture.rs`에서 캡처 직후 `MAX_DIMENSION=1568` 기준 Lanczos3 다운스케일. 큰 UI 요소(버튼/메뉴) 인식엔 영향 거의 없음, 작은 글자 약간 흐려짐.
+- 예상 효과: 30-50초 → 15-25초.
+- 교훈: vision API는 "이미지 크기 = 비용 + 시간"이 직접 비례. 클라이언트 측 다운스케일이 가장 큰 win. 모델 swap이나 inference 옵션 만지는 것보다 효과 크고 비용 0.
+- (DECISIONS.md "Capture 해상도" 엔트리에서 trade-off 명시)
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)
