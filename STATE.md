@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 2.1
-**Last completed:** Phase 2.1 — prompts.rs SYSTEM_PROMPT (SPEC 텍스트 그대로) + user_text() wrapper. pub mod prompts. cargo check 통과.
-**Last commit:** 426b2bb (Phase 1.3 config)
-**Next step:** Phase 2.2 — dispatcher.rs: AnalysisResult struct, DispatchError, LLMDispatcher async trait. async_trait crate 추가 또는 std Future 직접.
+**Phase:** 2.2
+**Last completed:** Phase 2.2 — dispatcher.rs (AnalysisResult, DispatchError enum, LLMDispatcher async trait via async-trait crate). pub mod dispatcher. cargo check 통과.
+**Last commit:** c39faba (Phase 2.1 prompts)
+**Next step:** Phase 2.3 — AnthropicDispatcher: reqwest 의존성 + base64 + 모델 상수 (`claude-sonnet-4-6`) + JSON 파싱 + tracing 로깅.
 **Blockers:** fixture PNG 없음.
-**Last updated:** 2026-05-26T00:09:00Z
+**Last updated:** 2026-05-26T00:10:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -17,8 +17,8 @@
 - [x] Phase 1.1 logging (7417314)
 - [x] Phase 1.2 fixture loader (1936247)
 - [x] Phase 1.3 config (426b2bb)
-- [x] Phase 2.1 prompts (this commit)
-- [ ] Phase 2.2 LLMDispatcher trait
+- [x] Phase 2.1 prompts (c39faba)
+- [x] Phase 2.2 LLMDispatcher trait (this commit)
 - [ ] Phase 2.3 AnthropicDispatcher
 - [ ] Phase 2.4 fixture tests → Phase 2 COMPLETE
 - [ ] Phase 3.1 screen capture
