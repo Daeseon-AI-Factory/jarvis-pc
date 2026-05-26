@@ -1,17 +1,17 @@
 # Current State
 
-**Phase:** 0.2
-**Last completed:** Phase 0.2 — structure stubs (TriggerPanel/Overlay/ipc + 8 Rust modules + dispatcher_tests under src-tauri/tests/)
-**Last commit:** 600d430 (Phase 0.1 tauri scaffold)
-**Next step:** Phase 0.3 — .gitignore audit. 현재 root .gitignore가 SPEC 7줄 + scaffold 보강 union 상태. SPEC와 차이 정리 후 commit.
-**Blockers:** API 키 placeholder. fixture PNG 없음. (둘 다 후속 Phase 시점 처리)
-**Last updated:** 2026-05-26T00:02:00Z
+**Phase:** 0.3
+**Last completed:** Phase 0.3 — .gitignore audit (SPEC 8 entries 모두 present, .env ignored, logs/build.log tracked 확인)
+**Last commit:** 9b4b886 (Phase 0.2 structure)
+**Next step:** Phase 0.4 — scripts/verify_key.sh 작성, ANTHROPIC_API_KEY placeholder이므로 호출 없이 SCRATCHPAD 기록 후 진행.
+**Blockers:** API 키 placeholder. fixture PNG 없음.
+**Last updated:** 2026-05-26T00:03:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
 - [x] Phase 0.1 Tauri scaffold (600d430)
-- [x] Phase 0.2 structure stubs (this commit)
-- [ ] Phase 0.3 .gitignore audit
+- [x] Phase 0.2 structure stubs (9b4b886)
+- [x] Phase 0.3 .gitignore audit (this commit)
 - [ ] Phase 0.4 API key verify (deferred)
 - [ ] Phase 0.5 macOS permissions → Phase 0 COMPLETE
 - [ ] Phase 1.1 logging

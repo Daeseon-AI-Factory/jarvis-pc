@@ -5,3 +5,5 @@
 2026-05-26T00:01:30Z | Phase 0.1 | commit | 600d430: tauri scaffold (rsync merge + src-tauri/.gitignore restore)
 2026-05-26T00:02:00Z | Phase 0.2 | structure stubs | 11 placeholder files (3 TS, 8 Rust mod, 1 integration test). lib.rs는 변경 없음, mod 선언은 각 Phase에서.
 2026-05-26T00:02:15Z | Phase 0.2 | verify | cargo check 1.37s 통과, tsc --noEmit 통과. SCRATCHPAD에 tests/ 위치 변경 1건 추가.
+2026-05-26T00:02:30Z | Phase 0.2 | commit | 9b4b886: 11 placeholder modules + dispatcher_tests
+2026-05-26T00:03:00Z | Phase 0.3 | gitignore audit | SPEC required 8개 entries 모두 present. .env ignored (line 2). logs/build.log tracked. 변경 불필요.
