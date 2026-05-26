@@ -1,5 +1,18 @@
 use async_trait::async_trait;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
+use base64::Engine as _;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+
+// CLAUDE.md mandates this stays a const so a model swap is one-line.
+pub const VISION_MODEL: &str = "claude-sonnet-4-6";
+#[allow(dead_code)]
+pub const TEXT_MODEL: &str = "claude-haiku-4-5-20251001";
+
+const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+const DEFAULT_MAX_TOKENS: u32 = 1024;
 
 /// Structured output the trigger panel / overlay actually renders.
 /// All fields are optional because the model occasionally returns malformed
@@ -48,4 +61,235 @@ pub trait LLMDispatcher: Send + Sync {
         image_bytes: Vec<u8>,
         instruction: String,
     ) -> Result<AnalysisResult, DispatchError>;
+}
+
+pub struct AnthropicDispatcher {
+    client: Client,
+    api_key: String,
+    model: String,
+    max_tokens: u32,
+}
+
+impl AnthropicDispatcher {
+    /// Errors with MissingApiKey instead of panicking — SPEC R5 says the
+    /// build keeps working even when the key isn't ready yet; the failure
+    /// surfaces only at the moment a caller asks for the dispatcher.
+    pub fn new() -> Result<Self, DispatchError> {
+        let api_key = crate::anthropic_api_key().ok_or(DispatchError::MissingApiKey)?;
+        let client = Client::builder()
+            .build()
+            .map_err(|e| DispatchError::Other(format!("reqwest client: {e}")))?;
+        Ok(Self {
+            client,
+            api_key,
+            model: VISION_MODEL.to_string(),
+            max_tokens: DEFAULT_MAX_TOKENS,
+        })
+    }
+
+    pub fn with_model(mut self, m: impl Into<String>) -> Self {
+        self.model = m.into();
+        self
+    }
+
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+}
+
+#[async_trait]
+impl LLMDispatcher for AnthropicDispatcher {
+    async fn analyze(
+        &self,
+        image_bytes: Vec<u8>,
+        instruction: String,
+    ) -> Result<AnalysisResult, DispatchError> {
+        let b64 = BASE64_STANDARD.encode(&image_bytes);
+        let body = json!({
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "system": crate::prompts::SYSTEM_PROMPT,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "image/png",
+                            "data": b64,
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": crate::prompts::user_text(&instruction),
+                    }
+                ]
+            }]
+        });
+
+        tracing::info!(
+            target: "dispatcher",
+            "analyze begin: model={}, image_bytes={}, instr_len={}",
+            self.model,
+            image_bytes.len(),
+            instruction.len()
+        );
+
+        let resp = self
+            .client
+            .post(ANTHROPIC_API_URL)
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| DispatchError::Network(e.to_string()))?;
+
+        let status = resp.status();
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| DispatchError::Network(e.to_string()))?;
+
+        if !status.is_success() {
+            tracing::warn!(
+                target: "dispatcher",
+                "analyze fail: status={}, body_len={}",
+                status.as_u16(),
+                text.len()
+            );
+            return Err(match status.as_u16() {
+                401 | 403 => DispatchError::Auth(text),
+                code => DispatchError::Api { status: code, body: text },
+            });
+        }
+
+        let envelope: Value = serde_json::from_str(&text)
+            .map_err(|e| DispatchError::Parse(format!("envelope: {e}; body[..200]={}", &text.chars().take(200).collect::<String>())))?;
+
+        let raw = envelope
+            .get("content")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.iter().find_map(|m| {
+                if m.get("type").and_then(|t| t.as_str()) == Some("text") {
+                    m.get("text").and_then(|t| t.as_str()).map(str::to_string)
+                } else {
+                    None
+                }
+            }))
+            .unwrap_or_default();
+
+        tracing::info!(
+            target: "dispatcher",
+            "analyze ok: status={}, raw_len={}",
+            status.as_u16(),
+            raw.len()
+        );
+
+        Ok(parse_analysis(raw))
+    }
+}
+
+fn strip_code_fences(s: &str) -> String {
+    let s = s.trim();
+    let body = s
+        .strip_prefix("```json")
+        .or_else(|| s.strip_prefix("```JSON"))
+        .or_else(|| s.strip_prefix("```"));
+    if let Some(rest) = body {
+        let rest = rest.trim_start_matches('\n');
+        if let Some(end) = rest.rfind("```") {
+            return rest[..end].trim().to_string();
+        }
+    }
+    s.to_string()
+}
+
+/// Parse model raw output into the structured AnalysisResult. Tolerates
+/// markdown code fences and missing fields — anything we can't extract just
+/// stays None and callers fall back to `raw`.
+pub fn parse_analysis(raw: String) -> AnalysisResult {
+    let mut out = AnalysisResult {
+        raw: raw.clone(),
+        ..Default::default()
+    };
+    let cleaned = strip_code_fences(&raw);
+    let Ok(value) = serde_json::from_str::<Value>(&cleaned) else {
+        return out;
+    };
+    out.screen_state = value
+        .get("screen_state")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    out.next_action = value
+        .get("next_action")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    out.reasoning = value
+        .get("reasoning")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    if let Some(arr) = value.get("coordinates").and_then(|v| v.as_array()) {
+        if arr.len() == 4 {
+            let parts: Option<Vec<i32>> = arr
+                .iter()
+                .map(|v| v.as_i64().map(|n| n as i32))
+                .collect();
+            if let Some(p) = parts {
+                out.coordinates = Some([p[0], p[1], p[2], p[3]]);
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_well_formed_json() {
+        let raw = r#"{
+            "screen_state": "vercel dashboard, no project yet",
+            "next_action": "우측 상단 'New Project' 버튼 클릭",
+            "coordinates": [1200, 80, 120, 36],
+            "reasoning": "사이드바 아래에 항목 없음"
+        }"#;
+        let r = parse_analysis(raw.to_string());
+        assert_eq!(r.screen_state.as_deref(), Some("vercel dashboard, no project yet"));
+        assert_eq!(r.coordinates, Some([1200, 80, 120, 36]));
+        assert!(r.next_action.is_some());
+        assert!(r.reasoning.is_some());
+        assert_eq!(r.raw, raw);
+    }
+
+    #[test]
+    fn parse_strips_markdown_fences() {
+        let raw = "```json\n{\"screen_state\":\"x\",\"next_action\":\"y\",\"coordinates\":null,\"reasoning\":\"z\"}\n```";
+        let r = parse_analysis(raw.to_string());
+        assert_eq!(r.screen_state.as_deref(), Some("x"));
+        assert_eq!(r.next_action.as_deref(), Some("y"));
+        assert_eq!(r.coordinates, None);
+    }
+
+    #[test]
+    fn parse_falls_back_to_raw_on_garbage() {
+        let raw = "not json at all";
+        let r = parse_analysis(raw.to_string());
+        assert!(r.screen_state.is_none());
+        assert!(r.next_action.is_none());
+        assert!(r.coordinates.is_none());
+        assert_eq!(r.raw, raw);
+    }
+
+    #[test]
+    fn parse_keeps_partial_fields() {
+        let raw = r#"{"screen_state":"ok","coordinates":[10,20,30,40]}"#;
+        let r = parse_analysis(raw.to_string());
+        assert_eq!(r.screen_state.as_deref(), Some("ok"));
+        assert_eq!(r.coordinates, Some([10, 20, 30, 40]));
+        assert!(r.next_action.is_none());
+    }
 }

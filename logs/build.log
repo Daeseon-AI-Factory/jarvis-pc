@@ -35,3 +35,6 @@
 2026-05-26T00:09:30Z | Phase 2.1 | commit | c39faba: SYSTEM_PROMPT + user_text wrapper.
 2026-05-26T00:10:00Z | Phase 2.2 | dispatcher trait | async-trait 0.1 dep 추가. dispatcher.rs (AnalysisResult, DispatchError, trait LLMDispatcher). pub mod 등록.
 2026-05-26T00:10:15Z | Phase 2.2 | verify | cargo check 46s (async-trait crate download). 통과.
+2026-05-26T00:10:30Z | Phase 2.2 | commit | 796b4cd: dispatcher trait + AnalysisResult + DispatchError.
+2026-05-26T00:11:00Z | Phase 2.3 | anthropic dispatcher | reqwest 0.12 (rustls-tls) + base64 0.22 + tokio. VISION_MODEL const. parse_analysis (markdown fence tolerant). tracing 로깅.
+2026-05-26T00:11:15Z | Phase 2.3 | verify | cargo check 2m35s (first reqwest build). cargo test dispatcher::tests 4/4 pass (16s).

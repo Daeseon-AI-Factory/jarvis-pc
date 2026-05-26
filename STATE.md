@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 2.2
-**Last completed:** Phase 2.2 — dispatcher.rs (AnalysisResult, DispatchError enum, LLMDispatcher async trait via async-trait crate). pub mod dispatcher. cargo check 통과.
-**Last commit:** c39faba (Phase 2.1 prompts)
-**Next step:** Phase 2.3 — AnthropicDispatcher: reqwest 의존성 + base64 + 모델 상수 (`claude-sonnet-4-6`) + JSON 파싱 + tracing 로깅.
-**Blockers:** fixture PNG 없음.
-**Last updated:** 2026-05-26T00:10:00Z
+**Phase:** 2.3
+**Last completed:** Phase 2.3 — AnthropicDispatcher + parse_analysis (markdown-fence-tolerant). VISION_MODEL/TEXT_MODEL const. reqwest 0.12 + base64 0.22 + tokio 1. tracing 로깅. 4 unit tests pass.
+**Last commit:** 796b4cd (Phase 2.2 dispatcher trait)
+**Next step:** Phase 2.4 — dispatcher_tests.rs에 fixture loop: image_bytes + ai_instruction → analyze() → expected_keywords가 next_action에 포함되는지. 키/이미지 없으면 skip.
+**Blockers:** fixture PNG 없음 (Phase 2.4 가드로 skip).
+**Last updated:** 2026-05-26T00:11:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -18,8 +18,8 @@
 - [x] Phase 1.2 fixture loader (1936247)
 - [x] Phase 1.3 config (426b2bb)
 - [x] Phase 2.1 prompts (c39faba)
-- [x] Phase 2.2 LLMDispatcher trait (this commit)
-- [ ] Phase 2.3 AnthropicDispatcher
+- [x] Phase 2.2 LLMDispatcher trait (796b4cd)
+- [x] Phase 2.3 AnthropicDispatcher (this commit)
 - [ ] Phase 2.4 fixture tests → Phase 2 COMPLETE
 - [ ] Phase 3.1 screen capture
 - [ ] Phase 3.2 global hotkey
