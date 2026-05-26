@@ -1,0 +1,17 @@
+[
+  {
+    "image_path": "fixtures/vercel_dashboard.png",
+    "ai_instruction": "Vercel에서 새 프로젝트를 배포하려면 dashboard에서 'New Project' 버튼을 누른 다음 Git 저장소를 선택하세요.",
+    "expected_keywords": ["New Project", "버튼"]
+  },
+  {
+    "image_path": "fixtures/aws_console.png",
+    "ai_instruction": "EC2 인스턴스를 시작하려면 서비스 메뉴에서 EC2를 선택하고 Launch Instance를 클릭하세요.",
+    "expected_keywords": ["EC2", "Launch"]
+  },
+  {
+    "image_path": "fixtures/github_repo.png",
+    "ai_instruction": "이 repository를 fork하려면 우측 상단의 Fork 버튼을 클릭하세요.",
+    "expected_keywords": ["Fork"]
+  }
+]
