@@ -9,3 +9,6 @@
 2026-05-26T00:03:00Z | Phase 0.3 | gitignore audit | SPEC required 8개 entries 모두 present. .env ignored (line 2). logs/build.log tracked. 변경 불필요.
 2026-05-26T00:03:30Z | Phase 0.3 | commit | cfacbe1: gitignore audit (state + log only)
 2026-05-26T00:04:00Z | Phase 0.4 | api key verify | scripts/verify_key.sh 추가, placeholder 인식해서 SKIP. 라이브 호출 없음.
+2026-05-26T00:04:30Z | Phase 0.4 | commit | 82056be: scripts/verify_key.sh
+2026-05-26T00:05:00Z | Phase 0.5 | macos permissions | src-tauri/Info.plist 추가 (NSScreenCaptureUsageDescription만). Tauri 2가 자동 머지.
+2026-05-26T00:05:15Z | Phase 0.5 | verify | cargo check 1.19s 통과.
