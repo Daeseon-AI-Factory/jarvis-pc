@@ -7,3 +7,5 @@
 2026-05-26T00:02:15Z | Phase 0.2 | verify | cargo check 1.37s 통과, tsc --noEmit 통과. SCRATCHPAD에 tests/ 위치 변경 1건 추가.
 2026-05-26T00:02:30Z | Phase 0.2 | commit | 9b4b886: 11 placeholder modules + dispatcher_tests
 2026-05-26T00:03:00Z | Phase 0.3 | gitignore audit | SPEC required 8개 entries 모두 present. .env ignored (line 2). logs/build.log tracked. 변경 불필요.
+2026-05-26T00:03:30Z | Phase 0.3 | commit | cfacbe1: gitignore audit (state + log only)
+2026-05-26T00:04:00Z | Phase 0.4 | api key verify | scripts/verify_key.sh 추가, placeholder 인식해서 SKIP. 라이브 호출 없음.
