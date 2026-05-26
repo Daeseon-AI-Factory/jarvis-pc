@@ -57,6 +57,35 @@ body {
   color: #c0392b;
 }
 
+.trigger-panel .result {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: 8px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.trigger-panel .result .next-action {
+  margin: 0;
+}
+
+.trigger-panel .result .reasoning {
+  margin: 0;
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.trigger-panel .result .raw {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.7;
+}
+
 .trigger-panel .actions {
   display: flex;
   justify-content: flex-end;

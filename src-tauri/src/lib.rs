@@ -136,6 +136,29 @@ fn log_event(level: String, msg: String) {
     }
 }
 
+#[tauri::command]
+async fn analyze(instruction: String) -> Result<dispatcher::AnalysisResult, String> {
+    use dispatcher::LLMDispatcher;
+    tracing::info!(target: "analyze", "begin: instr_len={}", instruction.len());
+    let image = tauri::async_runtime::spawn_blocking(capture::capture_active_screen)
+        .await
+        .map_err(|e| format!("capture task join: {e}"))?
+        .map_err(|e| format!("capture: {e}"))?;
+    let dispatcher = dispatcher::AnthropicDispatcher::new().map_err(|e| e.to_string())?;
+    let result = dispatcher
+        .analyze(image, instruction)
+        .await
+        .map_err(|e| e.to_string())?;
+    tracing::info!(
+        target: "analyze",
+        "done: state={:?}, next={:?}, coords={:?}",
+        result.screen_state.as_deref(),
+        result.next_action.as_deref(),
+        result.coordinates
+    );
+    Ok(result)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -152,7 +175,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, log_event])
+        .invoke_handler(tauri::generate_handler![greet, log_event, analyze])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

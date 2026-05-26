@@ -1,14 +1,15 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { logBackend } from "../lib/ipc";
+import { AnalysisResult, invokeAnalyze, logBackend } from "../lib/ipc";
 
 const TRIGGER_EVENT = "screenbridge://trigger";
 
 export default function TriggerPanel() {
   const [instruction, setInstruction] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Listen for hotkey / tray trigger events. Show + focus the window and
@@ -46,18 +47,29 @@ export default function TriggerPanel() {
     if (!instruction.trim() || status === "loading") return;
     setStatus("loading");
     setError(null);
+    setResult(null);
     void logBackend("info", `analyze submit: ${instruction.length} chars`);
-    // Phase 4.2 wires the actual analyze IPC. For now, keep the loading
-    // state visible briefly so the UI shape can be inspected.
-    setTimeout(() => {
-      setStatus("idle");
-    }, 600);
+    try {
+      const r = await invokeAnalyze(instruction);
+      setResult(r);
+      setStatus("done");
+      void logBackend(
+        "info",
+        `analyze done: next=${r.next_action?.slice(0, 60) ?? "<none>"}`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      setStatus("error");
+      void logBackend("error", `analyze failed: ${msg}`);
+    }
   }
 
   async function cancel() {
     setInstruction("");
     setStatus("idle");
     setError(null);
+    setResult(null);
     await getCurrentWindow().hide();
     void logBackend("info", "trigger panel hidden");
   }
@@ -72,10 +84,25 @@ export default function TriggerPanel() {
           value={instruction}
           onChange={(e) => setInstruction(e.target.value)}
           placeholder="여기에 AI 지시를 붙여넣으세요..."
-          rows={6}
+          rows={4}
           disabled={status === "loading"}
         />
         {error && <p className="error">{error}</p>}
+        {result && status === "done" && (
+          <div className="result">
+            {result.next_action && (
+              <p className="next-action">
+                <strong>다음:</strong> {result.next_action}
+              </p>
+            )}
+            {result.reasoning && (
+              <p className="reasoning">{result.reasoning}</p>
+            )}
+            {!result.next_action && !result.reasoning && (
+              <p className="raw">{result.raw}</p>
+            )}
+          </div>
+        )}
         <div className="actions">
           <button type="button" onClick={cancel} disabled={status === "loading"}>
             Cancel
