@@ -1,4 +1,5 @@
 pub mod fixtures;
+pub mod prompts;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;

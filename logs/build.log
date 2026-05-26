@@ -29,3 +29,6 @@
 2026-05-26T00:07:30Z | Phase 1.2 | commit | 1936247: fixtures.rs + pub mod + load_fixtures integration test.
 2026-05-26T00:08:00Z | Phase 1.3 | config | lib.rs에 project_root + anthropic_api_key + is_api_key_available (.env + process env). fixtures.rs는 project_root 사용으로 dedup.
 2026-05-26T00:08:15Z | Phase 1.3 | verify | cargo test 3/3 통과. placeholder_env_reports_unavailable이 process env에서 키 발견 후 skip (사용자가 셸 export 사용 확인).
+2026-05-26T00:08:30Z | Phase 1.3 | commit | 426b2bb: anthropic_api_key + is_api_key_available + project_root, SCRATCHPAD 정리.
+2026-05-26T00:09:00Z | Phase 2.1 | prompts | prompts.rs SYSTEM_PROMPT (SPEC 그대로) + user_text(). pub mod 등록.
+2026-05-26T00:09:15Z | Phase 2.1 | verify | cargo check 14.59s 통과 (tauri-macros rebuild 한 번).

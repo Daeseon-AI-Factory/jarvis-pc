@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 1.3
-**Last completed:** Phase 1.3 — project_root() + anthropic_api_key() + is_api_key_available() in lib.rs (no config.rs to keep SPEC tree clean). fixtures.rs/lib.rs share project_root(). Tests: 3/3 pass (placeholder test correctly skips because process env carries the key).
-**Last commit:** 1936247 (Phase 1.2 fixture loader)
-**Next step:** Phase 2.1 — prompts.rs: SYSTEM_PROMPT (constant) per SPEC. Phase 2.2-2.3 dispatcher 다음.
-**Blockers:** fixture PNG 없음 (Phase 2.4 시점). API 키는 process env에 있으므로 ok.
-**Last updated:** 2026-05-26T00:08:00Z
+**Phase:** 2.1
+**Last completed:** Phase 2.1 — prompts.rs SYSTEM_PROMPT (SPEC 텍스트 그대로) + user_text() wrapper. pub mod prompts. cargo check 통과.
+**Last commit:** 426b2bb (Phase 1.3 config)
+**Next step:** Phase 2.2 — dispatcher.rs: AnalysisResult struct, DispatchError, LLMDispatcher async trait. async_trait crate 추가 또는 std Future 직접.
+**Blockers:** fixture PNG 없음.
+**Last updated:** 2026-05-26T00:09:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -16,8 +16,8 @@
 - [x] Phase 0.5 macOS permissions → Phase 0 COMPLETE (da020d9)
 - [x] Phase 1.1 logging (7417314)
 - [x] Phase 1.2 fixture loader (1936247)
-- [x] Phase 1.3 config (this commit)
-- [ ] Phase 2.1 prompts
+- [x] Phase 1.3 config (426b2bb)
+- [x] Phase 2.1 prompts (this commit)
 - [ ] Phase 2.2 LLMDispatcher trait
 - [ ] Phase 2.3 AnthropicDispatcher
 - [ ] Phase 2.4 fixture tests → Phase 2 COMPLETE
