@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 0.5
-**Last completed:** Phase 0 COMPLETE — Info.plist with NSScreenCaptureUsageDescription added; cargo check ok.
-**Last commit:** 82056be (Phase 0.4 API key check deferred)
-**Next step:** Phase 1.1 — Rust `tracing` 셋업 → logs/build.log에 append. TS 측은 간단 logger + invoke('log_event') IPC.
-**Blockers:** API 키 placeholder. fixture PNG 없음.
-**Last updated:** 2026-05-26T00:05:00Z
+**Phase:** 1.1
+**Last completed:** Phase 1.1 — tracing → logs/build.log (BarFormatter로 SPEC 4-pipe 형식 유지) + #[tauri::command] log_event + frontend logBackend. cargo test 통과, 양쪽 두 줄 append 확인.
+**Last commit:** da020d9 (Phase 0 COMPLETE)
+**Next step:** Phase 1.2 — src-tauri/src/fixtures.rs: Fixture struct, load_fixtures() reading fixtures/instructions.json. Integration test len≥1.
+**Blockers:** fixture PNG 없음 (Phase 2.4 시점 영향). API 키 placeholder (Phase 2.4 시점 영향).
+**Last updated:** 2026-05-26T00:06:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -13,8 +13,8 @@
 - [x] Phase 0.2 structure stubs (9b4b886)
 - [x] Phase 0.3 .gitignore audit (cfacbe1)
 - [x] Phase 0.4 API key verify (82056be, SKIP path)
-- [x] Phase 0.5 macOS permissions → Phase 0 COMPLETE (this commit)
-- [ ] Phase 1.1 logging
+- [x] Phase 0.5 macOS permissions → Phase 0 COMPLETE (da020d9)
+- [x] Phase 1.1 logging (this commit)
 - [ ] Phase 1.2 fixture loader
 - [ ] Phase 1.3 config
 - [ ] Phase 2.1 prompts

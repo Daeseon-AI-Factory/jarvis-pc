@@ -12,3 +12,10 @@
 2026-05-26T00:04:30Z | Phase 0.4 | commit | 82056be: scripts/verify_key.sh
 2026-05-26T00:05:00Z | Phase 0.5 | macos permissions | src-tauri/Info.plist 추가 (NSScreenCaptureUsageDescription만). Tauri 2가 자동 머지.
 2026-05-26T00:05:15Z | Phase 0.5 | verify | cargo check 1.19s 통과.
+2026-05-26T20:20:35.871239000Z | runtime | info:backend | phase-1.1 smoke-backend
+2026-05-26T20:20:35.871294000Z | runtime | info:frontend | phase-1.1 smoke-frontend
+2026-05-26T20:20:36.493751000Z | runtime | info:backend | phase-1.1 smoke-backend
+2026-05-26T20:20:36.493811000Z | runtime | info:frontend | phase-1.1 smoke-frontend
+2026-05-26T00:05:30Z | Phase 0.5 | commit | da020d9: Info.plist (NSScreenCaptureUsageDescription) → Phase 0 COMPLETE
+2026-05-26T00:06:00Z | Phase 1.1 | logging | tracing 0.1 + tracing-subscriber 0.3 + tracing-appender 0.2 + time 0.3. BarFormatter로 `<ISO> | runtime | <lvl>:<tgt> | <msg>` 출력. log_event command. ipc.ts logBackend. main.tsx 호출.
+2026-05-26T00:06:15Z | Phase 1.1 | verify | cargo test logging_tests 통과 (양쪽 2 라인 append 확인), tsc --noEmit 통과. 위 4줄 runtime 출력은 검증 흔적.
