@@ -65,3 +65,6 @@
 2026-05-26T00:19:30Z | Phase 5 | commit | 36c195e: Overlay listen+render+toggle ignore_cursor, TriggerPanel emit+hide. Phase 5 COMPLETE.
 2026-05-26T00:20:00Z | Phase 6.1 | session save | sessions.rs save_session + record_feedback. uuid 1 dep. app_data_dir 사용. analyze command 호출 (best-effort).
 2026-05-26T00:20:15Z | Phase 6.1 | verify | cargo test sessions::tests 2/2 pass (29.87s 빌드, 0.00s 실행).
+2026-05-26T00:20:30Z | Phase 6.1 | commit | 0e2282d: sessions.rs + analyze 통합.
+2026-05-26T00:21:00Z | Phase 6.2 | feedback | AnalysisResult.session_dir. record_feedback command. Overlay 👍/👎 버튼 + recordFeedback TS.
+2026-05-26T00:21:15Z | Phase 6.2 | verify | cargo check 13.02s 통과, tsc --noEmit 통과.

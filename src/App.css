@@ -189,6 +189,32 @@ body {
   opacity: 0.5;
 }
 
+.bubble-feedback {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.bubble-feedback button {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.bubble-feedback button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bubble-feedback button.selected {
+  background: rgba(57, 108, 216, 0.4);
+  border-color: rgba(57, 108, 216, 0.7);
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;

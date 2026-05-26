@@ -25,6 +25,10 @@ pub struct AnalysisResult {
     pub reasoning: Option<String>,
     /// Raw model output, before JSON parsing. Always populated.
     pub raw: String,
+    /// Filled in by lib::analyze after sessions::save_session — None when
+    /// persistence failed or the dispatcher was called directly from tests.
+    #[serde(default)]
+    pub session_dir: Option<String>,
 }
 
 #[derive(Debug)]

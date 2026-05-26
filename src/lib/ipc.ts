@@ -16,8 +16,18 @@ export interface AnalysisResult {
   coordinates: [number, number, number, number] | null;
   reasoning: string | null;
   raw: string;
+  session_dir: string | null;
 }
 
 export async function invokeAnalyze(instruction: string): Promise<AnalysisResult> {
   return invoke<AnalysisResult>("analyze", { instruction });
+}
+
+export type FeedbackValue = "up" | "down";
+
+export async function recordFeedback(
+  sessionDir: string,
+  value: FeedbackValue
+): Promise<void> {
+  await invoke("record_feedback", { sessionDir, value });
 }

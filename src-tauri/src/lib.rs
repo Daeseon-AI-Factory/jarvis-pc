@@ -163,16 +163,25 @@ async fn analyze(
     );
     // Best-effort persistence; logging is enough on failure so the user
     // still gets the analysis result back.
+    let mut result = result;
     match app.path().app_data_dir() {
         Ok(base) => {
             let sessions_dir = base.join("sessions");
-            if let Err(e) = sessions::save_session(&sessions_dir, &image, &instruction, &result) {
-                tracing::warn!(target: "sessions", "save failed: {e}");
+            match sessions::save_session(&sessions_dir, &image, &instruction, &result) {
+                Ok(dir) => {
+                    result.session_dir = Some(dir.to_string_lossy().into_owned());
+                }
+                Err(e) => tracing::warn!(target: "sessions", "save failed: {e}"),
             }
         }
         Err(e) => tracing::warn!(target: "sessions", "app_data_dir unresolved: {e}"),
     }
     Ok(result)
+}
+
+#[tauri::command]
+fn record_feedback(session_dir: String, value: String) -> Result<(), String> {
+    sessions::record_feedback(std::path::Path::new(&session_dir), &value).map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -191,7 +200,12 @@ pub fn run() {
             }
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, log_event, analyze])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            log_event,
+            analyze,
+            record_feedback
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

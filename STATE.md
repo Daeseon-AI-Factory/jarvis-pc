@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 6.1
-**Last completed:** Phase 6.1 — sessions.rs (save_session + record_feedback). analyze command이 app_data_dir/sessions/<YYYY-MM-DD>/<uuid>/에 4 files 저장 (best-effort, 실패해도 결과 반환). uuid 1 dep 추가. 2 unit tests pass.
-**Last commit:** 36c195e (Phase 5 COMPLETE)
-**Next step:** Phase 6.2 — overlay에 👍/👎 버튼. invoke로 record_feedback 호출. 현재 세션 dir 추적.
+**Phase:** 6.2
+**Last completed:** Phase 6.2 — AnalysisResult.session_dir 필드. record_feedback #[tauri::command]. Overlay 👍/👎 버튼 (selected state, async invoke). recordFeedback TS helper. cargo check + tsc 통과.
+**Last commit:** 0e2282d (Phase 6.1 session save)
+**Next step:** Phase 6.3 — Settings minimal. tray menu에 "Open sessions folder" 추가 (opener plugin). 단축키 변경/wipe는 SCRATCHPAD 보류 또는 v0.2.
 **Blockers:** fixture PNG 없음. runtime e2e manual.
-**Last updated:** 2026-05-26T00:20:00Z
+**Last updated:** 2026-05-26T00:21:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -29,8 +29,8 @@
 - [x] Phase 5.1 overlay window (ce3fe24)
 - [x] Phase 5.2 overlay content (this commit)
 - [x] Phase 5.3 end-to-end flow → Phase 5 COMPLETE (36c195e)
-- [x] Phase 6.1 session save (this commit)
-- [ ] Phase 6.2 feedback
+- [x] Phase 6.1 session save (0e2282d)
+- [x] Phase 6.2 feedback (this commit)
 - [ ] Phase 6.3 settings UI
 - [ ] Phase 6.4 README.md → Phase 6 COMPLETE
 

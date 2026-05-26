@@ -1,12 +1,18 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { AnalysisResult, logBackend } from "../lib/ipc";
+import {
+  AnalysisResult,
+  FeedbackValue,
+  logBackend,
+  recordFeedback,
+} from "../lib/ipc";
 
 const OVERLAY_SHOW_EVENT = "screenbridge://overlay/show";
 
 export default function Overlay() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackValue | null>(null);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -15,6 +21,7 @@ export default function Overlay() {
     void win.setIgnoreCursorEvents(true);
     listen<AnalysisResult>(OVERLAY_SHOW_EVENT, async (event) => {
       setResult(event.payload);
+      setFeedback(null);
       await win.show();
       await win.setFocus();
       // Stop passthrough while the user is actively reading; clicks should
@@ -38,10 +45,25 @@ export default function Overlay() {
 
   async function close() {
     setResult(null);
+    setFeedback(null);
     const win = getCurrentWindow();
     await win.setIgnoreCursorEvents(true);
     await win.hide();
     void logBackend("info", "overlay hidden");
+  }
+
+  async function sendFeedback(value: FeedbackValue) {
+    if (!result?.session_dir) return;
+    setFeedback(value);
+    try {
+      await recordFeedback(result.session_dir, value);
+      void logBackend("info", `feedback recorded: ${value}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      void logBackend("warn", `feedback failed: ${msg}`);
+      // Keep the visual selection even if the write failed; the user
+      // already pressed it and re-pressing is fine.
+    }
   }
 
   if (!result) return null;
@@ -64,6 +86,26 @@ export default function Overlay() {
         )}
         {!result.next_action && !result.reasoning && (
           <p className="bubble-raw">{result.raw}</p>
+        )}
+        {result.session_dir && (
+          <div className="bubble-feedback">
+            <button
+              type="button"
+              className={feedback === "up" ? "selected" : ""}
+              onClick={() => sendFeedback("up")}
+              aria-label="좋아요"
+            >
+              ⬆
+            </button>
+            <button
+              type="button"
+              className={feedback === "down" ? "selected" : ""}
+              onClick={() => sendFeedback("down")}
+              aria-label="별로"
+            >
+              ⬇
+            </button>
+          </div>
         )}
         <p className="bubble-hint">클릭 또는 ESC로 닫기</p>
       </div>
