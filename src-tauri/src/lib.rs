@@ -1,6 +1,7 @@
 pub mod capture;
 pub mod dispatcher;
 pub mod fixtures;
+pub mod hotkey;
 pub mod prompts;
 
 use std::path::PathBuf;
@@ -140,6 +141,13 @@ pub fn run() {
     tracing::info!(target: "backend", "screenbridge starting");
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .setup(|app| {
+            if let Err(e) = hotkey::register_default(app.handle()) {
+                tracing::error!(target: "hotkey", "register failed: {e}");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![greet, log_event])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

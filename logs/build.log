@@ -44,3 +44,6 @@
 2026-05-26T00:12:30Z | Phase 2.4 | commit | 324dc63: Phase 2 COMPLETE
 2026-05-26T00:13:00Z | Phase 3.1 | screen capture | xcap 0.8 + image 0.25. capture_active_screen() PNG bytes. #[ignore] smoke test (사용자 수동 + Screen Recording 권한).
 2026-05-26T00:13:15Z | Phase 3.1 | verify | cargo check 37.93s 통과 (xcap deps). runtime smoke는 SCRATCHPAD에 기록 후 사용자 수동.
+2026-05-26T00:13:30Z | Phase 3.1 | commit | 4969cf4 + ef49841 (SCRATCHPAD dedupe).
+2026-05-26T00:14:00Z | Phase 3.2 | global hotkey | tauri-plugin-global-shortcut 2 plugin. register_default()로 Alt+Space → TRIGGER_EVENT emit. setup hook에서 등록.
+2026-05-26T00:14:15Z | Phase 3.2 | verify | cargo check 4.42s 통과. runtime은 npm run tauri dev + 단축키 누름 (사용자 manual).

@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 3.1
-**Last completed:** Phase 3.1 — xcap 0.8 + image 0.25 (png only). capture.rs::capture_active_screen() returns PNG bytes. CaptureError enum. #[ignore]-가드 smoke test (`cargo test ... -- --ignored` 사용자 수동). cargo check 통과.
-**Last commit:** 324dc63 (Phase 2 COMPLETE)
-**Next step:** Phase 3.2 — tauri-plugin-global-shortcut 2 추가. 기본 ⌥+Space 등록. 누르면 이벤트 emit. hotkey.rs.
-**Blockers:** fixture PNG 없음. Screen Recording 권한 다이얼로그는 사용자 수동 승인 대기.
-**Last updated:** 2026-05-26T00:13:00Z
+**Phase:** 3.2
+**Last completed:** Phase 3.2 — tauri-plugin-global-shortcut 2. hotkey.rs::register_default()가 setup에서 Alt+Space 등록. 누르면 TRIGGER_EVENT(`screenbridge://trigger`) emit + tracing log. cargo check 통과.
+**Last commit:** ef49841 (Phase 3.1 follow-up SCRATCHPAD)
+**Next step:** Phase 3.3 — tray.rs: 메뉴바 아이콘 + Trigger now / Settings / Quit. LSUIElement true로 dock 숨김. Phase 3 COMPLETE.
+**Blockers:** fixture PNG 없음. Screen Recording 권한 다이얼로그. 단축키 runtime 확인은 사용자 manual.
+**Last updated:** 2026-05-26T00:14:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -21,8 +21,8 @@
 - [x] Phase 2.2 LLMDispatcher trait (796b4cd)
 - [x] Phase 2.3 AnthropicDispatcher (6ecb6da)
 - [x] Phase 2.4 fixture tests → Phase 2 COMPLETE (324dc63)
-- [x] Phase 3.1 screen capture (this commit, runtime smoke deferred)
-- [ ] Phase 3.2 global hotkey
+- [x] Phase 3.1 screen capture (4969cf4 + ef49841 cleanup, runtime smoke deferred)
+- [x] Phase 3.2 global hotkey (this commit, runtime smoke deferred)
 - [ ] Phase 3.3 tray menu → Phase 3 COMPLETE
 - [ ] Phase 4.1 Trigger Panel window
 - [ ] Phase 4.2 IPC flow → Phase 4 COMPLETE
