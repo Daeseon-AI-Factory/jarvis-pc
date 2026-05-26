@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 6.2
-**Last completed:** Phase 6.2 — AnalysisResult.session_dir 필드. record_feedback #[tauri::command]. Overlay 👍/👎 버튼 (selected state, async invoke). recordFeedback TS helper. cargo check + tsc 통과.
-**Last commit:** 0e2282d (Phase 6.1 session save)
-**Next step:** Phase 6.3 — Settings minimal. tray menu에 "Open sessions folder" 추가 (opener plugin). 단축키 변경/wipe는 SCRATCHPAD 보류 또는 v0.2.
+**Phase:** 6.3
+**Last completed:** Phase 6.3 — tray menu 확장 ("Open sessions folder" + 구분선). macOS `open` 명령으로 Finder 열기. 단축키/wipe는 SCRATCHPAD에 v0.2 이월 기록.
+**Last commit:** f3a4224 (Phase 6.2 feedback)
+**Next step:** Phase 6.4 — README.md (설치/실행/권한/한계) + BUILD_REPORT.md (Phase 완료 목록 + SCRATCHPAD 요약 + 첫 확인 명령). Phase 6 COMPLETE.
 **Blockers:** fixture PNG 없음. runtime e2e manual.
-**Last updated:** 2026-05-26T00:21:00Z
+**Last updated:** 2026-05-26T00:22:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -30,8 +30,8 @@
 - [x] Phase 5.2 overlay content (this commit)
 - [x] Phase 5.3 end-to-end flow → Phase 5 COMPLETE (36c195e)
 - [x] Phase 6.1 session save (0e2282d)
-- [x] Phase 6.2 feedback (this commit)
-- [ ] Phase 6.3 settings UI
+- [x] Phase 6.2 feedback (f3a4224)
+- [x] Phase 6.3 settings UI (this commit, minimal)
 - [ ] Phase 6.4 README.md → Phase 6 COMPLETE
 
-## SCRATCHPAD 미해결: 2
+## SCRATCHPAD 미해결: 3

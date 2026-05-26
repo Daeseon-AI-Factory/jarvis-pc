@@ -68,3 +68,6 @@
 2026-05-26T00:20:30Z | Phase 6.1 | commit | 0e2282d: sessions.rs + analyze 통합.
 2026-05-26T00:21:00Z | Phase 6.2 | feedback | AnalysisResult.session_dir. record_feedback command. Overlay 👍/👎 버튼 + recordFeedback TS.
 2026-05-26T00:21:15Z | Phase 6.2 | verify | cargo check 13.02s 통과, tsc --noEmit 통과.
+2026-05-26T00:21:30Z | Phase 6.2 | commit | f3a4224: AnalysisResult.session_dir + record_feedback + overlay 👍/👎.
+2026-05-26T00:22:00Z | Phase 6.3 | settings minimal | tray "Open sessions folder" 추가 (macOS open). 단축키 변경/wipe는 v0.2.
+2026-05-26T00:22:15Z | Phase 6.3 | verify | cargo check 2.03s 통과.

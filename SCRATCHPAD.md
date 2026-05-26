@@ -4,6 +4,11 @@
 
 ---
 
+## [2026-05-26] Phase 6.3 — Settings v0.1엔 minimal
+**처리:** tray menu에 "Open sessions folder" 만. 단축키 변경 / 세션 wipe / Settings 윈도우는 v0.2로 이월.
+**이유:** v0.1은 dogfooding 목적. 단축키 기본값 Alt+Space로 충분, wipe는 Finder에서 직접 쉬움 (Open sessions folder 클릭 후 수동 삭제). dialog plugin 추가도 회피.
+**사용자 답 필요:** 없음. v0.2 진입 시 우선순위.
+
 ## [2026-05-26] Phase 3.1 — Screen Recording 권한 다이얼로그 필요
 **상태:** `capture_active_screen()` 구현 + `#[ignore]`-가드된 smoke test 추가. cargo check 통과.
 **막힌 지점:** 실제 캡처 호출 시 macOS가 첫 회에 "Screen Recording 권한" 다이얼로그를 띄움. 자동 클릭 불가.

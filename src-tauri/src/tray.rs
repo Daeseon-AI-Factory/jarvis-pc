@@ -1,16 +1,23 @@
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem},
     tray::TrayIconBuilder,
-    AppHandle, Emitter,
+    AppHandle, Emitter, Manager,
 };
 
 use crate::hotkey::TRIGGER_EVENT;
 
 pub fn install(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let trigger = MenuItem::with_id(app, "trigger", "Trigger now", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+    let open_sessions = MenuItem::with_id(
+        app,
+        "open_sessions",
+        "Open sessions folder",
+        true,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&trigger, &settings, &quit])?;
+    let sep = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&trigger, &sep, &open_sessions, &sep, &quit])?;
 
     let mut builder = TrayIconBuilder::new().menu(&menu).on_menu_event(
         |app, event| match event.id().as_ref() {
@@ -20,11 +27,20 @@ pub fn install(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
                     tracing::warn!(target: "tray", "emit trigger failed: {e}");
                 }
             }
-            "settings" => {
-                // Wired up in Phase 6.3 (Settings UI). For now: log so the
-                // click is observable in build.log.
-                tracing::info!(target: "tray", "settings clicked (Phase 6.3 wires this)");
-            }
+            "open_sessions" => match app.path().app_data_dir() {
+                Ok(base) => {
+                    let dir = base.join("sessions");
+                    if let Err(e) = std::fs::create_dir_all(&dir) {
+                        tracing::warn!(target: "tray", "create sessions dir failed: {e}");
+                    }
+                    if let Err(e) = std::process::Command::new("open").arg(&dir).status() {
+                        tracing::warn!(target: "tray", "open command failed: {e}");
+                    } else {
+                        tracing::info!(target: "tray", "opened sessions: {:?}", dir);
+                    }
+                }
+                Err(e) => tracing::warn!(target: "tray", "app_data_dir unresolved: {e}"),
+            },
             "quit" => {
                 tracing::info!(target: "tray", "quit clicked");
                 app.exit(0);
