@@ -177,4 +177,22 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-26 23:10 — Groq Llama 3.2 11B Vision 호스팅 현황 불명확
+
+**증상:** "현재 기준 최선" 답하려고 WebSearch 두 번 했는데 결과 모순.
+
+**가설 / 시도:**
+1. 첫 검색에서는 Groq blog (2024-09)에서 "Llama 3.2 Vision 출시" + Llama 3.2 11B Vision $0.18/M paid pricing 명시.
+2. 두 번째 검색 ([Artificial Analysis Llama 3.2 11B Vision providers](https://artificialanalysis.ai/models/llama-3-2-instruct-11b-vision/providers))에서는 Amazon Bedrock / Azure / DeepInfra만 listed. Groq 없음.
+
+**원인:** 두 가지 가능성, 검색으로는 명확 X:
+- Groq가 한때 호스팅했지만 deprecate (Groq docs deprecations 페이지 검색 결과에 있었음).
+- 또는 Artificial Analysis가 단순히 Groq를 측정 안 함.
+
+**해결 + 학습:**
+- Fix: GROQ_VISION_MODEL const는 가설값 `"meta-llama/llama-4-scout-17b-16e-instruct"`로 두고 사용자가 `console.groq.com/docs/models` 직접 확인해서 정확한 모델 ID로 교체하도록 docstring 명시.
+- 교훈: AI 모델 호스팅 상황은 빠르게 변함. WebSearch 결과 사이에 시점 차이가 있으면 vendor 공식 docs 직접 확인이 가장 정확. 추가 hop이 귀찮아 보여도 결국 더 빠름.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

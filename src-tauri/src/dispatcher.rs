@@ -290,6 +290,260 @@ impl LLMDispatcher for ClaudeCliDispatcher {
     }
 }
 
+/// Groq + Llama 3.2 11B Vision (or whatever vision model Groq currently
+/// hosts free). OpenAI-compatible API. Free tier 30 RPM / 1000 RPD / 6K TPM
+/// is plenty for dogfooding.
+pub struct GroqDispatcher {
+    client: Client,
+    api_key: String,
+    model: String,
+}
+
+const GROQ_API_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
+/// 사용자가 console.groq.com/docs/models에서 확인한 정확한 vision 모델 ID로
+/// 교체. 2026-05 시점 가설값 — 실제로는 deprecated일 가능성 있음.
+pub const GROQ_VISION_MODEL: &str = "meta-llama/llama-4-scout-17b-16e-instruct";
+
+impl GroqDispatcher {
+    pub fn new() -> Result<Self, DispatchError> {
+        let api_key = crate::groq_api_key().ok_or(DispatchError::MissingApiKey)?;
+        let client = Client::builder()
+            .build()
+            .map_err(|e| DispatchError::Other(format!("reqwest client: {e}")))?;
+        Ok(Self {
+            client,
+            api_key,
+            model: GROQ_VISION_MODEL.to_string(),
+        })
+    }
+
+    pub fn with_model(mut self, m: impl Into<String>) -> Self {
+        self.model = m.into();
+        self
+    }
+}
+
+#[async_trait]
+impl LLMDispatcher for GroqDispatcher {
+    async fn analyze(
+        &self,
+        image_bytes: Vec<u8>,
+        instruction: String,
+    ) -> Result<AnalysisResult, DispatchError> {
+        let b64 = BASE64_STANDARD.encode(&image_bytes);
+        let body = json!({
+            "model": self.model,
+            "max_tokens": DEFAULT_MAX_TOKENS,
+            "temperature": 0.0,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": crate::prompts::SYSTEM_PROMPT,
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": crate::prompts::user_text(&instruction),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": format!("data:image/png;base64,{b64}"),
+                            },
+                        }
+                    ]
+                }
+            ]
+        });
+
+        tracing::info!(
+            target: "dispatcher",
+            "groq analyze begin: model={}, image_bytes={}, instr_len={}",
+            self.model,
+            image_bytes.len(),
+            instruction.len()
+        );
+
+        let resp = self
+            .client
+            .post(GROQ_API_URL)
+            .bearer_auth(&self.api_key)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| DispatchError::Network(e.to_string()))?;
+
+        let status = resp.status();
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| DispatchError::Network(e.to_string()))?;
+
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                401 | 403 => DispatchError::Auth(text),
+                code => DispatchError::Api {
+                    status: code,
+                    body: text.chars().take(800).collect(),
+                },
+            });
+        }
+
+        let envelope: Value = serde_json::from_str(&text).map_err(|e| {
+            DispatchError::Parse(format!(
+                "groq envelope: {e}; body[..200]={}",
+                text.chars().take(200).collect::<String>()
+            ))
+        })?;
+
+        let raw = envelope
+            .get("choices")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|m| m.get("message"))
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        tracing::info!(
+            target: "dispatcher",
+            "groq analyze ok: raw_len={}",
+            raw.len()
+        );
+        Ok(parse_analysis(raw))
+    }
+}
+
+/// Google Gemini API. Native multimodal. Free tier 250-1000 RPD depending on
+/// model. URL uses ?key=<token> query param (not Bearer).
+pub struct GeminiDispatcher {
+    client: Client,
+    api_key: String,
+    model: String,
+}
+
+const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta/models";
+pub const GEMINI_VISION_MODEL: &str = "gemini-2.5-flash";
+
+impl GeminiDispatcher {
+    pub fn new() -> Result<Self, DispatchError> {
+        let api_key = crate::gemini_api_key().ok_or(DispatchError::MissingApiKey)?;
+        let client = Client::builder()
+            .build()
+            .map_err(|e| DispatchError::Other(format!("reqwest client: {e}")))?;
+        Ok(Self {
+            client,
+            api_key,
+            model: GEMINI_VISION_MODEL.to_string(),
+        })
+    }
+
+    pub fn with_model(mut self, m: impl Into<String>) -> Self {
+        self.model = m.into();
+        self
+    }
+}
+
+#[async_trait]
+impl LLMDispatcher for GeminiDispatcher {
+    async fn analyze(
+        &self,
+        image_bytes: Vec<u8>,
+        instruction: String,
+    ) -> Result<AnalysisResult, DispatchError> {
+        let b64 = BASE64_STANDARD.encode(&image_bytes);
+        let body = json!({
+            "system_instruction": {
+                "parts": [{"text": crate::prompts::SYSTEM_PROMPT}]
+            },
+            "contents": [
+                {
+                    "parts": [
+                        {"text": crate::prompts::user_text(&instruction)},
+                        {
+                            "inline_data": {
+                                "mime_type": "image/png",
+                                "data": b64
+                            }
+                        }
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "maxOutputTokens": DEFAULT_MAX_TOKENS,
+                "temperature": 0.0
+            }
+        });
+
+        let url = format!(
+            "{}/{}:generateContent?key={}",
+            GEMINI_API_BASE, self.model, self.api_key
+        );
+
+        tracing::info!(
+            target: "dispatcher",
+            "gemini analyze begin: model={}, image_bytes={}, instr_len={}",
+            self.model,
+            image_bytes.len(),
+            instruction.len()
+        );
+
+        let resp = self
+            .client
+            .post(&url)
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| DispatchError::Network(e.to_string()))?;
+
+        let status = resp.status();
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| DispatchError::Network(e.to_string()))?;
+
+        if !status.is_success() {
+            return Err(match status.as_u16() {
+                401 | 403 => DispatchError::Auth(text),
+                code => DispatchError::Api {
+                    status: code,
+                    body: text.chars().take(800).collect(),
+                },
+            });
+        }
+
+        let envelope: Value = serde_json::from_str(&text).map_err(|e| {
+            DispatchError::Parse(format!(
+                "gemini envelope: {e}; body[..200]={}",
+                text.chars().take(200).collect::<String>()
+            ))
+        })?;
+
+        let raw = envelope
+            .get("candidates")
+            .and_then(|c| c.as_array())
+            .and_then(|arr| arr.first())
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.get("parts"))
+            .and_then(|p| p.as_array())
+            .and_then(|arr| arr.iter().find_map(|p| p.get("text").and_then(|t| t.as_str())))
+            .unwrap_or_default()
+            .to_string();
+
+        tracing::info!(
+            target: "dispatcher",
+            "gemini analyze ok: raw_len={}",
+            raw.len()
+        );
+        Ok(parse_analysis(raw))
+    }
+}
+
 fn strip_code_fences(s: &str) -> String {
     let s = s.trim();
     let body = s

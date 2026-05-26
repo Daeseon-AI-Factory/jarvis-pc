@@ -83,17 +83,28 @@ fn is_real_api_key(s: &str) -> bool {
         && !s.contains("your-api-key")
 }
 
-/// Resolve ANTHROPIC_API_KEY from process env first, falling back to .env at
-/// the repo root. Returns None for empty / placeholder values so callers can
-/// gate on the result without re-checking the string.
-pub fn anthropic_api_key() -> Option<String> {
-    if let Ok(v) = std::env::var("ANTHROPIC_API_KEY") {
+/// Resolve API key by name from process env first, falling back to .env at
+/// the repo root. Returns None for empty / placeholder values.
+fn lookup_api_key(name: &str) -> Option<String> {
+    if let Ok(v) = std::env::var(name) {
         if is_real_api_key(&v) {
             return Some(v);
         }
     }
     let env_path = project_root().join(".env");
-    parse_env_file_key(&env_path, "ANTHROPIC_API_KEY").filter(|v| is_real_api_key(v))
+    parse_env_file_key(&env_path, name).filter(|v| is_real_api_key(v))
+}
+
+pub fn anthropic_api_key() -> Option<String> {
+    lookup_api_key("ANTHROPIC_API_KEY")
+}
+
+pub fn groq_api_key() -> Option<String> {
+    lookup_api_key("GROQ_API_KEY")
+}
+
+pub fn gemini_api_key() -> Option<String> {
+    lookup_api_key("GEMINI_API_KEY")
 }
 
 /// Cheap check callers use to skip live API tests when the key is missing.
@@ -144,16 +155,34 @@ async fn analyze(
 ) -> Result<dispatcher::AnalysisResult, String> {
     use dispatcher::LLMDispatcher;
     use tauri::Manager;
-    tracing::info!(target: "analyze", "begin: instr_len={}", instruction.len());
+    let kind = std::env::var("SB_DISPATCHER").unwrap_or_else(|_| "claude".to_string());
+    tracing::info!(target: "analyze", "begin: kind={kind}, instr_len={}", instruction.len());
     let image = tauri::async_runtime::spawn_blocking(capture::capture_active_screen)
         .await
         .map_err(|e| format!("capture task join: {e}"))?
         .map_err(|e| format!("capture: {e}"))?;
-    let dispatcher = dispatcher::ClaudeCliDispatcher::new();
-    let result = dispatcher
-        .analyze(image.clone(), instruction.clone())
-        .await
-        .map_err(|e| e.to_string())?;
+    let started = std::time::Instant::now();
+    let result = match kind.as_str() {
+        "groq" => {
+            let d = dispatcher::GroqDispatcher::new().map_err(|e| e.to_string())?;
+            d.analyze(image.clone(), instruction.clone()).await
+        }
+        "gemini" => {
+            let d = dispatcher::GeminiDispatcher::new().map_err(|e| e.to_string())?;
+            d.analyze(image.clone(), instruction.clone()).await
+        }
+        "anthropic" => {
+            let d = dispatcher::AnthropicDispatcher::new().map_err(|e| e.to_string())?;
+            d.analyze(image.clone(), instruction.clone()).await
+        }
+        _ => {
+            let d = dispatcher::ClaudeCliDispatcher::new();
+            d.analyze(image.clone(), instruction.clone()).await
+        }
+    };
+    let elapsed_ms = started.elapsed().as_millis();
+    let result = result.map_err(|e| e.to_string())?;
+    tracing::info!(target: "analyze", "elapsed: kind={kind}, ms={elapsed_ms}");
     tracing::info!(
         target: "analyze",
         "done: state={:?}, next={:?}, coords={:?}",

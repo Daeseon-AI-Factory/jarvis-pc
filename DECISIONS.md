@@ -274,4 +274,52 @@ R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를
 
 ---
 
+## 2026-05-26 — Dispatcher swap 메커니즘: env var vs config file vs build feature
+
+**선택지:**
+- **A. `SB_DISPATCHER` env var** — `SB_DISPATCHER=groq npm run tauri dev` 식. 4개 분기 (claude/groq/gemini/anthropic).
+- B. `~/.screenbridge/config.toml` 설정 파일 — 한 번 설정 후 영구.
+- C. `cargo build --features=groq` — 컴파일 타임 분기.
+
+**Trade-off:**
+
+| 축 | A (env var) | B (config file) | C (cargo feature) |
+| --- | --- | --- | --- |
+| 측정 사이클 (4개 dispatcher 비교) | 빠름 (env만 바꿈) | 중간 (파일 편집) | 매번 재컴파일 |
+| 런타임 swap | 가능 (dev 재시작) | 가능 | 불가 (rebuild) |
+| 코드 변경 | 분기 한 곳 (lib.rs) | config 모듈 추가 | features 셋업 + cfg |
+| 사용자 UX | 익숙 (셸 env) | 한 번 설정 후 까먹음 | 어색 |
+
+**선택:** **A**.
+
+**근거:** 지금 단계 = dispatcher 정확도/속도 비교. 매번 다른 옵션 한 번씩 돌려보는 게 워크플로. env var가 가장 빠른 측정 사이클. v0.2에 default를 결정하면 그때 B(config) 추가 검토.
+
+**되돌리기 비용:** 작음. lib.rs::analyze match arm 4개를 default 한 줄로 줄이고 다른 dispatcher 코드는 보존. 30분.
+
+---
+
+## 2026-05-26 — Groq vision 모델 const: 가설값 + 사용자 검증
+
+**선택지:**
+- A. WebSearch 결과 기반 모델 ID 박음 (Llama 3.2 11B Vision).
+- **B. 가설값 const + 사용자가 console.groq.com/docs/models 직접 확인 후 교체**.
+- C. 동적 fetch — Groq의 `/v1/models` endpoint로 vision 지원 모델 자동 발견.
+
+**Trade-off:**
+
+| 축 | A | B | C |
+| --- | --- | --- | --- |
+| 할루시네이션 리스크 | 높음 (Groq 호스팅 상태 검색 모순) | 낮음 (사용자 검증) | 낮음 |
+| 사용자 마찰 | 0 | 1번 console 방문 | 0 |
+| 코드 복잡도 | 낮음 | 낮음 | 중간 (추가 API 호출) |
+| 시점 의존성 (모델 deprecate) | 높음 | 낮음 (재방문) | 낮음 |
+
+**선택:** **B**.
+
+**근거:** TROUBLESHOOTING 23:10에 기록한 모순 — 검색 결과로 단정 못 함. 가설값을 const로 두고 사용자가 console 직접 확인하면 (a) 현재 시점 정확한 모델 ID 박을 수 있고 (b) Groq vision 호스팅 자체 확인되며 (c) 측정 사이클은 그대로 빠름. 할루시네이션 방지가 사용자 명시 요구.
+
+**되돌리기 비용:** 작음. const 한 줄 교체. 또는 v0.2에서 C(동적 fetch)로 swap.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
