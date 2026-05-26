@@ -4,7 +4,13 @@
 
 ---
 
-## [2026-05-26] Phase 1.2 / Phase 2.4 — fixture 이미지 부재
+## [2026-05-26] Phase 3.1 — Screen Recording 권한 다이얼로그 필요
+**상태:** `capture_active_screen()` 구현 + `#[ignore]`-가드된 smoke test 추가. cargo check 통과.
+**막힌 지점:** 실제 캡처 호출 시 macOS가 첫 회에 "Screen Recording 권한" 다이얼로그를 띄움. 자동 클릭 불가.
+**가능한 해결책:**
+- 사용자가 `cargo test --manifest-path src-tauri/Cargo.toml capture_active_screen_smoke -- --ignored --nocapture` 수동 실행 후 권한 승인.
+- 또는 Phase 5 e2e 시점에 `npm run tauri dev`로 앱 띄우고 단축키 누르면 그때 다이얼로그 등장.
+**사용자 답 필요:** 사용자가 Phase 3.1 verify를 manual 실행할 시점 선택. 빌드 차원에서는 cargo check + cargo build 성공으로 충분 (R5 R4 통과).
 
 ## [2026-05-26] Phase 1.2 / Phase 2.4 — fixture 이미지 부재
 **시도한 것:** `fixtures/instructions.json`은 있음 (3개 항목: vercel_dashboard, aws_console, github_repo).
