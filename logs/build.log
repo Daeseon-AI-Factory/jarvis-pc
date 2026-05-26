@@ -59,3 +59,6 @@
 2026-05-26T00:17:30Z | Phase 4.2 | commit | 8db9f81: analyze command + invokeAnalyze + result UI. Phase 4 COMPLETE.
 2026-05-26T00:18:00Z | Phase 5.1 | overlay window | tauri.conf.json overlay (transparent fullscreen alwaysOnTop). App.tsx label routing. Overlay.tsx placeholder.
 2026-05-26T00:18:15Z | Phase 5.1 | verify | tsc --noEmit 통과.
+2026-05-26T00:18:30Z | Phase 5.1 | commit | ce3fe24: tauri.conf overlay window + App label routing + Overlay placeholder.
+2026-05-26T00:19:00Z | Phase 5.2/5.3 | overlay content + flow | Overlay listen(overlay:show) + coordinate 박스 + bubble + ESC/클릭 닫힘 + setIgnoreCursorEvents 토글. TriggerPanel analyze 후 emit + self hide + reset.
+2026-05-26T00:19:15Z | Phase 5 | verify | tsc --noEmit 통과. e2e runtime은 사용자 manual.

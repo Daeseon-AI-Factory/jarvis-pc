@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { AnalysisResult, invokeAnalyze, logBackend } from "../lib/ipc";
 
 const TRIGGER_EVENT = "screenbridge://trigger";
+const OVERLAY_SHOW_EVENT = "screenbridge://overlay/show";
 
 export default function TriggerPanel() {
   const [instruction, setInstruction] = useState("");
@@ -57,6 +58,13 @@ export default function TriggerPanel() {
         "info",
         `analyze done: next=${r.next_action?.slice(0, 60) ?? "<none>"}`
       );
+      // Hand the result off to the overlay window, then collapse this one.
+      await emit(OVERLAY_SHOW_EVENT, r);
+      await getCurrentWindow().hide();
+      // Drop the inline copy so the next trigger starts clean.
+      setResult(null);
+      setStatus("idle");
+      setInstruction("");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);

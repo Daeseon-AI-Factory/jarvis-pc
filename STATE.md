@@ -1,11 +1,11 @@
 # Current State
 
-**Phase:** 5.1
-**Last completed:** Phase 5.1 — tauri.conf.json overlay window (transparent, decorations:false, alwaysOnTop, fullscreen, skipTaskbar). App.tsx label routing. Overlay.tsx placeholder. App.css overlay-root pointer-events:none.
-**Last commit:** 8db9f81 (Phase 4 COMPLETE)
-**Next step:** Phase 5.2 — Overlay 컨텐츠: coordinates 박스 + bubble (next_action + reasoning). listen(overlay:show) + payload. ESC/클릭 닫힘. CSS fade-in / pulse.
+**Phase:** 5.3
+**Last completed:** Phase 5 COMPLETE — Overlay listens screenbridge://overlay/show, renders red-pulse coordinate box + dark bubble (action / reasoning / raw fallback) + hint. setIgnoreCursorEvents toggles between show (false) and hide (true). TriggerPanel analyze 성공 → emit overlay → hide self + reset. ESC/클릭 close. cargo check (전 phase) + tsc 통과.
+**Last commit:** ce3fe24 (Phase 5.1 overlay window)
+**Next step:** Phase 6.1 — sessions.rs: ~/Library/Application Support/ScreenBridge/sessions/<date>/<uuid>/{screen.png, instruction.txt, response.json, meta.json}. analyze command이 그 디렉토리에 저장.
 **Blockers:** fixture PNG 없음. runtime e2e 사용자 manual.
-**Last updated:** 2026-05-26T00:18:00Z
+**Last updated:** 2026-05-26T00:19:00Z
 
 ## Phase 완료 현황
 - [x] Phase 0.0 bootstrap (7775b8e)
@@ -26,9 +26,9 @@
 - [x] Phase 3.3 tray menu → Phase 3 COMPLETE (bf8702d)
 - [x] Phase 4.1 Trigger Panel window (b9dcbfc)
 - [x] Phase 4.2 IPC flow → Phase 4 COMPLETE (8db9f81)
-- [x] Phase 5.1 overlay window (this commit)
-- [ ] Phase 5.2 overlay content
-- [ ] Phase 5.3 end-to-end flow → Phase 5 COMPLETE
+- [x] Phase 5.1 overlay window (ce3fe24)
+- [x] Phase 5.2 overlay content (this commit)
+- [x] Phase 5.3 end-to-end flow → Phase 5 COMPLETE (this commit)
 - [ ] Phase 6.1 session save
 - [ ] Phase 6.2 feedback
 - [ ] Phase 6.3 settings UI
