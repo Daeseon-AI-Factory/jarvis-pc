@@ -22,6 +22,18 @@
         "decorations": true,
         "focus": true,
         "center": true
+      },
+      {
+        "label": "overlay",
+        "title": "ScreenBridge — Overlay",
+        "visible": false,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "fullscreen": true,
+        "shadow": false
       }
     ],
     "security": {

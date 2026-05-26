@@ -113,6 +113,24 @@ body {
   cursor: not-allowed;
 }
 
+.overlay-root {
+  position: fixed;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.overlay-placeholder {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;

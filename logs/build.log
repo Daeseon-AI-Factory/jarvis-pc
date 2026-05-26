@@ -56,3 +56,6 @@
 2026-05-26T00:16:30Z | Phase 4.1 | commit | b9dcbfc: tauri.conf trigger window + TriggerPanel + App rewrite.
 2026-05-26T00:17:00Z | Phase 4.2 | analyze IPC | analyze command (spawn_blocking capture + dispatcher.analyze). invokeAnalyze TS. TriggerPanel result 표시.
 2026-05-26T00:17:15Z | Phase 4.2 | verify | cargo check 2.60s 통과 (LLMDispatcher use 추가 fix). tsc --noEmit 통과.
+2026-05-26T00:17:30Z | Phase 4.2 | commit | 8db9f81: analyze command + invokeAnalyze + result UI. Phase 4 COMPLETE.
+2026-05-26T00:18:00Z | Phase 5.1 | overlay window | tauri.conf.json overlay (transparent fullscreen alwaysOnTop). App.tsx label routing. Overlay.tsx placeholder.
+2026-05-26T00:18:15Z | Phase 5.1 | verify | tsc --noEmit 통과.
