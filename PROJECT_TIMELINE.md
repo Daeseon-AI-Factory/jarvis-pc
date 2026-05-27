@@ -123,4 +123,19 @@ Tauri 코드 복원 방법 (필요 시):
 
 ---
 
+## 2026-05-27 — Swift Phase 0.1: SwiftPM scaffold
+
+옵션 B 채택 (SwiftPM via `swift package init --type executable`). root에 `Package.swift` + `Sources/ScreenBridge/ScreenBridgeApp.swift`. 사용자 Xcode GUI 없이 cargo-style CLI 사이클 (`swift build` / `swift run`).
+
+- `Package.swift`: macOS 14+ platform, Swift 6 language mode.
+- `Sources/ScreenBridge/ScreenBridgeApp.swift`: 기본 SwiftUI `@main App` + `ContentView` placeholder.
+- `swift build` 9.37s 통과.
+- Tests/ScreenBridgeTests/ stub.
+
+다음 (Swift 0.2): NSApplicationDelegateAdaptor + LSUIElement (Info.plist) + NSStatusItem.
+
+production `.app` bundle은 후속 (`swift-bundler` 또는 Xcode build phase). 일단 dev = `swift run`.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)
