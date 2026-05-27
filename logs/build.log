@@ -462,3 +462,60 @@
 2026-05-26T23:50:26.290783000Z | runtime | info:frontend | trigger panel after setFocus()
 2026-05-26T23:50:26.290946000Z | runtime | info:frontend | trigger panel shown
 2026-05-26T23:50:31.936252000Z | runtime | info:frontend | trigger panel hidden
+2026-05-27T16:33:46.982290000Z | runtime | info:backend | screenbridge starting
+2026-05-27T16:33:47.966774000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T16:33:47.988130000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T16:33:51.301704000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T16:33:51.302369000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T16:33:51.382257000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T16:33:51.382686000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T16:33:51.386495000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T16:33:51.386730000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T16:33:52.990511000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T16:33:53.007349000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T16:33:53.031320000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T16:33:53.119535000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T16:33:53.120271000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T16:33:53.132129000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T16:33:53.133611000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T16:33:53.133817000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T16:33:53.133992000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T16:33:56.669604000Z | runtime | info:frontend | trigger panel hidden
+2026-05-27T16:59:45.228325000Z | runtime | info:backend | screenbridge starting
+2026-05-27T16:59:45.651687000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T16:59:45.662191000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T16:59:46.499517000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T16:59:46.499865000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T16:59:46.525589000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T16:59:46.526172000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T16:59:46.527112000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T16:59:46.527338000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T16:59:49.739965000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T16:59:49.744367000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T16:59:49.745421000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T16:59:49.762818000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T16:59:49.763718000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T16:59:49.792356000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T16:59:49.795246000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T16:59:49.796203000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T16:59:49.796914000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T16:59:50.665537000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T16:59:50.667593000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T16:59:50.668655000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T16:59:50.670945000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T16:59:50.671678000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T16:59:50.677442000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T16:59:50.677722000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T16:59:50.677899000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T16:59:50.678071000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T17:00:01.809575000Z | runtime | info:frontend | analyze submit: 240 chars
+2026-05-27T17:00:01.810238000Z | runtime | info:analyze | begin: kind=groq, instr_len=294
+2026-05-27T17:00:08.529432000Z | runtime | info:capture | captured: orig=3456x2234, sent=1568x1014, bytes=1028634
+2026-05-27T17:00:08.536390000Z | runtime | info:dispatcher | groq analyze begin: model=meta-llama/llama-4-scout-17b-16e-instruct, image_bytes=1028634, instr_len=294
+2026-05-27T17:01:25.154988000Z | runtime | info:dispatcher | groq analyze ok: raw_len=416
+2026-05-27T17:01:25.155167000Z | runtime | info:analyze | elapsed: kind=groq, ms=76625
+2026-05-27T17:01:25.155190000Z | runtime | info:analyze | done: state=Some("현재 화면에는 여러 창이 열려 있으며, 터미널에서 오류 메시지가 표시되고 있습니다. 화면 중앙에 팝업 창이 나타나 있습니다."), next=Some("팝업 창의 'Cancel' 버튼 클릭"), coords=None
+2026-05-27T17:01:25.156935000Z | runtime | info:sessions | saved: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-27/41100578-ee7e-4756-b3f6-0cd415674831"
+2026-05-27T17:01:25.161564000Z | runtime | info:frontend | analyze done: next=팝업 창의 'Cancel' 버튼 클릭
+2026-05-27T17:01:25.370485000Z | runtime | info:frontend | overlay shown
+2026-05-27T17:01:25.370779000Z | runtime | info:frontend | overlay shown

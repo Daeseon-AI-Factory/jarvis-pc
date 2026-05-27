@@ -199,4 +199,35 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 17:01 — 오버레이가 다른 macOS Space에 떠 있음
+
+**증상:** Space A에서 ScreenBridge dev 띄움 → Space B로 이동 → ⌥+Space → trigger panel은 안 보이거나 잘못 보이고, Analyze 결과 overlay가 Space A로 그려져 사용자가 못 봄.
+
+**가설 / 시도:**
+- macOS의 NSWindow는 *처음 생성된 Space*에 stick하는 게 기본 동작 (NSWindowCollectionBehaviorDefault).
+- alwaysOnTop은 윈도우 level만 띄울 뿐 Space-following과 무관.
+
+**원인:** Tauri webview window default가 `canJoinAllSpaces = false`. ScreenBridge 부팅 시 위치한 Space에 trigger/overlay 둘 다 묶임. 다른 Space로 가면 보이지 않음.
+
+**해결 + 학습:**
+- Fix: tauri.conf.json의 두 윈도우 모두에 `"visibleOnAllWorkspaces": true` 추가. Tauri가 NSWindow.collectionBehavior에 canJoinAllSpaces 매핑.
+- 교훈: macOS의 단일 Space 가정은 menu-bar app 디자인에서 자주 깨짐. transparent/alwaysOnTop/fullscreen 셋업 시 Space 동작도 같이 점검.
+
+---
+
+## 2026-05-27 17:01 — Groq Llama 4 Scout 17B vision 실측: 76초 (예상 1-5초 대비)
+
+**증상:** SB_DISPATCHER=groq 시도. 76,625ms (76초) 걸림. claude CLI 41초 대비 두 배. 좌표 인식 실패 (`coords=None`).
+
+**가설 / 시도:**
+- WebSearch에서 Groq "300-1000 tps / sub-200ms TTFT" 발견 → vision도 동일할 거라 추정.
+
+**원인:** WebSearch 결과의 속도는 *텍스트* 모델 (Llama 3.3 70B 등) 기준. vision은 image encoder + token generation 두 단계라 다른 그림. Llama 4 Scout 17B는 preview 상태라 production 최적화 부족 가능. 또 우리 PNG 1MB의 base64 ~1.3MB 업로드 시간도 추가.
+
+**해결 + 학습:**
+- Fix 없음 — 측정 결과. Groq 옵션 dogfooding 후보로 폐기. DECISIONS 매트릭스에 실측값 갱신.
+- 교훈: 텍스트 inference 벤치마크를 vision에 그대로 끌어다 추정하지 말 것. vision은 별도 측정. 사실 확인 안 됐으면 DECISIONS에 "검증 안 됨"으로 명시 — 이번엔 그렇게 박았는데 실측이 추정 깨뜨림.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

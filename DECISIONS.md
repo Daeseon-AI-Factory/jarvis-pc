@@ -270,6 +270,16 @@ R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를
 
 **선택:** **사용자 결정 대기** (Groq vs Gemini vs claude 그대로).
 
+**2026-05-27 실측 갱신:**
+
+| dispatcher | 측정 시간 | 좌표 인식 | 정확도 (1회 측정) | 비고 |
+| --- | --- | --- | --- | --- |
+| claude CLI (Pro 구독) | 41초 (첫 호출, 다운스케일 전) | ✓ `[334,155,370,220]` | sonnet 답변 길고 정확 | TROUBLESHOOTING 22:50 |
+| **Groq Llama 4 Scout 17B (preview)** | **76초** | ✗ `coords=None` | "Cancel 버튼 클릭" — 좌표 없으면 overlay 박스 X | 예상 1-5초 vs 실측 76초. preview 모델 vision 최적화 부족 가능 |
+| Gemini 2.5 Flash | 미측정 | — | — | 다음 측정 후보 |
+
+→ Groq는 dogfooding 후보로 사실상 폐기 (속도 + 좌표 둘 다 약함).
+
 **되돌리기 비용:** 어느 옵션도 dispatcher trait 그대로 활용. 새 Dispatcher struct 하나 추가하고 lib.rs::analyze에서 한 줄 swap. 기존 ClaudeCliDispatcher/AnthropicDispatcher는 보존. 1-2시간 구현 + fixture 측정 30분.
 
 ---
