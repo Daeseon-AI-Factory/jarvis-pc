@@ -252,6 +252,18 @@ async fn analyze(
             sw, sh, ow, oh, rx, result.coordinates
         );
     }
+
+    // multi-monitor: capture한 monitor의 전역 좌표를 frontend에 전달해서
+    // overlay가 *그 monitor*에 그려지게. 안 주면 frontend currentMonitor()
+    // fallback (single monitor에선 OK).
+    let (mx, my) = cap.monitor_position;
+    let (ow, oh) = cap.orig_size;
+    result.monitor_rect = Some([mx, my, ow as i32, oh as i32]);
+    tracing::info!(
+        target: "analyze",
+        "monitor rect: x={} y={} w={} h={}",
+        mx, my, ow, oh
+    );
     tracing::info!(target: "analyze", "elapsed: kind={kind}, ms={elapsed_ms}");
     tracing::info!(
         target: "analyze",

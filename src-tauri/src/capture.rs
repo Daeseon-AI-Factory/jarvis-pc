@@ -1,3 +1,5 @@
+use core_graphics::event::CGEvent;
+use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use image::imageops::FilterType;
 use std::io::Cursor;
 use xcap::Monitor;
@@ -12,9 +14,21 @@ pub struct CapturedScreen {
     /// 모델에 실제로 보낸 (다운스케일 후) 픽셀 크기. 모델 좌표 응답의
     /// 기준 좌표계.
     pub sent_size: (u32, u32),
-    /// 캡처 시점 monitor의 원본 픽셀 크기. overlay를 그릴 좌표계 — 모델
-    /// coords에 orig/sent ratio를 곱해 변환 필요.
+    /// 캡처 시점 monitor의 원본 픽셀 크기 (그 monitor 안 local px).
     pub orig_size: (u32, u32),
+    /// 캡처한 monitor의 전역 좌표계 position (multi-monitor 환경에서 다른
+    /// monitor와 구분). overlay setPosition에 그대로 사용.
+    pub monitor_position: (i32, i32),
+}
+
+/// macOS의 NSEvent.mouseLocation을 core-graphics로 받는다. 좌표는 *bottom-left
+/// origin* 기준 (NSPoint 관례) — Y축 flip 필요. 또 모든 단위가 *logical px*.
+/// multi-monitor 환경에서 cursor 있는 monitor를 결정하기 위해 호출.
+fn cursor_position_logical() -> Option<(f64, f64)> {
+    let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).ok()?;
+    let event = CGEvent::new(source).ok()?;
+    let p = event.location();
+    Some((p.x, p.y))
 }
 
 #[derive(Debug)]
@@ -36,16 +50,33 @@ impl std::fmt::Display for CaptureError {
 
 impl std::error::Error for CaptureError {}
 
-/// Capture the primary monitor. macOS asks for Screen Recording permission
-/// the first time. Returns both bytes and dimensions so the analyze pipeline
-/// can scale model-relative coordinates back to monitor coords.
+/// Capture the monitor under the mouse cursor (multi-monitor friendly).
+/// Falls back to primary if cursor monitor can't be resolved. macOS asks for
+/// Screen Recording permission the first time.
 pub fn capture_active_screen() -> Result<CapturedScreen, CaptureError> {
     let monitors = Monitor::all().map_err(|e| CaptureError::XCap(e.to_string()))?;
-    let monitor = monitors
-        .iter()
-        .find(|m| m.is_primary().unwrap_or(false))
-        .or_else(|| monitors.first())
-        .ok_or(CaptureError::NoMonitor)?;
+
+    // 1. cursor 위치 → 그 monitor.
+    // 2. 못 받으면 is_primary().
+    // 3. 그것도 안 되면 monitors[0].
+    let cursor_monitor = cursor_position_logical().and_then(|(x, y)| {
+        // Monitor::from_point는 cursor의 logical px 받아 그 안의 monitor 찾는다.
+        Monitor::from_point(x as i32, y as i32).ok()
+    });
+    let monitor_owned;
+    let monitor: &Monitor = if let Some(m) = cursor_monitor.as_ref() {
+        m
+    } else {
+        monitor_owned = monitors
+            .iter()
+            .find(|m| m.is_primary().unwrap_or(false))
+            .or_else(|| monitors.first())
+            .ok_or(CaptureError::NoMonitor)?;
+        monitor_owned
+    };
+
+    let monitor_x = monitor.x().unwrap_or(0);
+    let monitor_y = monitor.y().unwrap_or(0);
 
     let img = monitor
         .capture_image()
@@ -70,7 +101,9 @@ pub fn capture_active_screen() -> Result<CapturedScreen, CaptureError> {
 
     tracing::info!(
         target: "capture",
-        "captured: orig={}x{}, sent={}x{}, bytes={}",
+        "captured: monitor_pos=({},{}) orig={}x{} sent={}x{} bytes={}",
+        monitor_x,
+        monitor_y,
         orig_w,
         orig_h,
         sent_w,
@@ -82,6 +115,7 @@ pub fn capture_active_screen() -> Result<CapturedScreen, CaptureError> {
         bytes,
         sent_size: (sent_w, sent_h),
         orig_size: (orig_w, orig_h),
+        monitor_position: (monitor_x, monitor_y),
     })
 }
 

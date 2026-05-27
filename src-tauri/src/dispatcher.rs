@@ -36,6 +36,10 @@ pub struct AnalysisResult {
     /// persistence failed or the dispatcher was called directly from tests.
     #[serde(default)]
     pub session_dir: Option<String>,
+    /// 캡처한 monitor의 전역 좌표 (multi-monitor 환경에서 overlay를 그 monitor에
+    /// 정확히 그리려고). [x, y, width, height] in physical px.
+    #[serde(default)]
+    pub monitor_rect: Option<[i32; 4]>,
 }
 
 #[derive(Debug)]

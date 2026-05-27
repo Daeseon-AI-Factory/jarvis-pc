@@ -416,4 +416,32 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — 박스가 *다른 monitor*에 그려짐 (multi-monitor 가정 무시)
+
+**증상:** 사용자가 Chrome(왼쪽 monitor) + VS Code(오른쪽 monitor) 사용. ⌥+Space → "Groq Create API Key 페이지에서 API 키 만들어줘". 결과:
+- 빨간 박스가 *VS Code monitor 우상단 빈 영역*에 그려짐
+- bubble은 "화면 우측 상단 Create API Key 버튼"이라 정확한 element 식별
+- build.log: `ocr miss: target="Create API Key"`. OCR list에 그 텍스트 없음.
+
+**가설 / 시도:**
+1. (틀림) Retina DPR 변환 또 어긋남 — 이전 fix가 logical px 변환 완벽.
+2. (틀림) macocr이 화면 OCR 실패 — 실제는 OCR 호출은 됐는데 list에 "Create API Key" 없음. 다른 화면 OCR한 거.
+3. (정답) **capture가 사용자가 본 monitor와 다른 monitor를 잡음**. 우리 코드는 `monitors.iter().find(|m| m.is_primary())` — primary monitor만. 사용자가 보고 있던 Chrome은 다른 monitor.
+
+**원인:** SPEC.md PRODUCT.md "단일 macOS Space만 지원" 가정 = single monitor 가정. multi-monitor 시 *어느 monitor를 캡처*할지 deterministic하지 않음 + overlay도 *home Space monitor*에 그려져 캡처 monitor와 별개.
+
+**해결 + 학습:**
+- Fix:
+  - `core-graphics` crate으로 cursor logical position (`CGEventSource::location()`) 받음.
+  - `Monitor::from_point(cursor.x, cursor.y)`로 cursor monitor 결정. fallback: is_primary() / monitors[0].
+  - `CapturedScreen`에 `monitor_position: (i32, i32)` 추가 (전역 좌표).
+  - `AnalysisResult.monitor_rect: Option<[i32; 4]>` ([x, y, w, h] 전역 physical px). frontend로 전달.
+  - `Overlay.tsx`가 `monitor_rect`로 setPosition + setSize → overlay가 *capture한 그 monitor*에 그려짐. 그 안 좌표 변환은 그대로 (sent→orig scale-up + /dpr).
+- 교훈:
+  - SPEC 가정이 깨지면 즉시 fix — "v0.5+ 이월"이라고 미룰 수 없는 사용자 daily case.
+  - PRODUCT.md "AI 도구 매일 쓰는 사람" = 90%+가 multi-monitor (개발자/디자이너 macbook 외부 모니터 자주). 단일 monitor 가정은 그 자체 깨졌어야 함.
+  - cursor position이 multi-monitor 결정 deterministic의 *가장 단순한 source*. ⌥+Space 직전 cursor가 어느 monitor에 있었는지 = 사용자가 본 화면.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

@@ -15,8 +15,12 @@ export interface AnalysisResult {
   next_action: string | null;
   coordinates: [number, number, number, number] | null;
   reasoning: string | null;
+  target_text: string | null;
   raw: string;
   session_dir: string | null;
+  /// 캡처한 monitor의 전역 좌표 [x, y, w, h] (physical px). multi-monitor
+  /// 환경에서 overlay를 그 monitor에 정확히 그리려고.
+  monitor_rect: [number, number, number, number] | null;
 }
 
 export async function invokeAnalyze(instruction: string): Promise<AnalysisResult> {

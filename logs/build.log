@@ -1065,3 +1065,184 @@
 2026-05-27T19:41:56.650548000Z | runtime | info:frontend | overlay hidden
 2026-05-27T19:41:56.736280000Z | runtime | info:frontend | trigger panel after setFocus()
 2026-05-27T19:41:56.737419000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:59:53.694634000Z | runtime | info:backend | screenbridge starting
+2026-05-27T19:59:54.373566000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T19:59:54.384746000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T19:59:55.666784000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:59:55.667134000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:59:55.703570000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:59:55.704020000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:59:55.706248000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:59:55.706457000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:59:59.387706000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T19:59:59.392840000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:59:59.393553000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:59:59.394179000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:59:59.395473000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:59:59.400419000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:59:59.401301000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:59:59.402587000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:59:59.402786000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:59:59.402943000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:59:59.420843000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:59:59.421098000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:59:59.464380000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:59:59.600339000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T19:59:59.620488000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:59:59.621118000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:59:59.621480000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:59:59.621762000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:59:59.624121000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:59:59.624704000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:59:59.628107000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:59:59.628302000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:59:59.628461000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:59:59.628606000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:59:59.628746000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:59:59.628880000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:00:01.653531000Z | runtime | info:frontend | analyze submit: 34 chars
+2026-05-27T20:00:01.658708000Z | runtime | info:analyze | begin: kind=gemini, instr_len=56
+2026-05-27T20:00:08.893485000Z | runtime | info:capture | captured: orig=3456x2234, sent=1568x1014, bytes=967708
+2026-05-27T20:00:08.901149000Z | runtime | info:dispatcher | gemini analyze begin: model=gemini-2.5-flash, image_bytes=967708, instr_len=56
+2026-05-27T20:00:12.322901000Z | runtime | info:dispatcher | gemini analyze ok: raw_len=431
+2026-05-27T20:00:13.006548000Z | runtime | warn:analyze | ocr failed (LLM coords fallback): macocr stdout parse: expected value at line 1 column 1; stdout[..400]=screenbridge File
+Font View Window
+Help
+• API Key x§New Tal X
+M 받은편지 x
+* New ch X
+* Setting
+Ask Gemini
+< > G
+- console.groq.com/keys
+*
+口
+La
+8⑦ Daeseon-Al-Facto.. D Amazon D Branding D Business
+CodingTest
+• All Bookmarks
+Personal s
+/ Default Project -
+API Keys
++ Create API Key
+Manage your project API keys. Remember to keep your API keys safe to prevent
+unauthorized access.
+NAME
+jarvis-pc i
+esbuild"
+2026-05-27T20:00:13.006641000Z | runtime | info:analyze | ocr miss: target="Create API Key" (LLM coords fallback)
+2026-05-27T20:00:13.006652000Z | runtime | info:analyze | coords scaled: source=llm sent=1568x1014 orig=3456x2234 rx=2.204 -> Some([2843, 436, 282, 79])
+2026-05-27T20:00:13.006660000Z | runtime | info:analyze | elapsed: kind=gemini, ms=4112
+2026-05-27T20:00:13.006666000Z | runtime | info:analyze | done: state=Some("Groq API Keys 관리 페이지"), next=Some("화면 우측 상단에 보이는 '+ Create API Key' 버튼을 클릭하세요."), coords=Some([2843, 436, 282, 79])
+2026-05-27T20:00:13.008268000Z | runtime | info:sessions | saved: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-27/5000422e-2f63-4848-923d-e3e7f9858e30"
+2026-05-27T20:00:13.012915000Z | runtime | info:frontend | analyze done: next=화면 우측 상단에 보이는 '+ Create API Key' 버튼을 클릭하세요.
+2026-05-27T20:00:13.047365000Z | runtime | info:frontend | overlay shown (HUD mode, dpr=2)
+2026-05-27T20:00:13.047584000Z | runtime | info:frontend | overlay shown (HUD mode, dpr=2)
+2026-05-27T20:00:24.667227000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T20:00:24.672042000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:00:24.673597000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:00:24.681962000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:00:24.683043000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:00:24.684486000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:00:24.684781000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:00:24.685619000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:00:24.692172000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:00:24.703906000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:00:24.712066000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:00:24.712304000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:00:24.712627000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:00:26.536777000Z | runtime | info:frontend | analyze submit: 34 chars
+2026-05-27T20:00:26.541457000Z | runtime | info:analyze | begin: kind=gemini, instr_len=56
+2026-05-27T20:00:33.226461000Z | runtime | info:capture | captured: orig=3456x2234, sent=1568x1014, bytes=807739
+2026-05-27T20:00:33.231811000Z | runtime | info:dispatcher | gemini analyze begin: model=gemini-2.5-flash, image_bytes=807739, instr_len=56
+2026-05-27T20:00:57.319228000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T20:00:57.327391000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:00:57.328143000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:00:57.330529000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:00:57.331075000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:00:57.335113000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:00:57.336375000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:00:57.347013000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:00:57.347211000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:00:57.347363000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:00:57.359045000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:00:57.362543000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:00:57.362770000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:01:33.284197000Z | runtime | error:frontend | analyze failed: network: error sending request for url (https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=AIzaSyCpvzBXmR8q-K_hkJkq07o42Lf-GZCqZSo)
+2026-05-27T20:06:23.980310000Z | runtime | info:frontend | analyze submit: 34 chars
+2026-05-27T20:06:23.987242000Z | runtime | info:analyze | begin: kind=gemini, instr_len=56
+2026-05-27T20:06:31.903417000Z | runtime | info:capture | captured: orig=3456x2234, sent=1568x1014, bytes=538389
+2026-05-27T20:06:31.907683000Z | runtime | info:dispatcher | gemini analyze begin: model=gemini-2.5-flash, image_bytes=538389, instr_len=56
+2026-05-27T20:06:34.753076000Z | runtime | info:dispatcher | gemini analyze ok: raw_len=386
+2026-05-27T20:06:34.753238000Z | runtime | warn:analyze | ocr failed (LLM coords fallback): macocr stdout parse: expected value at line 1 column 1; stdout[..400]=screenbridge ile edit View window Help
+4 API Key x§ New Tal X M 92x x * Newch x | * Setting
++
+< > G
+°- console.groq.com/keys
+*
+BB • Daeseon-Al-Facto... C Amazon C Branding M Business
+• CodingTest
+Personal :
+/ Default Project -
+API Keys
+Manage your project API keys. Remember to keep your API keys safe to prevent
+unauthorized access.
+NAME
+jarvis-pc
+product006_Ilmclosedenterprise
+口
+Ask Gemini
+La
+M Al
+2026-05-27T20:06:34.753312000Z | runtime | info:analyze | ocr miss: target="Create API Key" (LLM coords fallback)
+2026-05-27T20:06:34.753329000Z | runtime | info:analyze | coords scaled: source=llm sent=1568x1014 orig=3456x2234 rx=2.204 -> Some([2865, 528, 308, 79])
+2026-05-27T20:06:34.753350000Z | runtime | info:analyze | elapsed: kind=gemini, ms=2849
+2026-05-27T20:06:34.753362000Z | runtime | info:analyze | done: state=Some("Groq API Keys 페이지"), next=Some("화면 우측 상단에 있는 빨간색 테두리의 'Create API Key' 버튼을 클릭하세요."), coords=Some([2865, 528, 308, 79])
+2026-05-27T20:06:34.755959000Z | runtime | info:sessions | saved: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-27/dba48aba-e185-4f5c-9ea6-19c43cc0f685"
+2026-05-27T20:06:34.761680000Z | runtime | info:frontend | analyze done: next=화면 우측 상단에 있는 빨간색 테두리의 'Create API Key' 버튼을 클릭하세요.
+2026-05-27T20:06:34.829602000Z | runtime | info:frontend | overlay shown (HUD mode, dpr=2)
+2026-05-27T20:06:34.829940000Z | runtime | info:frontend | overlay shown (HUD mode, dpr=2)
+2026-05-27T20:14:18.835931000Z | runtime | info:backend | screenbridge starting
+2026-05-27T20:14:19.364102000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T20:14:19.405509000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T20:14:21.075480000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T20:14:21.076708000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T20:14:21.114821000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T20:14:21.115280000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T20:14:21.116688000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T20:14:21.119957000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T20:14:24.409213000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T20:14:24.414909000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:14:24.416835000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:14:24.417314000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:14:24.417880000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:14:24.422730000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:14:24.423332000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:14:24.466057000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:14:24.467447000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:14:24.467801000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:14:24.467994000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:14:24.468154000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:14:24.468315000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:15:09.802611000Z | runtime | info:backend | screenbridge starting
+2026-05-27T20:15:10.188179000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T20:15:10.204721000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T20:15:11.049719000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T20:15:11.050125000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T20:15:11.082516000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T20:15:11.083307000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T20:15:11.084285000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T20:15:11.084504000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T20:15:15.207799000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T20:15:15.216063000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:15:15.216424000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:15:15.216810000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:15:15.218221000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:15:15.227190000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:15:15.227490000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:15:15.240864000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:15:15.241087000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:15:15.241245000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:15:15.263624000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:15:15.263919000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:15:15.264340000Z | runtime | info:frontend | overlay hidden

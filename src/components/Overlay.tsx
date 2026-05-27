@@ -29,30 +29,33 @@ export default function Overlay() {
     // false — closing is keyboard-only (⌥+Space toggles).
     void win.setIgnoreCursorEvents(true);
     listen<AnalysisResult>(OVERLAY_SHOW_EVENT, async (event) => {
-      setResult(event.payload);
+      const payload = event.payload;
+      setResult(payload);
+      // capture한 monitor의 전역 위치 우선 사용 (multi-monitor 환경).
+      // 없으면 overlay window의 currentMonitor() fallback (single monitor OK).
+      const rect = payload.monitor_rect;
+      const fallback = await currentMonitor();
+      const targetX = rect ? rect[0] : fallback?.position.x ?? 0;
+      const targetY = rect ? rect[1] : fallback?.position.y ?? 0;
+      const targetW = rect ? rect[2] : fallback?.size.width ?? 1920;
+      const targetH = rect ? rect[3] : fallback?.size.height ?? 1080;
+      await win.setPosition(new PhysicalPosition(targetX, targetY));
+      await win.setSize(new PhysicalSize(targetW, targetH));
+      // DPR은 monitor 이동 후 다시 조회. overlay window가 새 monitor에 있을 때
+      // 그 monitor의 scaleFactor 사용.
       const mon = await currentMonitor();
-      if (mon) {
-        await win.setPosition(
-          new PhysicalPosition(mon.position.x, mon.position.y)
-        );
-        await win.setSize(
-          new PhysicalSize(mon.size.width, mon.size.height)
-        );
-        // Retina DPR을 받아둔다. coords는 physical px이지만 CSS는 logical.
-        // logical = physical / scaleFactor. 없으면 1 (non-retina).
-        const dpr = mon.scaleFactor ?? 1;
-        setMonitor({
-          dpr,
-          logicalW: mon.size.width / dpr,
-          logicalH: mon.size.height / dpr,
-        });
-      }
+      const dpr = mon?.scaleFactor ?? 1;
+      setMonitor({
+        dpr,
+        logicalW: targetW / dpr,
+        logicalH: targetH / dpr,
+      });
       await win.show();
       // Do NOT setFocus — focus would steal keyboard from the real app
       // beneath. The overlay is a heads-up display, not a focused window.
       void logBackend(
         "info",
-        `overlay shown (HUD mode, dpr=${mon?.scaleFactor ?? 1})`
+        `overlay shown: monitor=(${targetX},${targetY},${targetW},${targetH}) dpr=${dpr}`
       );
     }).then((fn) => {
       unlistenShow = fn;

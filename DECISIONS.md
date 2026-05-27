@@ -476,4 +476,40 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-27 — Multi-monitor: cursor monitor capture (SPEC "단일 Space" 깸)
+
+**선택지:**
+- A. 기존 — primary monitor 또는 monitors[0]만. SPEC 룰 따름.
+- **B. Cursor 위치 monitor 캡처 + overlay 그 monitor에**. PRODUCT.md "단일 Space" 룰 깬다.
+- C. 모든 monitor 캡처 + 합성 (panorama) → LLM 한 번 호출.
+- D. 모든 monitor 각각 LLM 호출 → 결과 합치기.
+
+**Trade-off:**
+
+| 축 | A (primary only) | B (cursor monitor, 채택) | C (panorama) | D (multi-call) |
+| --- | --- | --- | --- | --- |
+| 사용자가 본 화면 정확히 캡처 | ✗ multi-monitor에선 fail | ✓ 항상 | ✓ | ✓ |
+| 구현 비용 | 0 | 1-2h (core-graphics + Monitor::from_point) | 4-6h (panorama 합성 + 좌표 매핑) | 2-3h × N |
+| 비용 (API 호출 수) | 1 | 1 | 1 | N |
+| 좌표 계산 복잡도 | 단순 | 단순 (monitor 단위 local) | 복잡 (panorama 좌표 → individual monitor 매핑) | 단순 N개 |
+
+**선택:** **B**.
+
+**근거:**
+- dogfooding signal — 사용자가 daily multi-monitor. SPEC "단일 Space" 룰이 깨졌음을 실측이 증명. 룰보다 실측 우선.
+- ⌥+Space 누르는 시점에 *cursor가 어느 monitor에 있냐*가 "사용자가 본 화면"의 deterministic proxy. macOS NSEvent.mouseLocation을 core-graphics로 받음. ~10줄 코드.
+- C/D는 사용자 케이스 (한 monitor 작업, 다른 monitor reference) 분석에 과한 비용. cursor 단일 monitor가 95% 케이스 커버.
+- A 유지 시 multi-monitor 사용자 = 항상 잘못된 monitor 캡처 = dogfooding 불가.
+
+**되돌리기 비용:** 작음 — capture.rs의 cursor monitor 선택 분기를 primary fallback으로 회귀. `core-graphics` crate 제거.
+
+**SPEC 위반 기록:**
+- PRODUCT.md "v0.1: 단일 macOS Space만 지원". 단일 monitor 함의. multi-monitor capture는 그것 깬 거 — dogfooding measurement 기반 룰 update.
+
+**미해결:**
+- Cursor가 monitor 경계에 있을 때 from_point의 동작 (return 한 쪽 monitor).
+- Trigger panel은 여전히 home monitor에 stick. ⌥+Space 누른 monitor가 home과 다르면 panel 안 보임. 별도 fix 필요 (panel도 cursor monitor로 이동).
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
