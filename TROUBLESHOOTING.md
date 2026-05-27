@@ -444,4 +444,22 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — multi-monitor fix 후 또 어긋남: trigger panel로 cursor 이동하면 capture가 panel monitor 잡음
+
+**증상 (예측):** 이전 multi-monitor fix는 *analyze 시점* cursor 사용. 사용자가 Chrome 보면서 ⌥+Space → trigger panel은 home monitor에 등장 → 사용자가 panel 보러 monitor 시선/cursor 이동 → Analyze 누름 → 그 시점 cursor가 *panel monitor* → capture가 panel monitor (사용자가 본 Chrome 아님).
+
+**가설 / 시도:**
+- (analyze 시점 cursor가 = ⌥+Space 누른 시점 cursor라는 implicit 가정 — multi-monitor에선 깨짐)
+
+**원인:** 단축키 누른 시점과 Analyze 클릭 시점 사이에 cursor 위치가 바뀜. 그 사이에 사용자는 화면 전환, focus 이동, 타이핑 등. cursor가 더 이상 "사용자가 본 monitor"의 proxy 아님.
+
+**해결 + 학습:**
+- Fix:
+  - `capture::record_trigger_cursor()` 함수 + `LAST_TRIGGER_CURSOR` static.
+  - `hotkey::register_default`와 `tray::install`의 trigger handler에서 `record_trigger_cursor()` 호출. ⌥+Space (또는 트레이 클릭) 누른 *그 순간* cursor 저장.
+  - `capture_active_screen()`이 stored cursor 먼저 사용, fallback으로 현재 cursor + primary monitor.
+- 교훈: cursor position이 "사용자가 본 화면"의 proxy로 좋은데, *어느 시점의* cursor냐가 결정적. 사용자 입력 stream의 *시작점* (trigger) 시점 = intent의 가장 명확한 signal.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

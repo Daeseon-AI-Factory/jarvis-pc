@@ -22,6 +22,7 @@ pub fn install(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     let mut builder = TrayIconBuilder::new().menu(&menu).on_menu_event(
         |app, event| match event.id().as_ref() {
             "trigger" => {
+                crate::capture::record_trigger_cursor();
                 tracing::info!(target: "tray", "trigger clicked");
                 if let Err(e) = app.emit(TRIGGER_EVENT, ()) {
                     tracing::warn!(target: "tray", "emit trigger failed: {e}");

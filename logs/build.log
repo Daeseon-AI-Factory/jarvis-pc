@@ -1246,3 +1246,26 @@ M Al
 2026-05-27T20:15:15.263624000Z | runtime | info:frontend | trigger panel shown
 2026-05-27T20:15:15.263919000Z | runtime | info:frontend | overlay hidden
 2026-05-27T20:15:15.264340000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:20:43.111654000Z | runtime | info:backend | screenbridge starting
+2026-05-27T20:20:43.545410000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T20:20:43.557727000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T20:20:44.543545000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T20:20:44.545430000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T20:20:44.580765000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T20:20:44.581229000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T20:20:44.582162000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T20:20:44.582359000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T20:20:48.562364000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T20:20:48.570076000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:20:48.570557000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:20:48.573387000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T20:20:48.589458000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T20:20:48.597319000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:20:48.598269000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T20:20:48.647006000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:20:48.647261000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:20:48.647424000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T20:20:48.647603000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T20:20:48.647745000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:20:48.648492000Z | runtime | info:frontend | overlay hidden
+2026-05-27T20:20:58.198081000Z | runtime | info:frontend | trigger panel hidden

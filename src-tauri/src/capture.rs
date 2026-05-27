@@ -24,11 +24,36 @@ pub struct CapturedScreen {
 /// macOS의 NSEvent.mouseLocation을 core-graphics로 받는다. 좌표는 *bottom-left
 /// origin* 기준 (NSPoint 관례) — Y축 flip 필요. 또 모든 단위가 *logical px*.
 /// multi-monitor 환경에서 cursor 있는 monitor를 결정하기 위해 호출.
-fn cursor_position_logical() -> Option<(f64, f64)> {
+pub fn cursor_position_logical() -> Option<(f64, f64)> {
     let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState).ok()?;
     let event = CGEvent::new(source).ok()?;
     let p = event.location();
     Some((p.x, p.y))
+}
+
+/// ⌥+Space 누른 시점의 cursor를 backend가 기록해두고 analyze가 그것 사용.
+/// 현재 cursor를 직접 쓰면 사용자가 trigger panel로 cursor 옮긴 후 캡처할 때
+/// panel monitor를 잡아버린다.
+pub static LAST_TRIGGER_CURSOR: std::sync::OnceLock<
+    std::sync::Mutex<Option<(f64, f64)>>,
+> = std::sync::OnceLock::new();
+
+fn trigger_cursor_cell() -> &'static std::sync::Mutex<Option<(f64, f64)>> {
+    LAST_TRIGGER_CURSOR.get_or_init(|| std::sync::Mutex::new(None))
+}
+
+/// hotkey/tray callback에서 호출. ⌥+Space 누른 시점 cursor 저장.
+pub fn record_trigger_cursor() {
+    if let Some(pos) = cursor_position_logical() {
+        if let Ok(mut g) = trigger_cursor_cell().lock() {
+            *g = Some(pos);
+            tracing::info!(target: "capture", "trigger cursor recorded: ({:.0}, {:.0})", pos.0, pos.1);
+        }
+    }
+}
+
+fn stored_trigger_cursor() -> Option<(f64, f64)> {
+    trigger_cursor_cell().lock().ok().and_then(|g| *g)
 }
 
 #[derive(Debug)]
@@ -56,11 +81,11 @@ impl std::error::Error for CaptureError {}
 pub fn capture_active_screen() -> Result<CapturedScreen, CaptureError> {
     let monitors = Monitor::all().map_err(|e| CaptureError::XCap(e.to_string()))?;
 
-    // 1. cursor 위치 → 그 monitor.
-    // 2. 못 받으면 is_primary().
-    // 3. 그것도 안 되면 monitors[0].
-    let cursor_monitor = cursor_position_logical().and_then(|(x, y)| {
-        // Monitor::from_point는 cursor의 logical px 받아 그 안의 monitor 찾는다.
+    // 1. ⌥+Space 누른 시점의 stored cursor → 그 monitor (사용자가 보고 있던 화면).
+    // 2. 없으면 현재 cursor.
+    // 3. 그것도 못 받으면 is_primary() / monitors[0].
+    let cursor_for_monitor = stored_trigger_cursor().or_else(cursor_position_logical);
+    let cursor_monitor = cursor_for_monitor.and_then(|(x, y)| {
         Monitor::from_point(x as i32, y as i32).ok()
     });
     let monitor_owned;
