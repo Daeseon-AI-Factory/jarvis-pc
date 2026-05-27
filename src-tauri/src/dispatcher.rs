@@ -300,8 +300,9 @@ pub struct GroqDispatcher {
 }
 
 const GROQ_API_URL: &str = "https://api.groq.com/openai/v1/chat/completions";
-/// 사용자가 console.groq.com/docs/models에서 확인한 정확한 vision 모델 ID로
-/// 교체. 2026-05 시점 가설값 — 실제로는 deprecated일 가능성 있음.
+/// 2026-05-27 console.groq.com/docs/vision 확인: 현재 vision 모델은 이거 하나.
+/// Preview 상태. 128K context, max 5 images, base64 4MB 한도. 우리 다운스케일
+/// 후 ~1MB PNG라 OK. 모델 lineup 바뀌면 vision docs 재확인.
 pub const GROQ_VISION_MODEL: &str = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 impl GroqDispatcher {

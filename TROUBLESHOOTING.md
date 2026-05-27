@@ -177,21 +177,25 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
-## 2026-05-26 23:10 — Groq Llama 3.2 11B Vision 호스팅 현황 불명확
+## 2026-05-26 23:10 — Groq vision 호스팅 현황 불명확 (해결됨)
 
 **증상:** "현재 기준 최선" 답하려고 WebSearch 두 번 했는데 결과 모순.
 
 **가설 / 시도:**
 1. 첫 검색에서는 Groq blog (2024-09)에서 "Llama 3.2 Vision 출시" + Llama 3.2 11B Vision $0.18/M paid pricing 명시.
 2. 두 번째 검색 ([Artificial Analysis Llama 3.2 11B Vision providers](https://artificialanalysis.ai/models/llama-3-2-instruct-11b-vision/providers))에서는 Amazon Bedrock / Azure / DeepInfra만 listed. Groq 없음.
+3. **해결:** [Groq vision docs](https://console.groq.com/docs/vision) 공식 페이지 직접 fetch.
 
-**원인:** 두 가지 가능성, 검색으로는 명확 X:
-- Groq가 한때 호스팅했지만 deprecate (Groq docs deprecations 페이지 검색 결과에 있었음).
-- 또는 Artificial Analysis가 단순히 Groq를 측정 안 함.
+**원인:** Groq는 Llama 3.2 11B Vision은 deprecate, 현재 vision 모델은 **`meta-llama/llama-4-scout-17b-16e-instruct` 하나만** (preview 상태). Artificial Analysis가 측정 안 한 이유는 Groq의 vision lineup이 Llama 3.2 → Llama 4 Scout으로 교체됐기 때문.
 
 **해결 + 학습:**
-- Fix: GROQ_VISION_MODEL const는 가설값 `"meta-llama/llama-4-scout-17b-16e-instruct"`로 두고 사용자가 `console.groq.com/docs/models` 직접 확인해서 정확한 모델 ID로 교체하도록 docstring 명시.
-- 교훈: AI 모델 호스팅 상황은 빠르게 변함. WebSearch 결과 사이에 시점 차이가 있으면 vendor 공식 docs 직접 확인이 가장 정확. 추가 hop이 귀찮아 보여도 결국 더 빠름.
+- Fix: GROQ_VISION_MODEL const가 우연히 정확한 값이었음. 변경 불필요.
+- 새 fact:
+  - 모델 상태: preview (experimental)
+  - 한도: max 5 images/request, base64 4MB, 원본 20MB, 33 MP. 우리 다운스케일 후 ~1MB PNG라 OK.
+  - 컨텍스트: 128K tokens, multilingual, JSON mode 지원.
+  - 사이즈: 17B (Llama 3.2 11B보다 크고 더 정확할 가능성).
+- 교훈: AI 모델 호스팅은 빠르게 변함. WebSearch가 모순일 때 vendor 공식 docs (이 케이스 `console.groq.com/docs/vision`) 직접 fetch가 30초로 진실 확정. 매번 첫 의문에 docs 가는 게 정답.
 
 ---
 
