@@ -62,9 +62,12 @@ impl std::error::Error for DispatchError {}
 /// vision model only has to satisfy this trait.
 #[async_trait]
 pub trait LLMDispatcher: Send + Sync {
+    /// `image_size`는 모델이 좌표 응답에 쓸 좌표계 (다운스케일된 이미지의
+    /// 너비/높이). 우리가 user_text에 명시해 모델에 알린다.
     async fn analyze(
         &self,
         image_bytes: Vec<u8>,
+        image_size: (u32, u32),
         instruction: String,
     ) -> Result<AnalysisResult, DispatchError>;
 }
@@ -109,6 +112,7 @@ impl LLMDispatcher for AnthropicDispatcher {
     async fn analyze(
         &self,
         image_bytes: Vec<u8>,
+        image_size: (u32, u32),
         instruction: String,
     ) -> Result<AnalysisResult, DispatchError> {
         let b64 = BASE64_STANDARD.encode(&image_bytes);
@@ -129,7 +133,7 @@ impl LLMDispatcher for AnthropicDispatcher {
                     },
                     {
                         "type": "text",
-                        "text": crate::prompts::user_text(&instruction),
+                        "text": crate::prompts::user_text(&instruction, image_size),
                     }
                 ]
             }]
@@ -228,6 +232,7 @@ impl LLMDispatcher for ClaudeCliDispatcher {
     async fn analyze(
         &self,
         image_bytes: Vec<u8>,
+        image_size: (u32, u32),
         instruction: String,
     ) -> Result<AnalysisResult, DispatchError> {
         // 1. Drop the PNG to a temp file. claude's Read tool wants a real
@@ -240,9 +245,12 @@ impl LLMDispatcher for ClaudeCliDispatcher {
             .map_err(|e| DispatchError::Other(format!("temp png write: {e}")))?;
 
         let temp_path_str = temp_path.to_string_lossy().to_string();
+        let (iw, ih) = image_size;
         let prompt = format!(
-            "다음 화면 캡처 이미지를 Read 도구로 읽고, 그 아래에 적힌 AI 지시를 현재 사용자 화면에 맞게 번역해서 JSON으로 응답해.\n\n이미지: {}\n\nAI 지시:\n{}",
+            "다음 화면 캡처 이미지를 Read 도구로 읽고, 그 아래에 적힌 AI 지시를 현재 사용자 화면에 맞게 번역해서 JSON으로 응답해.\n\n이미지: {}\n[Image dimensions: {}×{} px, top-left = (0, 0). 응답의 coordinates는 이 이미지 크기 기준 절대 px.]\n\nAI 지시:\n{}",
             temp_path_str,
+            iw,
+            ih,
             instruction.trim()
         );
 
@@ -333,6 +341,7 @@ impl LLMDispatcher for GroqDispatcher {
     async fn analyze(
         &self,
         image_bytes: Vec<u8>,
+        image_size: (u32, u32),
         instruction: String,
     ) -> Result<AnalysisResult, DispatchError> {
         let b64 = BASE64_STANDARD.encode(&image_bytes);
@@ -350,7 +359,7 @@ impl LLMDispatcher for GroqDispatcher {
                     "content": [
                         {
                             "type": "text",
-                            "text": crate::prompts::user_text(&instruction),
+                            "text": crate::prompts::user_text(&instruction, image_size),
                         },
                         {
                             "type": "image_url",
@@ -459,6 +468,7 @@ impl LLMDispatcher for GeminiDispatcher {
     async fn analyze(
         &self,
         image_bytes: Vec<u8>,
+        image_size: (u32, u32),
         instruction: String,
     ) -> Result<AnalysisResult, DispatchError> {
         let b64 = BASE64_STANDARD.encode(&image_bytes);
@@ -469,7 +479,7 @@ impl LLMDispatcher for GeminiDispatcher {
             "contents": [
                 {
                     "parts": [
-                        {"text": crate::prompts::user_text(&instruction)},
+                        {"text": crate::prompts::user_text(&instruction, image_size)},
                         {
                             "inline_data": {
                                 "mime_type": "image/png",

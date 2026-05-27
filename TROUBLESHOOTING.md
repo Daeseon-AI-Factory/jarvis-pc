@@ -326,4 +326,28 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — 빨간 박스가 안 보임 / next_action 추상적
+
+**증상:** Gemini 결과 `coords=[400, 17, 20, 20]` 받았는데 화면 어디에도 빨간 박스 안 보임. next_action도 "크롬 새 탭 열기 버튼 클릭" 같은 일반 문구 — 어느 버튼인지 모름.
+
+**가설 / 시도:**
+1. CSS 그리기 실패 → 아님. overlay 코드 정상.
+2. (정답 1) **좌표계 어긋남**. 우리는 다운스케일된 1568×1014 PNG를 모델에 보냄. 모델은 그 이미지 기준 좌표 반환 (예: [400, 17, ...]). 그런데 overlay는 monitor physical 3456×2234에 그 좌표 *그대로* 그림 → 비율 ~2.2x 어긋남 + 화면 좌상단 너무 작아 안 보임.
+3. (정답 2) **SYSTEM_PROMPT가 구체성 강제 부족**. "구체 지시"라고만 적었지 예시 없음. 모델이 "Create API Key" 같은 *실제 UI 라벨*을 안 적고 "버튼 클릭" 일반 구문으로 답변.
+
+**원인:**
+- 좌표: 우리가 모델에 보낸 이미지의 좌표계와 우리 overlay의 좌표계가 다른 척도인데 변환 X. 다운스케일 도입 시 같이 처리했어야.
+- 추상성: SYSTEM_PROMPT 텍스트가 짧고 예시 없음. JSON schema도 enforce 안 했을 때 free-form fallback.
+
+**해결 + 학습:**
+- Fix (좌표):
+  - `capture.rs::CapturedScreen` 도입 — `bytes / sent_size / orig_size` 모두 반환.
+  - `LLMDispatcher::analyze` trait signature에 `image_size: (u32, u32)` 추가. 네 dispatcher 다 변경. `prompts::user_text(instruction, image_size)`에 `[Image dimensions: WxH px, top-left = (0,0). 응답 coordinates는 이 이미지 기준 절대 px.]` 명시.
+  - `lib::analyze`가 결과 받은 후 `coords *= orig/sent ratio`로 monitor 좌표 변환. tracing log에 `coords scaled: sent=AxB orig=CxD rx=... ry=... → [...]` 박음.
+- Fix (구체성): SYSTEM_PROMPT에 **✓/✗ 예시 박음**. "✗ 안 됨: 'New Project 버튼 클릭' / ✓ 좋음: '우측 상단 보라색 Create API Key 버튼 (검색창 옆)'". coordinates "null 금지, 모르면 추정값이라도".
+- 교훈 (좌표): 클라이언트가 이미지 manipulate (resize/crop/downscale)할 때마다 *좌표 변환 layer*가 같이 들어가야. 한 곳에 박아두지 않으면 어긋남이 silent로 분산.
+- 교훈 (프롬프트): 모델은 "구체적으로"라는 추상 단어보다 *✗/✓ 예시*에 훨씬 잘 반응. 1줄짜리 룰보다 케이스 한 개씩이 더 효과적.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

@@ -736,3 +736,107 @@
 2026-05-27T18:58:08.963530000Z | runtime | info:frontend | overlay hidden
 2026-05-27T18:58:08.995956000Z | runtime | info:frontend | trigger panel after setFocus()
 2026-05-27T18:58:09.005619000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:01:27.986170000Z | runtime | info:backend | screenbridge starting
+2026-05-27T19:01:28.329219000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T19:01:28.339889000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T19:01:29.176327000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:01:29.176699000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:01:29.205132000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:01:29.205741000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:01:29.206938000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:01:29.207174000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:01:30.943213000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T19:01:30.947376000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:01:30.948411000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:01:30.949152000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:01:30.949778000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:01:30.960393000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:01:30.982996000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:01:30.983227000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:01:30.985169000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:01:30.985382000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:01:30.985565000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:01:30.986115000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:01:30.986292000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:01:33.344064000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T19:01:33.345525000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:01:33.345977000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:01:33.347063000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:01:33.347658000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:01:33.348028000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:01:33.348602000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:01:33.350185000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:01:33.350459000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:01:33.350617000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:01:33.350765000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:01:33.353746000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:01:33.353938000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:01:45.481955000Z | runtime | info:frontend | analyze submit: 28 chars
+2026-05-27T19:01:45.496858000Z | runtime | info:analyze | begin: kind=gemini, instr_len=54
+2026-05-27T19:01:53.125247000Z | runtime | info:capture | captured: orig=3456x2234, sent=1568x1014, bytes=935383
+2026-05-27T19:01:53.132651000Z | runtime | info:dispatcher | gemini analyze begin: model=gemini-2.5-flash, image_bytes=935383, instr_len=54
+2026-05-27T19:01:57.619777000Z | runtime | info:dispatcher | gemini analyze ok: raw_len=556
+2026-05-27T19:01:57.619964000Z | runtime | info:analyze | elapsed: kind=gemini, ms=4494
+2026-05-27T19:01:57.619992000Z | runtime | info:analyze | done: state=Some("현재 화면에 크롬 브라우저가 열려 있으며, 여러 탭이 활성화되어 있습니다."), next=Some("크롬 브라우저의 새 탭 열기 버튼을 클릭하여 새 탭을 엽니다."), coords=Some([400, 17, 20, 20])
+2026-05-27T19:01:57.623290000Z | runtime | info:sessions | saved: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-27/26c488b9-de86-44c1-b565-21a7e6f93b2c"
+2026-05-27T19:01:57.715433000Z | runtime | info:frontend | analyze done: next=크롬 브라우저의 새 탭 열기 버튼을 클릭하여 새 탭을 엽니다.
+2026-05-27T19:01:57.764246000Z | runtime | info:frontend | overlay shown (HUD mode, click-through)
+2026-05-27T19:01:57.764548000Z | runtime | info:frontend | overlay shown (HUD mode, click-through)
+2026-05-27T19:02:24.277958000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T19:02:24.283972000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:02:24.285632000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:02:24.293552000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:02:24.294005000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:02:24.295431000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:02:24.295600000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:02:24.295876000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:02:24.296282000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:02:24.316896000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:02:24.356829000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:02:24.358035000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:02:24.358244000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:04:10.038985000Z | runtime | info:frontend | trigger panel hidden
+2026-05-27T19:08:19.024369000Z | runtime | info:backend | screenbridge starting
+2026-05-27T19:08:19.667003000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T19:08:19.701144000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T19:08:20.914767000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:08:20.919849000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:08:20.954626000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:08:20.955940000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:08:20.959020000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:08:20.959242000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:08:24.705184000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T19:08:24.713072000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:08:24.713680000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:08:24.713984000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:08:24.714247000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:08:24.719537000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:08:24.719922000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:08:24.758384000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:08:24.758643000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:08:24.759036000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:08:24.759220000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:08:24.759388000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:08:24.759955000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:08:58.982696000Z | runtime | info:backend | screenbridge starting
+2026-05-27T19:08:59.405189000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T19:08:59.420587000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T19:09:00.087229000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:09:00.089260000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T19:09:00.125672000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:09:00.126403000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T19:09:00.129635000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:09:00.130400000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T19:09:04.428479000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T19:09:04.439032000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:09:04.440725000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T19:09:04.442259000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:09:04.442679000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T19:09:04.452053000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:09:04.452353000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T19:09:04.453639000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:09:04.454231000Z | runtime | info:frontend | overlay hidden
+2026-05-27T19:09:04.518610000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:09:04.519833000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T19:09:04.520065000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T19:09:04.520227000Z | runtime | info:frontend | trigger panel shown

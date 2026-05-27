@@ -6,6 +6,17 @@ use xcap::Monitor;
 /// tiles (more tokens, more latency). Downscale before send.
 const MAX_DIMENSION: u32 = 1568;
 
+#[derive(Debug, Clone)]
+pub struct CapturedScreen {
+    pub bytes: Vec<u8>,
+    /// 모델에 실제로 보낸 (다운스케일 후) 픽셀 크기. 모델 좌표 응답의
+    /// 기준 좌표계.
+    pub sent_size: (u32, u32),
+    /// 캡처 시점 monitor의 원본 픽셀 크기. overlay를 그릴 좌표계 — 모델
+    /// coords에 orig/sent ratio를 곱해 변환 필요.
+    pub orig_size: (u32, u32),
+}
+
 #[derive(Debug)]
 pub enum CaptureError {
     NoMonitor,
@@ -25,9 +36,10 @@ impl std::fmt::Display for CaptureError {
 
 impl std::error::Error for CaptureError {}
 
-/// Capture the primary monitor and return the PNG bytes. macOS asks for
-/// Screen Recording permission the first time this runs.
-pub fn capture_active_screen() -> Result<Vec<u8>, CaptureError> {
+/// Capture the primary monitor. macOS asks for Screen Recording permission
+/// the first time. Returns both bytes and dimensions so the analyze pipeline
+/// can scale model-relative coordinates back to monitor coords.
+pub fn capture_active_screen() -> Result<CapturedScreen, CaptureError> {
     let monitors = Monitor::all().map_err(|e| CaptureError::XCap(e.to_string()))?;
     let monitor = monitors
         .iter()
@@ -66,7 +78,11 @@ pub fn capture_active_screen() -> Result<Vec<u8>, CaptureError> {
         bytes.len()
     );
 
-    Ok(bytes)
+    Ok(CapturedScreen {
+        bytes,
+        sent_size: (sent_w, sent_h),
+        orig_size: (orig_w, orig_h),
+    })
 }
 
 #[cfg(test)]
@@ -79,12 +95,14 @@ mod tests {
     #[test]
     #[ignore = "needs macOS Screen Recording permission"]
     fn capture_active_screen_smoke() {
-        let bytes = capture_active_screen().expect("capture should succeed");
-        assert!(bytes.len() > 1024, "captured {} bytes (< 1KB)", bytes.len());
+        let cap = capture_active_screen().expect("capture should succeed");
+        assert!(cap.bytes.len() > 1024, "captured {} bytes (< 1KB)", cap.bytes.len());
         assert_eq!(
-            &bytes[..8],
+            &cap.bytes[..8],
             &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
             "missing PNG signature"
         );
+        assert!(cap.sent_size.0 <= MAX_DIMENSION && cap.sent_size.1 <= MAX_DIMENSION);
+        assert!(cap.orig_size.0 > 0 && cap.orig_size.1 > 0);
     }
 }

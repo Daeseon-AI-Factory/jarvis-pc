@@ -91,8 +91,12 @@ async fn analyze_each_fixture_yields_expected_keywords() {
             continue;
         }
         let bytes = std::fs::read(&img_path).expect("read fixture image");
+        // 실제 fixture 이미지 사이즈를 알아내려면 별도 디코딩 필요. v0.2엔
+        // fixture metadata에 dimensions 박아둘 후보. 일단 사용자 monitor의
+        // 보편적 다운스케일 사이즈로 hardcode.
+        let image_size = (1568u32, 1014u32);
         let result = dispatcher
-            .analyze(bytes, fx.ai_instruction.clone())
+            .analyze(bytes, image_size, fx.ai_instruction.clone())
             .await
             .unwrap_or_else(|e| panic!("analyze failed for {:?}: {e}", fx.image_path));
 

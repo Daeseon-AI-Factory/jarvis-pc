@@ -157,7 +157,7 @@ async fn analyze(
     use tauri::Manager;
     let kind = std::env::var("SB_DISPATCHER").unwrap_or_else(|_| "claude".to_string());
     tracing::info!(target: "analyze", "begin: kind={kind}, instr_len={}", instruction.len());
-    let image = tauri::async_runtime::spawn_blocking(capture::capture_active_screen)
+    let cap = tauri::async_runtime::spawn_blocking(capture::capture_active_screen)
         .await
         .map_err(|e| format!("capture task join: {e}"))?
         .map_err(|e| format!("capture: {e}"))?;
@@ -165,23 +165,42 @@ async fn analyze(
     let result = match kind.as_str() {
         "groq" => {
             let d = dispatcher::GroqDispatcher::new().map_err(|e| e.to_string())?;
-            d.analyze(image.clone(), instruction.clone()).await
+            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
         }
         "gemini" => {
             let d = dispatcher::GeminiDispatcher::new().map_err(|e| e.to_string())?;
-            d.analyze(image.clone(), instruction.clone()).await
+            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
         }
         "anthropic" => {
             let d = dispatcher::AnthropicDispatcher::new().map_err(|e| e.to_string())?;
-            d.analyze(image.clone(), instruction.clone()).await
+            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
         }
         _ => {
             let d = dispatcher::ClaudeCliDispatcher::new();
-            d.analyze(image.clone(), instruction.clone()).await
+            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
         }
     };
     let elapsed_ms = started.elapsed().as_millis();
-    let result = result.map_err(|e| e.to_string())?;
+    let mut result = result.map_err(|e| e.to_string())?;
+    // 모델 좌표 (다운스케일 이미지 기준) → monitor 좌표 (orig 사이즈 기준)
+    // 변환. 이걸 안 하면 빨간 박스가 monitor의 잘못된 위치에 그려져 안 보임.
+    if let Some([x, y, w, h]) = result.coordinates {
+        let (sw, sh) = cap.sent_size;
+        let (ow, oh) = cap.orig_size;
+        let rx = ow as f64 / sw as f64;
+        let ry = oh as f64 / sh as f64;
+        result.coordinates = Some([
+            (x as f64 * rx) as i32,
+            (y as f64 * ry) as i32,
+            (w as f64 * rx) as i32,
+            (h as f64 * ry) as i32,
+        ]);
+        tracing::info!(
+            target: "analyze",
+            "coords scaled: sent={}x{} orig={}x{} rx={:.3} ry={:.3} -> {:?}",
+            sw, sh, ow, oh, rx, ry, result.coordinates
+        );
+    }
     tracing::info!(target: "analyze", "elapsed: kind={kind}, ms={elapsed_ms}");
     tracing::info!(
         target: "analyze",
@@ -190,13 +209,11 @@ async fn analyze(
         result.next_action.as_deref(),
         result.coordinates
     );
-    // Best-effort persistence; logging is enough on failure so the user
-    // still gets the analysis result back.
-    let mut result = result;
+    // Best-effort persistence.
     match app.path().app_data_dir() {
         Ok(base) => {
             let sessions_dir = base.join("sessions");
-            match sessions::save_session(&sessions_dir, &image, &instruction, &result) {
+            match sessions::save_session(&sessions_dir, &cap.bytes, &instruction, &result) {
                 Ok(dir) => {
                     result.session_dir = Some(dir.to_string_lossy().into_owned());
                 }
