@@ -519,3 +519,43 @@
 2026-05-27T17:01:25.161564000Z | runtime | info:frontend | analyze done: next=팝업 창의 'Cancel' 버튼 클릭
 2026-05-27T17:01:25.370485000Z | runtime | info:frontend | overlay shown
 2026-05-27T17:01:25.370779000Z | runtime | info:frontend | overlay shown
+2026-05-27T17:24:12.559099000Z | runtime | info:backend | screenbridge starting
+2026-05-27T17:24:14.177463000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T17:24:14.206610000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T17:24:15.239812000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T17:24:15.768925000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T17:24:15.769289000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T17:24:15.803401000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T17:24:15.803948000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T17:24:15.804783000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T17:24:15.804974000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T17:24:17.383257000Z | runtime | info:hotkey | trigger pressed: Alt+Space
+2026-05-27T17:24:17.385752000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T17:24:17.387257000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T17:24:17.391707000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T17:24:17.392074000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T17:24:17.402216000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T17:24:17.402463000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T17:24:17.402627000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T17:24:17.402869000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T17:24:19.210743000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T17:24:19.213048000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T17:24:19.214084000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T17:24:19.217299000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T17:24:19.217896000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T17:24:19.228732000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T17:24:19.228964000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T17:24:19.229976000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T17:24:19.230506000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T17:24:29.493796000Z | runtime | info:frontend | analyze submit: 784 chars
+2026-05-27T17:24:29.495137000Z | runtime | info:analyze | begin: kind=gemini, instr_len=1026
+2026-05-27T17:24:36.487849000Z | runtime | info:capture | captured: orig=3456x2234, sent=1568x1014, bytes=1020631
+2026-05-27T17:24:36.494951000Z | runtime | info:dispatcher | gemini analyze begin: model=gemini-2.5-flash, image_bytes=1020631, instr_len=1026
+2026-05-27T17:24:51.544545000Z | runtime | info:dispatcher | gemini analyze ok: raw_len=173
+2026-05-27T17:24:51.544766000Z | runtime | info:analyze | elapsed: kind=gemini, ms=15056
+2026-05-27T17:24:51.544789000Z | runtime | info:analyze | done: state=None, next=None, coords=None
+2026-05-27T17:24:51.547961000Z | runtime | info:sessions | saved: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-27/08a5c2f5-eafe-42a3-bd93-5b1edc04bf8b"
+2026-05-27T17:24:51.552585000Z | runtime | info:frontend | analyze done: next=<none>
+2026-05-27T17:24:51.741999000Z | runtime | info:frontend | overlay shown
+2026-05-27T17:24:51.742233000Z | runtime | info:frontend | overlay shown
+2026-05-27T17:24:54.571630000Z | runtime | info:frontend | overlay hidden

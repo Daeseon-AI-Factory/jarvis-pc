@@ -230,4 +230,22 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — Overlay가 "화면 가린다" — click-through 안 했던 게 원인
+
+**증상:** 사용자가 ⌥+Space → Analyze → overlay 떠도 "화면 가린다" 불만 반복. transparent 정상이고 빨간 박스/bubble만 보이지만, *마우스 클릭이 overlay에 막혀* desktop의 진짜 버튼 못 누름. 사용자 입장 = "가린다".
+
+**가설 / 시도:**
+1. (틀림) macOSPrivateApi 미적용 → 흰색으로 가림. macOSPrivateApi:true config + features 둘 다 박았는데도 여전히 불만.
+2. (틀림) fullscreen visible:false 무시 → setSize(1,1)로 회피했지만 결과 받으면 monitor 사이즈로 키움. 그게 가린 게 아니라 *클릭 차단이* 가린 거.
+3. (정답) `setIgnoreCursorEvents(false)`로 overlay 활성 중 클릭 받음. 사용자가 desktop 작업 못 함 = "가려져 있음" 체감.
+
+**원인:** Phase 5.2에서 "결과 보고 있는 동안 클릭으로 닫기 가능하게"라는 UX 가정 + 👍/👎 피드백 버튼 클릭. 그러나 PRODUCT.md 본질 = 안경 메타포 = *desktop 그대로 사용하면서 위에 떠 있는 가이드 보기*. 클릭 받는 순간 안경 아닌 가림막이 됨.
+
+**해결 + 학습:**
+- Fix: `setIgnoreCursorEvents(true)` 영구. 절대 false로 안 토글. 닫기는 ⌥+Space 다시 누르면 backend가 sb-trigger broadcast → overlay listen 핸들러가 close().
+- 부작용: 👍/👎 피드백 버튼 마우스 클릭 불가 → v0.2에서 별도 micro-window로 옮김. recordFeedback IPC는 살아있음.
+- 교훈: HUD/overlay 디자인에서 클릭 통과 여부는 product 본질과 직결. "닫기 편하게" 같은 UX 편의 갖다 붙이면 본질이 즉시 깨질 수 있음. PRODUCT.md 본질 직역 = setIgnoreCursorEvents(true).
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

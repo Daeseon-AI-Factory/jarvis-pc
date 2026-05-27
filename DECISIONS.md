@@ -332,4 +332,35 @@ R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를
 
 ---
 
+## 2026-05-27 — Overlay 상호작용: 클릭 받기 vs 진짜 HUD (click-through)
+
+**선택지:**
+- A. **클릭 받기 모드** (이전 디자인) — `setIgnoreCursorEvents(false)`. overlay 안에서 클릭으로 닫기, 👍/👎 버튼 클릭 가능. 단 desktop 작업 차단됨.
+- **B. 진짜 HUD (click-through)** — `setIgnoreCursorEvents(true)` 영구. 마우스가 overlay 통과 → desktop의 진짜 버튼 클릭 가능. 닫기는 키보드 (⌥+Space 토글).
+- C. 작은 bubble 윈도우 (fullscreen X, 우하단 320×200 fixed) — 좌표 박스 표시 불가.
+
+**Trade-off:**
+
+| 축 | A (클릭 받기) | B (HUD click-through, 현재) | C (작은 bubble) |
+| --- | --- | --- | --- |
+| 빨간 박스 좌표 표시 | ✓ | **✓** | ✗ |
+| desktop 정상 사용 | ✗ (차단) | **✓** (진짜 안경) | ✓ |
+| 닫기 UX | 클릭 / ESC | ⌥+Space 토글 | 자동 / 단축키 |
+| 👍/👎 피드백 클릭 | ✓ | ✗ (통과되어 못 누름) | ✓ |
+| PRODUCT.md "안경" 메타포 | 부분 | **정확 일치** | 부분 |
+
+**선택:** **B**.
+
+**근거:** 사용자가 명시적으로 "안경 낀 듯이"라는 product vision 재확인. PRODUCT.md "AI 지시 ↔ 실제 화면 사이 번역 레이어"의 본질 = 사용자가 *실제 desktop을 그대로 사용하면서* 위에 떠 있는 가이드 본다. A는 desktop 작업 차단해서 본질 깨짐 — overlay 떠있는 동안 사용자가 진짜 New Project 버튼 클릭조차 못 함. B가 product 본질과 정확히 일치.
+
+피드백 버튼 click 손실은 v0.2에서 별도 micro-window (작은 always-on-top 클릭 받기 윈도우)로 분리해서 복원. recordFeedback IPC는 ipc.ts에 그대로 살아있음.
+
+**되돌리기 비용:** 매우 작음. Overlay.tsx의 setIgnoreCursorEvents(true) → 결과 받으면 false로 다시 토글하는 줄 두 줄로 회귀. 5분.
+
+**미해결 관심사:**
+- 피드백 (👍/👎) 어떻게 복원? v0.2에서 micro-window 또는 menu-bar tray 항목.
+- ⌥+Space 토글: trigger panel 열려있을 때 누르면 overlay close (이미 동작), overlay 떠있을 때 누르면 close 단독 (이번 fix). 동시에 둘 다 떠있는 케이스는 없으니 단순 토글로 충분.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
