@@ -3,14 +3,18 @@
   font-size: 14px;
   line-height: 1.5;
   color: #0f0f0f;
-  background-color: #f6f6f6;
+  /* :root에 배경색을 두면 overlay webview까지 그 색을 칠해서 transparent가
+   * 깨진다. 색은 trigger-panel에만 둔다 (그 윈도우는 보여야 하니까). */
+  background: transparent;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
+html,
 body {
   margin: 0;
+  background: transparent;
 }
 
 .trigger-panel {
@@ -19,6 +23,7 @@ body {
   padding: 16px 18px;
   height: 100vh;
   box-sizing: border-box;
+  background: #f6f6f6;
 }
 
 .trigger-panel form {
@@ -218,7 +223,10 @@ body {
 @media (prefers-color-scheme: dark) {
   :root {
     color: #f6f6f6;
-    background-color: #2f2f2f;
+    /* :root background는 transparent 유지. trigger-panel만 어둡게. */
+  }
+  .trigger-panel {
+    background: #2f2f2f;
   }
   .trigger-panel textarea {
     background: #1a1a1a;

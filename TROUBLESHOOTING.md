@@ -248,4 +248,25 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — Overlay 여전히 가림 — webview 자체 배경이 흰색이었다
+
+**증상:** click-through 박은 후에도 사용자가 "여전히 여전히 여전히 가린다" 반복. transparent:true config + macOSPrivateApi + features 다 박았는데도.
+
+**가설 / 시도:**
+1. (틀림) macOSPrivateApi 미적용. backend 콘솔에 경고 없으므로 적용됨.
+2. (틀림) Tauri transparent:true 옵션 미동작. setSize/show 후에도 webview는 transparent로 만들어졌음.
+3. (정답) **`App.css`의 `:root { background-color: #f6f6f6; }`** 가 overlay webview에까지 적용되어 webview html element가 흰색을 그림. transparent는 *webview content가 transparent여야* 의미 있음. content가 흰색 칠하면 OS는 그 흰색을 그대로 표시.
+
+**원인:** App.css는 trigger panel 디자인 위주로 작성됨. :root 자체에 배경색을 두면 *같은 React 번들을 로드하는 overlay webview*도 그 색을 받는다. Tauri의 두 윈도우는 같은 frontendDist를 로드 (`tauri.conf.json`의 단일 frontendDist 설정), label만 다름.
+
+**해결 + 학습:**
+- Fix:
+  - `:root background: transparent` (배경 제거).
+  - `html, body { background: transparent }` 명시.
+  - `.trigger-panel { background: #f6f6f6 }`로 trigger panel만 색.
+  - dark mode 분기도 같은 패턴.
+- 교훈: multi-window Tauri에서 *transparent 윈도우 + 색 있는 윈도우*가 한 React 번들 안에 공존하면 :root/html/body에 색 두지 말 것. 색은 컴포넌트 root에만. PRODUCT.md "안경" 본질의 진짜 enabler는 CSS 작성 패턴.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

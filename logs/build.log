@@ -559,3 +559,36 @@
 2026-05-27T17:24:51.741999000Z | runtime | info:frontend | overlay shown
 2026-05-27T17:24:51.742233000Z | runtime | info:frontend | overlay shown
 2026-05-27T17:24:54.571630000Z | runtime | info:frontend | overlay hidden
+2026-05-27T17:38:32.192685000Z | runtime | info:backend | screenbridge starting
+2026-05-27T17:38:32.502054000Z | runtime | info:hotkey | registered Alt+Space global shortcut
+2026-05-27T17:38:32.514340000Z | runtime | info:tray | tray installed (Trigger now / Settings / Quit)
+2026-05-27T17:38:33.284927000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T17:38:33.285296000Z | runtime | info:frontend | frontend bootstrapping
+2026-05-27T17:38:33.317715000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T17:38:33.318173000Z | runtime | info:frontend | trigger panel useEffect on label=trigger
+2026-05-27T17:38:33.318980000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T17:38:33.319138000Z | runtime | info:frontend | trigger panel listen REGISTERED on label=trigger
+2026-05-27T17:38:37.517797000Z | runtime | info:selftest | emitting sb-trigger after 5s
+2026-05-27T17:38:37.521912000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T17:38:37.522539000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T17:38:37.523616000Z | runtime | info:frontend | trigger panel listen FIRED on label=trigger
+2026-05-27T17:38:37.525916000Z | runtime | info:frontend | overlay received trigger → close
+2026-05-27T17:38:37.533817000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T17:38:37.534169000Z | runtime | info:frontend | trigger panel after show()
+2026-05-27T17:38:37.550903000Z | runtime | info:frontend | overlay hidden
+2026-05-27T17:38:37.551165000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T17:38:37.551342000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T17:38:37.551590000Z | runtime | info:frontend | trigger panel after setFocus()
+2026-05-27T17:38:37.551971000Z | runtime | info:frontend | trigger panel shown
+2026-05-27T17:38:37.552678000Z | runtime | info:frontend | overlay hidden
+2026-05-27T17:38:43.474214000Z | runtime | info:frontend | analyze submit: 945 chars
+2026-05-27T17:38:43.475175000Z | runtime | info:analyze | begin: kind=gemini, instr_len=1319
+2026-05-27T17:38:51.300539000Z | runtime | info:capture | captured: orig=3456x2234, sent=1568x1014, bytes=813620
+2026-05-27T17:38:51.306632000Z | runtime | info:dispatcher | gemini analyze begin: model=gemini-2.5-flash, image_bytes=813620, instr_len=1319
+2026-05-27T17:38:58.963126000Z | runtime | info:dispatcher | gemini analyze ok: raw_len=593
+2026-05-27T17:38:58.963399000Z | runtime | info:analyze | elapsed: kind=gemini, ms=7662
+2026-05-27T17:38:58.963430000Z | runtime | info:analyze | done: state=Some("The 'ScreenBridge - Trigger' panel is open, displaying the comparison text for Claude CLI, Groq Scout, and Gemini Flash. The 'Analyzing...' button is visible and active."), next=Some("Click the 'Analyzing...' button to proceed with the analysis as per the AI instruction."), coords=Some([590, 508, 78, 32])
+2026-05-27T17:38:58.966088000Z | runtime | info:sessions | saved: "/Users/daeseonyoo/Library/Application Support/com.screenbridge.app/sessions/2026-05-27/c6061346-bc63-4e57-8c95-9ceb5a3653f9"
+2026-05-27T17:38:58.970020000Z | runtime | info:frontend | analyze done: next=Click the 'Analyzing...' button to proceed with the analysis
+2026-05-27T17:38:59.024319000Z | runtime | info:frontend | overlay shown (HUD mode, click-through)
+2026-05-27T17:38:59.024527000Z | runtime | info:frontend | overlay shown (HUD mode, click-through)
