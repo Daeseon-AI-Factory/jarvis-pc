@@ -447,4 +447,33 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-27 — OCR 구현 방식: macocr subprocess vs objc2-vision direct
+
+**선택지:**
+- **A. macocr CLI subprocess** — `cargo install macocr` (v0.4.7, 2026-02-16). Rust binary, CLI/HTTP 모드. ClaudeCliDispatcher와 동일 subprocess 패턴.
+- B. objc2-vision direct binding — Rust에서 cocoa interop 직접.
+
+**Trade-off:**
+
+| 축 | A (subprocess) | B (direct) |
+| --- | --- | --- |
+| 구현 시간 | 2-3h | 8-10h |
+| 사용자 setup | `cargo install macocr` 1번 | 없음 |
+| Cold start | ~50-100ms 추가 | 0 |
+| Cargo deps | 0 | 5-6 (objc2, objc2-vision, objc2-foundation, core-graphics 등) |
+| 일관성 | 기존 ClaudeCliDispatcher subprocess와 같은 패턴 | 새로운 interop |
+| 미래 deprecation 위험 | macocr crate가 unmaintained 시 | objc2 API churn |
+
+**선택:** **A (macocr subprocess)**.
+
+**근거:**
+- 시간 단축이 dogfooding 진입까지 critical. 2-3h vs 8-10h.
+- macocr가 우리가 원하는 정확한 output JSON 형식 (`ocr_boxes[{x,y,w,h,text}]`) — 추가 wrapping 불필요.
+- subprocess 패턴 ClaudeCliDispatcher와 일관 — 디버그 노하우 재사용.
+- v0.2에 source 추상화 (trait OcrProvider)로 objc2-vision swap 가능. 결정 reversible.
+
+**되돌리기 비용:** ocr.rs 한 모듈 + macocr 라이브러리 호출만 objc2-vision 코드로 교체. ~10h.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
