@@ -65,6 +65,10 @@ export default function TriggerPanel() {
     setError(null);
     setResult(null);
     void logBackend("info", `analyze submit: ${instruction.length} chars`);
+    // 응답 대기 동안 trigger panel을 숨긴다 — visibleOnAllWorkspaces:true
+    // 라 다른 Space로 가면 따라와서 답답하다는 보고. result는 overlay로,
+    // 에러는 catch 블록에서 다시 show.
+    await getCurrentWindow().hide();
     try {
       const r = await invokeAnalyze(instruction);
       setResult(r);
@@ -82,6 +86,9 @@ export default function TriggerPanel() {
       setInstruction("");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      // 에러 시 사용자가 메시지 볼 수 있도록 panel 다시 보여줌.
+      await getCurrentWindow().show();
+      await getCurrentWindow().setFocus();
       setError(msg);
       setStatus("error");
       void logBackend("error", `analyze failed: ${msg}`);

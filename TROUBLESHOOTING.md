@@ -295,4 +295,35 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 18:54 — Gemini 호출 3분+ hang (reqwest default timeout 없음)
+
+**증상:** Gemini schema 박은 후 첫 호출. `begin` 라인 18:54:48, 현재 18:57:26 (3분 경과) → `ok` 또는 `fail` 라인 0. backend는 살아있음.
+
+**가설 / 시도:**
+1. Gemini schema validation에 더 오래 걸린다 → 가능성 있지만 3분은 비정상.
+2. reqwest timeout 없이 default → 영원히 wait 가능. ← 정답에 가까움.
+
+**원인:** `reqwest::Client::builder().build()`는 default timeout 없음. 어느 HTTP dispatcher든 서버가 응답 안 주면 영원히 await. Gemini가 schema 박은 큰 응답을 만드느라 정말 길어진 건지, 또는 connection 자체 hang인지 timeout 없으면 구분 안 됨.
+
+**해결 + 학습:**
+- Fix: 모든 dispatcher의 reqwest client에 `.timeout(Duration::from_secs(60))` 추가. AnthropicDispatcher와 GroqDispatcher와 GeminiDispatcher 셋 다. timeout 시 DispatchError::Network(...) 반환되어 frontend가 에러 표시.
+- 교훈: 모든 외부 HTTP 호출은 timeout 명시. reqwest default가 무한대라는 게 함정. Tauri analyze command도 backend timeout 갖는 게 정상 동작.
+
+---
+
+## 2026-05-27 — visibleOnAllWorkspaces:true 부작용 — trigger panel "어디 가도 따라옴"
+
+**증상:** Analyze 누르고 응답 기다리는 동안 다른 Space로 이동 → trigger panel이 따라옴. 모든 Space에 nag 윈도우.
+
+**가설 / 시도:**
+- visibleOnAllWorkspaces:true는 *어디서든 ⌥+Space로 trigger 가능*해 필요 — 옵션 자체는 유지해야.
+
+**원인:** 의도된 동작이지만 *응답 기다리는 동안* panel이 떠있어서 모든 Space에 따라옴. 응답이 빨리 오면 무관, 느리면 답답.
+
+**해결 + 학습:**
+- Fix: TriggerPanel `analyze()` 시작 시 즉시 `getCurrentWindow().hide()` 호출. 결과 받으면 overlay가 보여줌 (panel 이미 hidden). 에러 시 panel 다시 show + focus로 메시지 표시.
+- 교훈: visibleOnAllWorkspaces:true는 "활성 윈도우의 visibility"가 아니라 "활성 + 따라옴". 응답 대기 같은 *invisible-but-still-alive* 상태에선 명시적으로 hide. UX는 "안 보이면 따라오지 않음" 원칙.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

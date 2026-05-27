@@ -13,6 +13,8 @@ pub const TEXT_MODEL: &str = "claude-haiku-4-5-20251001";
 const ANTHROPIC_API_URL: &str = "https://api.anthropic.com/v1/messages";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 const DEFAULT_MAX_TOKENS: u32 = 1024;
+/// reqwest는 default timeout 없음. 모든 HTTP dispatcher가 hang 보호.
+const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Structured output the trigger panel / overlay actually renders.
 /// All fields are optional because the model occasionally returns malformed
@@ -81,6 +83,7 @@ impl AnthropicDispatcher {
     pub fn new() -> Result<Self, DispatchError> {
         let api_key = crate::anthropic_api_key().ok_or(DispatchError::MissingApiKey)?;
         let client = Client::builder()
+            .timeout(HTTP_TIMEOUT)
             .build()
             .map_err(|e| DispatchError::Other(format!("reqwest client: {e}")))?;
         Ok(Self {
@@ -309,6 +312,7 @@ impl GroqDispatcher {
     pub fn new() -> Result<Self, DispatchError> {
         let api_key = crate::groq_api_key().ok_or(DispatchError::MissingApiKey)?;
         let client = Client::builder()
+            .timeout(HTTP_TIMEOUT)
             .build()
             .map_err(|e| DispatchError::Other(format!("reqwest client: {e}")))?;
         Ok(Self {
@@ -434,6 +438,7 @@ impl GeminiDispatcher {
     pub fn new() -> Result<Self, DispatchError> {
         let api_key = crate::gemini_api_key().ok_or(DispatchError::MissingApiKey)?;
         let client = Client::builder()
+            .timeout(HTTP_TIMEOUT)
             .build()
             .map_err(|e| DispatchError::Other(format!("reqwest client: {e}")))?;
         Ok(Self {
