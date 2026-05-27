@@ -100,4 +100,27 @@ PRODUCT.md / SPEC.md 본질은 그대로. stack만 swap. Tauri-specific 룰들 (
 
 ---
 
+## 2026-05-27 — main 정리: Tauri 코드 → `tauri-archive` branch에만
+
+옵션 A (DECISIONS.md "STACK SWAP" 참조) 채택. main에서 Tauri-specific 파일 제거:
+- `src/` (React frontend)
+- `src-tauri/` (Rust backend + Cargo.toml + capabilities)
+- `package.json`, `package-lock.json`, `index.html`, `vite.config.ts`, `tsconfig*.json`, `public/` (Vite/Node)
+
+보존 (학습 자산 + stack 무관 meta):
+- 룰 문서: PRODUCT.md, SPEC.md (update 예정), CLAUDE.md, STATE.md, SCRATCHPAD.md
+- 학습 자산: TROUBLESHOOTING.md, DECISIONS.md, PROJECT_TIMELINE.md, BUILD_REPORT.md
+- Asset: fixtures/, logs/build.log, scripts/verify_key.sh, .env, .claude/settings.json (hook), .git/hooks/pre-commit
+
+`.gitignore` Swift/Xcode 친화로 update — node_modules / target / dist 제거, DerivedData / xcuserdata / .swiftpm / build 추가.
+
+Tauri 코드 복원 방법 (필요 시):
+- `git checkout tauri-archive` (전체)
+- 또는 `git checkout v0.1-tauri-attempt -- <path>` (일부)
+- GitHub UI: https://github.com/Daeseon-AI-Factory/jarvis-pc/tree/tauri-archive
+
+다음 commit: Xcode project scaffold (사용자가 Xcode에서 새 macOS App 생성 후).
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

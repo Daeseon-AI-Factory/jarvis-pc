@@ -1,25 +1,29 @@
-# Env
+# Env / secrets
 .env
 
-# Node
-node_modules/
-
-# Rust / Tauri build
-target/
-
-# Frontend build
-dist/
-dist-ssr/
+# OS
+.DS_Store
 
 # Logs (allow build.log)
 *.log
 !logs/build.log
 
-# Editor / OS
-.DS_Store
+# Editor / IDE
 .vscode/
 .idea/
 *.swp
 
-# Fixtures (override if generic *.png added later)
+# Swift / Xcode
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+.swiftpm/
+build/
+*.dSYM/
+Packages/
+Package.resolved
+.build/
+
+# Fixtures override (in case global *.png ignore is ever added)
 !fixtures/*.png
