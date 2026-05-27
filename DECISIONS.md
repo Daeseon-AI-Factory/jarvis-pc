@@ -512,4 +512,46 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-27 — **STACK SWAP: Tauri → Swift macOS native** (가장 큰 결정)
+
+**문제:** dogfooding 진입까지 16개 layer를 trial-and-error로 발견 (`TROUBLESHOOTING.md` + `PROJECT_TIMELINE.md` 매트릭스). 사용자 명시: "냉정하게 사용성 최대화".
+
+**선택지:**
+- A. **Tauri 그대로 + 점진적 native (objc2)** — sunk cost 보존, 추가 feature마다 또 layer 발견 가능성.
+- **B. Swift native rewrite** ← 채택. Apple SDK 표준 패턴. macOS HUD app의 textbook architecture.
+- C. Tauri WebView (UI) + Rust objc2 (모든 native) hybrid — A의 다른 모양.
+
+**Trade-off:**
+
+| 축 | A (Tauri 유지) | B (Swift rewrite, 채택) |
+| --- | --- | --- |
+| dogfooding 진입까지 시간 | ~3-5일 (남은 layer 박기) | 1-2주 (rewrite) |
+| 좌표 정확도 | OCR + LLM matching ~95-99% | AXUIElement ~99-100% |
+| 새 feature 개발 속도 | Tauri 추상화 우회 매번 | SDK 표준 한 줄 |
+| Multi-monitor / Spaces 통합 | 부분 (visibleOnAllWorkspaces 등 한정) | `.collectionBehavior` 모든 옵션 |
+| Accessibility API | objc2 raw binding 매번 | SwiftUI에서 SDK 표준 |
+| Cross-platform 옵션 | 보존 | **포기 (macOS only)** |
+| sunk cost | 0 (모두 살림) | ~3000줄 Tauri 코드 (학습 가치는 보존) |
+
+**선택:** **B**.
+
+**근거:**
+- ScreenBridge product type = macOS-native HUD overlay. Apple SDK가 textbook pattern 정해놓은 카테고리.
+- 사용자 우선 가치 = "냉정하게 사용성 최대화". cross-platform이나 학습 보존이 아님.
+- 발견한 16 layer 중 *모두* macOS native SDK에서 1-3줄로 해결. 16 commit이 16줄로 압축.
+- 미래 v0.5+ "Spaces multi-desktop" / v0.7+ "LLM Sovereignty (로컬 모델)" trajectory에서 native interop 깊이 사용 어쩌피 — 일찍 swap이 더 깔끔.
+- 학습 자산 (`TROUBLESHOOTING.md`, `DECISIONS.md`) = stack-independent. Swift에서도 같은 함정 피함.
+
+**되돌리기 비용:**
+- `git tag v0.1-tauri-attempt` + `git branch tauri-archive` (둘 다 push 완료) — 영구 백업.
+- 1줄: `git checkout tauri-archive` → Tauri 코드 복원.
+- 단 dogfooding 시점에 사용성 비교는 직접 측정 필요.
+
+**미해결:**
+- PRODUCT.md / SPEC.md의 "Tauri 2.0만 사용" 룰 (절대 규칙 5). 룰 자체 update 필요 → `CLAUDE.md` 룰 5 update.
+- SPEC.md Phase 매트릭스의 Tauri-specific Phase (0.1 scaffold, 3.x system integration, capability 등)는 Swift에선 다른 형태. SPEC update 또는 새 SPEC_SWIFT.md.
+- v0.1 "주 5회 자발적 사용" gate는 stack 무관 유지.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

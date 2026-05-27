@@ -18,12 +18,13 @@ ScreenBridge — macOS 데스크톱 도구. AI가 시키는 추상적 지시를 
 
 ## 작업 진행 시 핵심 문서
 - **PRODUCT.md** — 제품 비전과 방향. 거의 안 바뀜. 매 세션 첫 참조.
-- **SPEC.md** — 구체 작업 스펙. Phase별로 따라가면 됨.
+- **SPEC.md** — 구체 작업 스펙. Phase별로 따라가면 됨. (Tauri stack 기준 — Swift swap 후 SPEC update 필요.)
 - **STATE.md** — 현재 상태. 매 commit과 함께 갱신.
 - **SCRATCHPAD.md** — 막힌 곳, 사용자에게 물어볼 질문.
 - **logs/build.log** — append-only 결정 로그. 절대 truncate 금지.
-- **TROUBLESHOOTING.md** — 발견된 버그/이슈와 해결 과정. **모든 디버그 narrative가 가는 곳**. 학습 자산.
+- **TROUBLESHOOTING.md** — 발견된 버그/이슈와 해결 과정. **모든 디버그 narrative가 가는 곳**. 학습 자산. stack swap 후에도 그대로 유지 — 함정은 stack 무관.
 - **DECISIONS.md** — trade-off 있는 선택의 기록. 무엇을 골랐고 왜, 무엇을 안 골랐고 왜.
+- **PROJECT_TIMELINE.md** — 전체 history (phase 전환, stack swap, 큰 결정 흐름). 사후 정리 금지, append-only.
 
 ## 회복력 규칙 핵심 (전체는 SPEC.md R1-R7)
 
@@ -43,8 +44,8 @@ ScreenBridge — macOS 데스크톱 도구. AI가 시키는 추상적 지시를 
 2. **fixtures/ 안의 데이터만 신뢰.** 외부 데이터 가정 금지.
 3. **각 Phase verifier 통과해야 다음 Phase.** 3번 실패 시 SCRATCHPAD.md 기록 후 다음 Phase.
 4. **새 디렉토리/패키지 임의 생성 금지.** SPEC.md의 구조 엄수.
-5. **Tauri 2.0만 사용.** Tauri v1 API 금지. Electron 절대 금지.
-6. **Anthropic API 외 외부 LLM 라이브러리 v0.1에선 추가 금지.**
+5. **Swift macOS native app.** Tauri v0.1 attempt는 `tauri-archive` branch + `v0.1-tauri-attempt` tag로 보존. 새 작업은 Swift/SwiftUI/AppKit. SDK 표준 패턴 우선 — 추상화 우회 발견 시 SwiftUI 직접. (이전 룰 "Tauri 2.0만 사용"은 2026-05-27 `PROJECT_TIMELINE.md` 참조하여 swap.)
+6. **Anthropic API 외 외부 LLM 라이브러리 v0.1에선 추가 금지.** (실측상 Gemini 무료 + sonnet 비교 필요 시 그것만 추가, 그 외 새 vendor 신중.)
 7. **`logs/build.log`는 append-only.** 절대 truncate 금지.
 
 ## 사용자에게 멈춰서 물어볼 상황
