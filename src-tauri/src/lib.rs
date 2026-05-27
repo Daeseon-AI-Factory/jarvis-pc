@@ -2,6 +2,7 @@ pub mod capture;
 pub mod dispatcher;
 pub mod fixtures;
 pub mod hotkey;
+pub mod ocr;
 pub mod prompts;
 pub mod sessions;
 pub mod tray;
@@ -162,28 +163,77 @@ async fn analyze(
         .map_err(|e| format!("capture task join: {e}"))?
         .map_err(|e| format!("capture: {e}"))?;
     let started = std::time::Instant::now();
-    let result = match kind.as_str() {
-        "groq" => {
-            let d = dispatcher::GroqDispatcher::new().map_err(|e| e.to_string())?;
-            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
-        }
-        "gemini" => {
-            let d = dispatcher::GeminiDispatcher::new().map_err(|e| e.to_string())?;
-            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
-        }
-        "anthropic" => {
-            let d = dispatcher::AnthropicDispatcher::new().map_err(|e| e.to_string())?;
-            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
-        }
-        _ => {
-            let d = dispatcher::ClaudeCliDispatcher::new();
-            d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone()).await
+
+    // OCR + LLM 병렬 — LLM이 항상 길어서 OCR latency는 사실상 0.
+    let ocr_bytes = cap.bytes.clone();
+    let ocr_fut = async move { ocr::ocr_png(&ocr_bytes).await };
+
+    let llm_fut = async {
+        match kind.as_str() {
+            "groq" => {
+                let d = dispatcher::GroqDispatcher::new().map_err(|e| e.to_string())?;
+                d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone())
+                    .await
+                    .map_err(|e| e.to_string())
+            }
+            "gemini" => {
+                let d = dispatcher::GeminiDispatcher::new().map_err(|e| e.to_string())?;
+                d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone())
+                    .await
+                    .map_err(|e| e.to_string())
+            }
+            "anthropic" => {
+                let d = dispatcher::AnthropicDispatcher::new().map_err(|e| e.to_string())?;
+                d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone())
+                    .await
+                    .map_err(|e| e.to_string())
+            }
+            _ => {
+                let d = dispatcher::ClaudeCliDispatcher::new();
+                d.analyze(cap.bytes.clone(), cap.sent_size, instruction.clone())
+                    .await
+                    .map_err(|e| e.to_string())
+            }
         }
     };
+
+    let (ocr_result, llm_result) = tokio::join!(ocr_fut, llm_fut);
     let elapsed_ms = started.elapsed().as_millis();
-    let mut result = result.map_err(|e| e.to_string())?;
-    // 모델 좌표 (다운스케일 이미지 기준) → monitor 좌표 (orig 사이즈 기준)
-    // 변환. 이걸 안 하면 빨간 박스가 monitor의 잘못된 위치에 그려져 안 보임.
+    let mut result = llm_result?;
+
+    // OCR 결과: 실패해도 LLM 좌표 fallback 가능. 단 로그.
+    let ocr_boxes = match ocr_result {
+        Ok(boxes) => {
+            tracing::info!(target: "analyze", "ocr: {} boxes", boxes.len());
+            boxes
+        }
+        Err(e) => {
+            tracing::warn!(target: "analyze", "ocr failed (LLM coords fallback): {e}");
+            Vec::new()
+        }
+    };
+
+    // OCR 매칭 우선 — LLM이 추정한 좌표를 deterministic OCR 좌표로 덮어쓴다.
+    let mut used_ocr = false;
+    if let Some(target) = result.target_text.as_deref() {
+        if let Some(b) = ocr::find_box(&ocr_boxes, target) {
+            result.coordinates = Some([b.x, b.y, b.w, b.h]);
+            used_ocr = true;
+            tracing::info!(
+                target: "analyze",
+                "ocr matched: target={:?} -> [{},{},{},{}]",
+                target, b.x, b.y, b.w, b.h
+            );
+        } else if !target.trim().is_empty() {
+            tracing::info!(
+                target: "analyze",
+                "ocr miss: target={:?} (LLM coords fallback)",
+                target
+            );
+        }
+    }
+
+    // 좌표가 OCR이든 LLM이든 모두 *sent_size 기준 px*. monitor 좌표로 scale up.
     if let Some([x, y, w, h]) = result.coordinates {
         let (sw, sh) = cap.sent_size;
         let (ow, oh) = cap.orig_size;
@@ -197,8 +247,9 @@ async fn analyze(
         ]);
         tracing::info!(
             target: "analyze",
-            "coords scaled: sent={}x{} orig={}x{} rx={:.3} ry={:.3} -> {:?}",
-            sw, sh, ow, oh, rx, ry, result.coordinates
+            "coords scaled: source={} sent={}x{} orig={}x{} rx={:.3} -> {:?}",
+            if used_ocr { "ocr" } else { "llm" },
+            sw, sh, ow, oh, rx, result.coordinates
         );
     }
     tracing::info!(target: "analyze", "elapsed: kind={kind}, ms={elapsed_ms}");

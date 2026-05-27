@@ -404,4 +404,16 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — ocr.rs unit test: `fake_boxes()` temp borrow lifetime 에러
+
+**증상:** `cargo test --lib ocr::tests` 4 error E0716. 모든 test가 `find_box(&fake_boxes(), ...)` 형식.
+
+**원인:** Rust temp value lifetime — `fake_boxes()`가 만든 Vec이 한 expression 안에서만 살아있음. `find_box`가 그 안의 box `&OcrBox`를 반환했는데, Vec이 expression 끝에서 drop되니 dangling reference.
+
+**해결 + 학습:**
+- Fix: 매 test에서 `let boxes = fake_boxes();` 명시적 binding 후 `&boxes` 전달.
+- 교훈: Rust temp lifetime은 *함수가 reference 반환하면* tight. `&fn()` 패턴 위험 — fn 반환값이 Vec/Box처럼 owned면 temp가 즉시 drop. clippy의 `temporary_cstring_as_ptr` 비슷 함정.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)

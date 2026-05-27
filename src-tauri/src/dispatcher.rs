@@ -25,6 +25,11 @@ pub struct AnalysisResult {
     pub next_action: Option<String>,
     pub coordinates: Option<[i32; 4]>,
     pub reasoning: Option<String>,
+    /// 새 OCR architecture: LLM이 next_action의 핵심 UI 요소 visible text를
+    /// 그대로 여기 복사. backend가 이 text로 OCR list 매칭해서 *deterministic*
+    /// 좌표를 coordinates에 덮어쓴다. None이면 LLM 좌표 그대로 사용.
+    #[serde(default)]
+    pub target_text: Option<String>,
     /// Raw model output, before JSON parsing. Always populated.
     pub raw: String,
     /// Filled in by lib::analyze after sessions::save_session — None when
@@ -500,6 +505,7 @@ impl LLMDispatcher for GeminiDispatcher {
                     "properties": {
                         "screen_state": {"type": "string"},
                         "next_action": {"type": "string"},
+                        "target_text": {"type": "string"},
                         "coordinates": {
                             "type": "array",
                             "items": {"type": "integer"},
@@ -508,7 +514,7 @@ impl LLMDispatcher for GeminiDispatcher {
                         },
                         "reasoning": {"type": "string"}
                     },
-                    "required": ["screen_state", "next_action", "reasoning"]
+                    "required": ["screen_state", "next_action", "target_text", "reasoning"]
                 }
             }
         });
@@ -611,6 +617,10 @@ pub fn parse_analysis(raw: String) -> AnalysisResult {
         .map(str::to_string);
     out.next_action = value
         .get("next_action")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    out.target_text = value
+        .get("target_text")
         .and_then(|v| v.as_str())
         .map(str::to_string);
     out.reasoning = value

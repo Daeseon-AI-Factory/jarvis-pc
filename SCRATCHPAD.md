@@ -4,6 +4,15 @@
 
 ---
 
+## [2026-05-27] src-tauri/src/ocr.rs — SPEC tree에 없는 새 모듈
+**위반:** SPEC.md 룰 4 ("새 디렉토리/패키지 임의 생성 금지, 구조 엄수"). ocr.rs는 SPEC v0.1 트리에 없는 새 모듈.
+**정당화:** dogfooding 측정 결과 vision LLM 좌표 정확도 70% (사용자 불만). 99% 정확도 = deterministic source 필요. DECISIONS.md "99% 정확도 architecture" entry 참조. SPEC 작성자(=사용자) 본인이 dogfooding signal로 가설 깬 케이스.
+**처리:** ocr.rs 추가 commit. v0.2에서 OcrProvider trait 추상화 후 source swap 가능.
+
+## 사용자 다음 액션 — macocr 설치
+**필요:** `cargo install macocr` (한 번). v0.4.7. Rust로 macOS Vision framework wrapping. `which macocr`로 PATH 확인.
+**기대:** PATH에 macocr가 있으면 ocr.rs가 subprocess 호출 → JSON 파싱. 없으면 OcrError::NotInstalled로 frontend에 에러.
+
 ## [2026-05-26] git pre-commit hook은 portable X
 **상태:** `.git/hooks/pre-commit`이 R8/R9 강제용으로 박혀있음. 코드 변경 staged인데 TROUBLESHOOTING.md / DECISIONS.md 변경 없으면 commit 차단.
 **막힌 지점:** `.git/`은 git에 트래킹 안 됨. 다른 머신/clone 시 hook 사라짐.
