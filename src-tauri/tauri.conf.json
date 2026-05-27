@@ -22,8 +22,7 @@
         "alwaysOnTop": true,
         "decorations": true,
         "focus": true,
-        "center": true,
-        "visibleOnAllWorkspaces": true
+        "center": true
       },
       {
         "label": "overlay",
@@ -36,8 +35,7 @@
         "resizable": false,
         "width": 1,
         "height": 1,
-        "shadow": false,
-        "visibleOnAllWorkspaces": true
+        "shadow": false
       }
     ],
     "security": {

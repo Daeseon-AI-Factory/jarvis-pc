@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   PhysicalPosition,
@@ -10,8 +10,15 @@ import { AnalysisResult, logBackend } from "../lib/ipc";
 
 const OVERLAY_SHOW_EVENT = "sb-overlay-show";
 
+interface MonitorInfo {
+  dpr: number;
+  logicalW: number;
+  logicalH: number;
+}
+
 export default function Overlay() {
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [monitor, setMonitor] = useState<MonitorInfo | null>(null);
 
   useEffect(() => {
     let unlistenShow: (() => void) | undefined;
@@ -23,19 +30,30 @@ export default function Overlay() {
     void win.setIgnoreCursorEvents(true);
     listen<AnalysisResult>(OVERLAY_SHOW_EVENT, async (event) => {
       setResult(event.payload);
-      const monitor = await currentMonitor();
-      if (monitor) {
+      const mon = await currentMonitor();
+      if (mon) {
         await win.setPosition(
-          new PhysicalPosition(monitor.position.x, monitor.position.y)
+          new PhysicalPosition(mon.position.x, mon.position.y)
         );
         await win.setSize(
-          new PhysicalSize(monitor.size.width, monitor.size.height)
+          new PhysicalSize(mon.size.width, mon.size.height)
         );
+        // Retina DPR을 받아둔다. coords는 physical px이지만 CSS는 logical.
+        // logical = physical / scaleFactor. 없으면 1 (non-retina).
+        const dpr = mon.scaleFactor ?? 1;
+        setMonitor({
+          dpr,
+          logicalW: mon.size.width / dpr,
+          logicalH: mon.size.height / dpr,
+        });
       }
       await win.show();
       // Do NOT setFocus — focus would steal keyboard from the real app
       // beneath. The overlay is a heads-up display, not a focused window.
-      void logBackend("info", "overlay shown (HUD mode, click-through)");
+      void logBackend(
+        "info",
+        `overlay shown (HUD mode, dpr=${mon?.scaleFactor ?? 1})`
+      );
     }).then((fn) => {
       unlistenShow = fn;
     });
@@ -75,18 +93,59 @@ export default function Overlay() {
 
   if (!result) return null;
 
-  const c = result.coordinates;
-  // 전체가 click-through. onClick 핸들러 없음. bubble의 ⬆/⬇ 버튼도 클릭
-  // 통과되어 동작 안 함 — v0.2에서 별도 micro-window로 옮길 후보.
+  // physical-px 좌표를 CSS logical px로 변환. monitor 정보 없으면 1배.
+  const dpr = monitor?.dpr ?? 1;
+  const c = result.coordinates
+    ? {
+        left: result.coordinates[0] / dpr,
+        top: result.coordinates[1] / dpr,
+        width: result.coordinates[2] / dpr,
+        height: result.coordinates[3] / dpr,
+      }
+    : null;
+
+  // Bubble 위치 계산:
+  //   - 박스 있으면 그 옆에 (오른쪽 비면 오른쪽, 아니면 왼쪽). 위 비면 위.
+  //   - 박스 없으면 화면 중앙.
+  const BUBBLE_W = 360;
+  const BUBBLE_H_EST = 140;
+  const GAP = 16;
+  let bubbleStyle: CSSProperties = {
+    top: "50%",
+    left: "50%",
+    transform: "translate(-50%, -50%)",
+  };
+  if (c && monitor) {
+    const spaceRight = monitor.logicalW - (c.left + c.width);
+    const spaceLeft = c.left;
+    const spaceBelow = monitor.logicalH - (c.top + c.height);
+    let style: CSSProperties = {};
+    if (spaceRight >= BUBBLE_W + GAP) {
+      style = { left: c.left + c.width + GAP, top: c.top };
+    } else if (spaceLeft >= BUBBLE_W + GAP) {
+      style = { left: c.left - BUBBLE_W - GAP, top: c.top };
+    } else if (spaceBelow >= BUBBLE_H_EST + GAP) {
+      style = { left: c.left, top: c.top + c.height + GAP };
+    } else {
+      style = { left: c.left, top: c.top - BUBBLE_H_EST - GAP };
+    }
+    bubbleStyle = { ...style, width: BUBBLE_W };
+  }
+
   return (
     <div className="overlay-root">
       {c && (
         <div
           className="overlay-box"
-          style={{ left: c[0], top: c[1], width: c[2], height: c[3] }}
+          style={{
+            left: c.left,
+            top: c.top,
+            width: c.width,
+            height: c.height,
+          }}
         />
       )}
-      <div className="overlay-bubble">
+      <div className="overlay-bubble" style={bubbleStyle}>
         {result.next_action && (
           <p className="bubble-action">{result.next_action}</p>
         )}

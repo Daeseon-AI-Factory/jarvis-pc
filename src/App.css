@@ -144,8 +144,6 @@ body {
 
 .overlay-bubble {
   position: fixed;
-  bottom: 40px;
-  right: 40px;
   max-width: 420px;
   padding: 14px 16px;
   background: rgba(20, 20, 22, 0.94);
@@ -155,6 +153,7 @@ body {
   line-height: 1.45;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   animation: overlay-bubble-fadein 220ms ease-out;
+  /* bubble 위치는 React가 style로 직접 결정 (박스 옆 또는 화면 중앙) */
 }
 
 @keyframes overlay-bubble-fadein {

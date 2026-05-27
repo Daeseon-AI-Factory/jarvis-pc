@@ -350,4 +350,58 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — visibleOnAllWorkspaces:true 다시 끔 — "따라옴 답답"이 "안 보임"보다 짜증
+
+**증상:** 이전 fix로 visibleOnAllWorkspaces:true 박았더니 사용자가 *다른 Space 가도* trigger/overlay 따라옴. dogfooding 흐름에서 짜증.
+
+**가설 / 시도:**
+- (이전) visibleOnAllWorkspaces:true가 좋다 — 어디서든 ⌥+Space 가능 + Space stick 안 함.
+- (실측) 사용자 보고: "어디 가도 따라옴" 짜증이 "다른 Space에서 안 보임"보다 훨씬 큼.
+
+**원인:** macOS의 NSWindowCollectionBehavior 옵션이 boolean 두 극단 (canJoinAllSpaces vs default home Space stick) 외에 *moveToActiveSpace* (활성화 시 active로 이동)이 있지만 Tauri 2의 `visibleOnAllWorkspaces` boolean은 그것 매핑 X.
+
+**해결 + 학습:**
+- Fix: 두 윈도우 다 `visibleOnAllWorkspaces` 옵션 제거 (default false). trigger / overlay 둘 다 ScreenBridge home Space에 stick. 사용자가 *다른* Space에서 ⌥+Space 누르면 macOS가 일반적으로 앱 활성화 시 home Space로 자동 이동 ("Switch automatically to a Space" 시스템 설정).
+- 교훈:
+  - dogfooding signal이 디자인 가설 깬 첫 케이스. 추정이 아니라 실측이 결정.
+  - macOS Spaces 통합은 트레이드오프 깊음 — NSWindowCollectionBehavior 옵션 4개 (default / canJoinAllSpaces / moveToActiveSpace / fullScreenAuxiliary). Tauri 2가 다 expose 안 함. v0.5 multi-Space 작업 시 native cocoa interop로 .moveToActiveSpace 직접 설정 후보.
+
+---
+
+## 2026-05-27 — 좌표 변환 후에도 박스 엉뚱 — Retina DPR 한 layer 더
+
+**증상:** `coords scaled: ... rx=2.204 → [879, 519, 308, 79]` 로그까지 정확. next_action도 "우측 상단 Create API Key 버튼" 구체. 그러나 박스가 화면 *왼쪽 중간*에 그려짐. 박스 자리 어긋남.
+
+**가설 / 시도:**
+1. (이전 시도 통과) 좌표가 다운스케일 이미지 기준 → monitor physical 기준으로 변환 ✓.
+2. (정답) **Retina DPR(devicePixelRatio) 한 layer 더 빠짐**. capture는 physical px (3456×2234 on Retina MacBook), 모델 좌표 → physical 변환까지는 OK. 그런데 *webview CSS px = logical = physical / DPR*. 우리 setSize(PhysicalSize)는 webview를 monitor 전체 덮게 하지만 CSS px 단위는 logical (1728×1117).
+   - 우리 박스 style.left = 879 (physical로 받음). CSS는 logical 1728 안에서 879 → 51% 위치 (의도: 25%).
+   - 즉 의도 위치보다 2배 멀리 그려짐.
+
+**원인:** 좌표는 4-layer를 거침:
+  1. capture physical (3456×2234)
+  2. 다운스케일 sent (1568×1014) → 모델 좌표 응답 기준
+  3. monitor physical scale-up (3456×2234)
+  4. CSS logical (1728×1117) ← *여기 한 단계 빠뜨림*
+
+**해결 + 학습:**
+- Fix: `Overlay.tsx`가 `currentMonitor().scaleFactor`를 받아 DPR로 저장. coords / dpr 후 CSS에 적용. 박스/bubble 위치 모두 logical px.
+- 또 bubble 동적 위치 박음: 박스가 있으면 그 *옆* (오른쪽이 여유면 오른쪽, 안 여유면 왼쪽, 그것도 안 되면 아래/위). 박스 없으면 화면 중앙. 우하단 고정 사라짐.
+- 교훈: 좌표 변환 layer가 캡처→모델→monitor→CSS 4단계. 각 단계 명시 안 하면 한 군데 빠뜨림. 다음 vision 작업 시 *4단계 layer 다이어그램*을 코드 주석에 박을 것. logical/physical 변환은 macOS Retina의 영구 함정.
+
+## 2026-05-27 — visibleOnAllWorkspaces 재제거 — dogfooding signal로 디자인 가설 깸
+
+**증상:** "어디 가도 따라옴" 사용자 보고.
+
+**가설 / 시도:**
+- 이전 hypothesis: "다른 Space에서 ⌥+Space로 trigger 가능 + Space stick 안 함"이 좋다고 봤음. 실제 dogfooding에선 "어디서든 따라옴"이 더 답답.
+
+**원인:** macOS Spaces 디자인 가설을 시뮬레이션 안 하고 실측 안 함. visibleOnAllWorkspaces:true는 사용자 의도 ("내가 가는 Space에 같이")와 다름 — *모든 Space에 동시 보임*.
+
+**해결 + 학습:**
+- Fix: 두 윈도우 다 visibleOnAllWorkspaces 옵션 제거 (default false). ScreenBridge home Space에 stick. 사용자가 다른 Space에서 ⌥+Space 누르면 macOS "Switch to Space" 자동 동작 의존.
+- 교훈: macOS NSWindowCollectionBehavior 4가지 옵션 (default/canJoinAllSpaces/moveToActiveSpace/fullScreenAuxiliary) 중 Tauri는 boolean 매핑만. 진짜 "사용자 따라옴"이 필요하면 v0.5 multi-Space 작업 시 native cocoa interop 직접.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)
