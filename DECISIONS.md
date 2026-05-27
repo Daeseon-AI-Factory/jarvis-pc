@@ -367,4 +367,84 @@ R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를
 
 ---
 
+## 2026-05-27 — 99% 정확도 architecture: OCR vs DOM extension vs Accessibility API
+
+**문제:** Gemini Flash + DPR 변환 후 박스 정확도 ~70% (±50-100px). 사용자 명시: "99% 정확성 필요. 모델 스왑은 없다. 속도는 지금으로 유지." → **LLM에게 픽셀 좌표 추정 시키지 말고 deterministic source에서 좌표 얻기**. LLM은 element identification만.
+
+**선택지:**
+
+| # | 옵션 | source | 커버리지 | 추정 정확도 | 추가 시간 |
+| -- | --- | --- | --- | --- | --- |
+| A | **macOS Vision framework OCR** | 화면의 모든 text + bbox | 모든 앱 (text-based UI) | 95-99% (icon-only 제외) | 6-8h |
+| B | Chrome extension + DOM | active tab의 DOM tree | 브라우저만 | 99-100% | 4-6h |
+| C | macOS Accessibility (AXUIElement) | OS의 UI tree | 모든 앱 (Electron/sandboxed 약함) | 85-95% | 8-12h |
+| D | 셋 다 hybrid + fallback chain | 위 셋 ∪ | 거의 100% | 18-24h |
+
+**Trade-off (각 축):**
+
+| 축 | A (OCR) | B (Chrome) | C (Accessibility) | D (Hybrid) |
+| --- | --- | --- | --- | --- |
+| dogfooding case 커버리지 | universal (브라우저 + native) | 브라우저만 (사용자 ~80% 케이스) | 모든 앱 (단 일부 약함) | 거의 모든 case |
+| 정확도 | 95-99% text-based, icon 약함 | 99-100% (DOM은 truth) | 85-95% (앱별 노출도 다름) | 99%+ |
+| 속도 (총 latency) | +0.5s (OCR) → ~10s | -1s (LLM이 더 적게 보냄) → ~9s | +0.2s (AXUIElement) → ~10s | 위 셋 중 가장 짧은 source 선택 |
+| 권한 | Screen Recording (이미 있음) | Chrome extension install | Accessibility (신규, 강한 권한) | 모두 |
+| 구현 비용 | 6-8h | 4-6h | 8-12h | 18-24h |
+| 라이브러리 | cocoa-foundation/objc2 + Vision framework | manifest v3, WebSocket | objc2 + AXUIElement | 위 둘 |
+| 사용자 친화도 | 0 (투명) | install 한 번 | 권한 다이얼로그 | 위 모두 |
+| Cross-platform 호환 | macOS 한정 | Chrome 한정 | macOS 한정 | macOS 한정 |
+| SPEC.md 위치 | (없음, v0.1 추가) | v0.3 명시 | v0.5+ 시사 (LLM Sovereignty 아닌 별도) | (없음) |
+
+**선택:** **A (macOS Vision framework OCR + LLM element matching)**.
+
+**근거:**
+- **universal**: 사용자가 매일 쓰는 케이스 = 브라우저 (80%) + 데스크톱 앱 (20%, Slack/Mail/Finder/터미널 등). A는 둘 다. B는 브라우저만.
+- **dogfooding 진입까지 ROI 최대**: 6-8h 안에 정확도 70% → 95-99%로 점프. PRODUCT.md "주 5회 자발적 사용" gate를 진짜 통과할 정확도.
+- **속도 영향 미미**: macOS Vision framework 자체가 native + GPU 가속. OCR ~300-500ms 추가, 총 ~10초 sweet spot 유지.
+- **권한 추가 없음**: Screen Recording은 이미 부여됨. Accessibility(C)는 사용자에게 신규 권한 다이얼로그 — 마찰 ↑.
+- **LLM이 일을 잘하도록**: 픽셀 추정 같은 약점에서 빠지고 element identification에 집중. 정확도 자체 ↑.
+- **B(Chrome extension)는 v0.3으로 보강** — SPEC.md 명시 trajectory와 일치. A 다음에 B 추가하면 브라우저 case는 100% 정확 + native fallback 유지.
+- **C(Accessibility)는 v0.5+** — Electron/sandboxed 앱 약함 + 권한 마찰. B 추가 후에도 부족하면 그때.
+
+**미선택 + 근거:**
+- B (Chrome extension only): 브라우저만 — Slack/Mail/Finder 등 일상 작업 못 커버. v0.3에 같이 추가.
+- C (Accessibility only): 권한 + 앱별 노출도 ↓ + 구현 비용 ↑. ROI 가장 나쁨.
+- D (hybrid): 좋지만 v0.1 단계에 비용 너무 큼. A → B → C 순차 진화.
+
+**Architecture 디테일 (A 채택 시):**
+```
+사용자 화면 캡처
+   ├─→ 다운스케일 PNG (Gemini Flash 비전 입력)
+   └─→ macOS Vision framework
+            VNRecognizeTextRequest → list of (text, bbox)
+   ↓ LLM에 같이 보냄:
+      - PNG (시각 컨텍스트)
+      - OCR text list 부착 in user_text
+      - SYSTEM_PROMPT: "next_action에 클릭할 element의 정확한 visible text 명시. 좌표는 backend가 list에서 매칭"
+   ↓
+LLM 응답 (Gemini schema 강제):
+   { next_action: "...", target_text: "Create API Key",
+     coordinate_hint: [원래 picture px], ... }
+   ↓
+backend element-text fuzzy match (OCR list)
+   ↓
+정확한 coords (OCR bbox)
+   ↓
+Overlay box: 99% 정확
+```
+
+**되돌리기 비용:**
+- 부분 rollback (OCR 비활성, LLM 좌표만): lib.rs::analyze에서 OCR 호출 조건부 skip. SB_DISPATCHER=gemini 같은 env로 토글. 5분.
+- 완전 rollback (OCR 모듈 제거): src-tauri/src/ocr.rs 삭제 + Cargo crates 제거. 30분.
+
+**미해결 / 향후:**
+- **icon-only 버튼** (text 없는 X 버튼, 햄버거 메뉴 등): OCR 매칭 실패 → LLM 좌표 fallback (현재 동작 그대로). v0.2 후보: 자주 쓰는 icon library 등록.
+- **fuzzy matching 정확도**: "Create API Key" vs "Create API key" 대소문자, 공백, "API Key 생성" 한국어 번역 — backend matcher 일관성. levenshtein 또는 substring 우선.
+- **macOS Vision framework Rust crate 선택**: `cidre`, `objc2-vision`, 또는 직접 cocoa interop. 다음 단계에서 fact-check.
+
+**SPEC 위반 기록:**
+- 룰 4 ("새 디렉토리/패키지 임의 생성 금지, SPEC 구조 엄수"): `src-tauri/src/ocr.rs` 새 모듈 추가 — SPEC 트리에 없음. SCRATCHPAD에 위반 1줄 기록 + dogfooding 측정 결과 (정확도 70%) 기반 정당화.
+- 룰 6 ("Anthropic API 외 외부 LLM 라이브러리 v0.1엔 추가 금지"): OCR은 LLM 아님 — 위반 X.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
