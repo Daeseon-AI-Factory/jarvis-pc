@@ -476,7 +476,25 @@ impl LLMDispatcher for GeminiDispatcher {
             ],
             "generationConfig": {
                 "maxOutputTokens": DEFAULT_MAX_TOKENS,
-                "temperature": 0.0
+                "temperature": 0.0,
+                // Gemini이 free-form 텍스트로 답하면 parse_analysis가 fail
+                // 빈도 ~2/3. 강제 JSON으로 풀린다.
+                "responseMimeType": "application/json",
+                "responseSchema": {
+                    "type": "object",
+                    "properties": {
+                        "screen_state": {"type": "string"},
+                        "next_action": {"type": "string"},
+                        "coordinates": {
+                            "type": "array",
+                            "items": {"type": "integer"},
+                            "minItems": 4,
+                            "maxItems": 4
+                        },
+                        "reasoning": {"type": "string"}
+                    },
+                    "required": ["screen_state", "next_action", "reasoning"]
+                }
             }
         });
 

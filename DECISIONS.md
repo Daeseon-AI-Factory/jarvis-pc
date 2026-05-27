@@ -274,11 +274,15 @@ R9 (CLAUDE.md): 두 개 이상의 합리적 선택지가 있고 그중 하나를
 
 | dispatcher | 측정 시간 | 좌표 인식 | 정확도 (1회 측정) | 비고 |
 | --- | --- | --- | --- | --- |
-| claude CLI (Pro 구독) | 41초 (첫 호출, 다운스케일 전) | ✓ `[334,155,370,220]` | sonnet 답변 길고 정확 | TROUBLESHOOTING 22:50 |
-| **Groq Llama 4 Scout 17B (preview)** | **76초** | ✗ `coords=None` | "Cancel 버튼 클릭" — 좌표 없으면 overlay 박스 X | 예상 1-5초 vs 실측 76초. preview 모델 vision 최적화 부족 가능 |
-| Gemini 2.5 Flash | 미측정 | — | — | 다음 측정 후보 |
+| claude CLI (Pro 구독) | 41초 (첫 호출) | ✓ `[334,155,370,220]` | sonnet 답변 길고 정확 | TROUBLESHOOTING 22:50 |
+| Groq Llama 4 Scout 17B (preview) | 76초 | ✗ `coords=None` | "Cancel 버튼 클릭" — 좌표 없으면 박스 X | 예상 1-5초 vs 실측 76초. preview vision 최적화 부족 |
+| **Gemini 2.5 Flash** (responseSchema 없음) | **7-15초** (3회 평균 ~10초) | 1/3만 ✓ `[590,508,78,32]` | 한 번은 정확, 두 번은 free-form 텍스트 → parse 실패 | responseSchema 추가하면 안정화 예상 |
+| **Gemini 2.5 Flash + responseSchema (현재)** | 측정 중 | 측정 중 | 강제 JSON 출력 | TROUBLESHOOTING 2026-05-27 (Gemini free-form fix) |
 
-→ Groq는 dogfooding 후보로 사실상 폐기 (속도 + 좌표 둘 다 약함).
+**최종 후보:**
+- 1순위 **Gemini 2.5 Flash (responseSchema 강제)** — 속도 7-15초 + 좌표 인식 가능 + 무료 250 RPD. sonnet 41초의 1/3 시간. 안경 메타포 UX 가능 수준.
+- 2순위 claude CLI Pro 구독 — 정확도 최고, 속도 답답.
+- 후보 폐기 Groq — 속도 + 정확도 둘 다 약함.
 
 **되돌리기 비용:** 어느 옵션도 dispatcher trait 그대로 활용. 새 Dispatcher struct 하나 추가하고 lib.rs::analyze에서 한 줄 swap. 기존 ClaudeCliDispatcher/AnthropicDispatcher는 보존. 1-2시간 구현 + fixture 측정 30분.
 

@@ -269,4 +269,30 @@ window.show not allowed. Permissions associated with this command: core:window:a
 
 ---
 
+## 2026-05-27 — Gemini가 free-form 텍스트로 응답, parse 2/3 실패
+
+**증상:** SB_DISPATCHER=gemini 3회 호출 측정:
+- 17:24:29 → 15s, raw_len=173, **모든 fields None**
+- 17:38:43 → 8s, raw_len=593, **state ✓, next ✓, coords=[590,508,78,32] ✓**
+- 18:46:06 → 9s, raw_len=174, **모든 fields None**
+
+2/3 케이스 parse 실패. raw_len 173-174의 짧은 응답은 SYSTEM_PROMPT의 "JSON 외 텍스트 금지" 룰 무시.
+
+**가설 / 시도:**
+- (틀림) Gemini 모델 능력 부족. → 한 번은 정확히 좌표까지 잡음. 능력은 있음.
+- (정답) Gemini는 `responseMimeType: "application/json"` + `responseSchema`로 *강제* JSON 출력 가능. SYSTEM_PROMPT 안 텍스트로만 "JSON으로 답해"는 비결정적 — Gemini가 free-form 텍스트로 답하면 parse_analysis가 fallback raw 표시.
+
+**원인:** generationConfig에서 JSON 강제 옵션을 안 줬음. Anthropic은 SYSTEM_PROMPT의 강제력 강함 (sonnet은 99%+ JSON 출력), Gemini는 그것보다 느슨함 → 명시적 schema 필요.
+
+**해결 + 학습:**
+- Fix: GeminiDispatcher의 generationConfig에 `responseMimeType: "application/json"` + `responseSchema` (AnalysisResult 모양) 추가. screen_state/next_action/reasoning은 required, coordinates optional (모델이 좌표 못 잡는 케이스 OK).
+- 교훈: vendor별 strict JSON 강제 메커니즘 다름.
+  - Anthropic: SYSTEM_PROMPT 텍스트만으로 거의 항상 작동.
+  - Gemini: generationConfig.responseSchema 명시.
+  - Groq: json_object response_format 필요.
+  - OpenAI: response_format json_schema.
+  vendor swap 시 dispatcher 코드에 vendor-specific JSON enforcement 매번 명시. 한 번에 박을 것.
+
+---
+
 (다음 디버그는 여기에 append. 매 commit에 같이 들어가야 함. 사후 정리는 R8 위반.)
