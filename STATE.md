@@ -2,17 +2,17 @@
 
 **Stack:** Swift macOS native (SwiftUI + AppKit). Tauri v0.1 attempt는 `tauri-archive` branch + `v0.1-tauri-attempt` tag로 보존.
 
-**Phase:** Swift 0.1 — SwiftPM scaffold
-**Last completed:** SwiftPM executable package + macOS 14 platform + 기본 SwiftUI App + `swift build` 통과 (9.37s).
-**Last commit:** 32929bd (main reset — Tauri 제거)
-**Next step:** Phase 0.2 Swift — AppDelegate (NSApplicationDelegateAdaptor) + LSUIElement (menu bar only) + NSStatusItem tray.
-**Blockers:** 없음. Swift 6.3.2 + Xcode 26 + macOS 26 (Tahoe) 환경 정상.
-**Last updated:** 2026-05-27T19:20:00Z
+**Phase:** Swift 0.2 — menu-bar shell + hotkey + panel
+**Last completed:** AppDelegate (.accessory dock 숨김) + NSStatusItem 트레이 (Trigger/Open sessions/Quit) + Carbon RegisterEventHotKey ⌥+Space + NSPanel trigger panel (cursor monitor 중앙). `swift build` 2.26s 통과.
+**Last commit:** 31a773f (backfill 학습 자산)
+**Next step:** Phase 2.x — GeminiDispatcher (URLSession, responseSchema 강제) + LLMDispatcher protocol + prompts. 그 다음 Phase 3.1 ScreenCaptureKit, 4.2 analyze flow, 5.x HUD overlay.
+**Blockers:** 없음. swift run으로 사용자 manual smoke (menu bar 아이콘 + ⌥Space → panel) 필요.
+**Last updated:** 2026-05-27T19:30:00Z
 
 ## Swift Phase 매트릭스 (간단, 풀 SPEC update 별도)
 
-- [x] Phase 0.1 SwiftPM scaffold (이 commit)
-- [ ] Phase 0.2 AppDelegate + LSUIElement + NSStatusItem (menu bar)
+- [x] Phase 0.1 SwiftPM scaffold (571e213)
+- [x] Phase 0.2 AppDelegate + .accessory + NSStatusItem + Carbon hotkey + NSPanel (이 commit)
 - [ ] Phase 0.3 Info.plist + Entitlements (Accessibility, Screen Recording 권한)
 - [ ] Phase 0.4 .env loading
 - [ ] Phase 1.1 logging (os_log + logs/build.log)

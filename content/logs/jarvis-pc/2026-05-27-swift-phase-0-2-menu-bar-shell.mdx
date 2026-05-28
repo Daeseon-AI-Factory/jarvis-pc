@@ -1,0 +1,86 @@
+---
+title: "Swift Phase 0.2: menu-bar shell + global hotkey + trigger panel — Tauri 일주일치를 한 commit으로"
+date: "2026-05-27"
+project: "jarvis-pc"
+kind: "update"
+visibility: "public"
+language: "ko"
+summary: "Swift native rewrite 첫 기능 commit. NSApp.setActivationPolicy(.accessory)로 dock 숨김 + NSStatusItem 트레이 + Carbon RegisterEventHotKey ⌥+Space + NSPanel trigger panel. Tauri attempt에서 일주일 박은 menu-bar / hotkey / 윈도우 layer가 Swift SDK 표준으로 한 commit (2.26s 빌드)."
+tags: ["swift", "swiftui", "appkit", "nsstatusitem", "carbon", "hotkey", "nspanel", "menu-bar"]
+---
+
+## 목표
+
+Swift native rewrite의 첫 *동작하는 milestone*. menu bar app shell — dock 안 보이고, 메뉴바 아이콘 + ⌥+Space 단축키로 trigger panel 토글. Tauri attempt가 이걸 박는 데 Phase 0.1 (scaffold) + 3.2 (hotkey) + 3.3 (tray) + 4.1 (trigger window) + 여러 layer (capability / transparent / visible 등)를 거쳤다. Swift에선 한 commit.
+
+## 박은 것
+
+### dock 숨김 (LSUIElement 대신 런타임)
+
+SwiftPM executable엔 `Info.plist`를 못 박으니 (`.app` bundle 없음) 런타임에:
+```swift
+NSApp.setActivationPolicy(.accessory)
+```
+한 줄. menu bar only. Tauri는 `tauri.conf.json` + macOS 별도 처리였던 것.
+
+### menu bar tray (NSStatusItem)
+
+```swift
+let item = NSStatusBar.system.statusItem(withLength: .variableLength)
+item.button?.image = NSImage(systemSymbolName: "eyeglasses", ...)  // 안경 메타포
+let menu = NSMenu()
+menu.addItem(withTitle: "Trigger now (⌥Space)", action: #selector(triggerNow), ...)
+// Open sessions folder / Quit
+item.menu = menu
+```
+SF Symbol `eyeglasses` — product 본질. Tauri는 `tauri-plugin tray-icon` feature + capability였던 것.
+
+### global hotkey (Carbon)
+
+Carbon `RegisterEventHotKey` — deprecated이지만 global hotkey엔 여전히 표준 + 의존성 0:
+```swift
+RegisterEventHotKey(UInt32(kVK_Space), UInt32(optionKey), hotKeyID, ...)
+```
+C function pointer 콜백은 `Unmanaged`로 self 전달 (표준 패턴). Tauri는 `tauri-plugin-global-shortcut` + capability + 이벤트 emit/listen 체인이었던 것.
+
+### trigger panel (NSPanel + SwiftUI)
+
+`NSPanel` (`.nonactivatingPanel` + `.floating` + `.moveToActiveSpace`)에 SwiftUI `TriggerPanelView`를 `NSHostingView`로 담음. cursor 있는 화면 중앙에 (multi-monitor — 사용자가 본 화면):
+```swift
+let mouse = NSEvent.mouseLocation
+let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+```
+
+Tauri는 이걸 위해 발견한 layer: visible:false 시작 + listen(TRIGGER_EVENT) + show/setFocus + multi-monitor cursor 캡처 + visibleOnAllWorkspaces 등. Swift는 `.collectionBehavior = [.moveToActiveSpace]` + `NSEvent.mouseLocation` 두 줄.
+
+## Tauri layer ↔ Swift 한 줄 비교 (실측)
+
+| Tauri attempt (commits) | Swift Phase 0.2 (한 commit) |
+| --- | --- |
+| visible:false + transparent + macOSPrivateApi 발견 (a4a76f6, ed7c39f) | `setActivationPolicy(.accessory)` 한 줄 |
+| capability windows scoping (a4a76f6) | (capability 자체 없음) |
+| collectionBehavior=[.moveToActiveSpace] 부재 → 재제거 (4c38f73) | `.collectionBehavior = [.moveToActiveSpace]` 선언 |
+| multi-monitor cursor capture (cf4ea23, ea7390e) | `NSEvent.mouseLocation` + `NSScreen.screens.first` |
+| global-shortcut plugin + capability + emit/listen (ea1ef43) | `RegisterEventHotKey` 한 함수 |
+| tray-icon feature + capability (bf8702d) | `NSStatusBar.system.statusItem` |
+
+Tauri에서 ~6 commit + 여러 trial-and-error → Swift 1 commit, 빌드 2.26s.
+
+## 디버그 1건
+
+**Swift 6 strict concurrency**: `@MainActor` class `HotKeyManager`에 cleanup deinit 넣으니 빌드 에러:
+```
+cannot access property 'eventHandler' ... from nonisolated deinit
+```
+@MainActor class의 deinit은 nonisolated 기본 → isolated property 접근 X. deinit 제거하고 `unregister()` @MainActor method로. lifetime-long object라 OS 정리에 맡김. (`docs/troubleshooting.md` 참조.)
+
+## 다음
+
+- Phase 0.3: NSScreenCaptureUsageDescription (Info.plist — production `.app` 시점, dev는 권한 첫 호출 시)
+- Phase 2.x: GeminiDispatcher (URLSession — Tauri reqwest 패턴 그대로, vendor JSON 강제 학습 자산 적용)
+- Phase 3.1: ScreenCaptureKit (multi-monitor + DPR 자동 — Tauri 4-layer 좌표 변환이 SDK 처리)
+- Phase 5.1: NSWindow HUD overlay (`.ignoresMouseEvents = true` — Tauri click-through layer가 한 줄)
+
+## 한 줄
+
+menu-bar / hotkey / 윈도우 — Tauri에서 일주일 박은 것이 Swift SDK 표준으로 한 commit. "Tauri 16 layer가 Swift 한 줄"이라는 가설의 첫 측정 데이터 = 사실로 확인.

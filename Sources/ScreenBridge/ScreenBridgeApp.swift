@@ -1,44 +1,17 @@
 import SwiftUI
 
-/// v0.1 Phase 0.2 Swift scaffold — 단순 SwiftUI App. dev `swift run`으로
-/// 띄움. 다음 phase에서:
-///   - NSApplicationDelegateAdaptor로 AppDelegate 연결
-///   - LSUIElement=true (menu bar only, dock 숨김) — Info.plist 추가 필요
-///   - NSStatusItem tray
-///   - NSWindow native HUD overlay (transparent + click-through +
-///     collectionBehavior=[.moveToActiveSpace])
-///   - Carbon RegisterEventHotKey global ⌥+Space
-///
-/// 이 phase는 *빌드와 실행만 가능*이 목표. WindowGroup가 dock에 보이는
-/// 일반 윈도우 만들고 종료하면 앱 끝남.
+/// menu-bar 전용 앱. main window scene 없이 (Settings로 trick) — dock에 안 보이고
+/// NSStatusItem + global hotkey로만 동작. 실제 윈도우는 AppDelegate가 NSWindow로
+/// 직접 띄운다 (SwiftUI WindowGroup은 menu-bar HUD 패턴에 안 맞음).
 @main
 struct ScreenBridgeApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     var body: some Scene {
-        WindowGroup("ScreenBridge") {
-            ContentView()
+        // menu-bar 앱은 보일 main scene이 없다. Settings scene은 ⌘, 로만 열리는
+        // 빈 placeholder (없으면 SwiftUI App이 컴파일 안 됨).
+        Settings {
+            EmptyView()
         }
-        .windowResizability(.contentSize)
     }
-}
-
-struct ContentView: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("ScreenBridge")
-                .font(.title)
-                .fontWeight(.semibold)
-            Text("v0.1 (Swift native) — Phase 0.2 scaffold")
-                .font(.body)
-                .foregroundStyle(.secondary)
-            Text("다음 단계: AppDelegate + NSStatusItem + global hotkey")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(40)
-        .frame(width: 480, height: 200)
-    }
-}
-
-#Preview {
-    ContentView()
 }

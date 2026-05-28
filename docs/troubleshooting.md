@@ -134,3 +134,19 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Fix**: main을 Swift macOS native (SwiftPM + SwiftUI + AppKit)로 swap. Tauri 코드는 `tauri-archive` branch + `v0.1-tauri-attempt` tag로 영구 보존.
 - **Commit**: `32929bd` (main reset), `571e213` (Swift Phase 0.1)
 - **Pattern**: stack 선택은 *product 카테고리*와 framework sweet spot의 match가 우선. cross-platform 욕심이 native-only 제품에 비싼 trade-off.
+
+---
+
+## Swift 6 strict concurrency — deinit에서 @MainActor property 접근 불가
+
+- **Symptom**: HotKeyManager (@MainActor)에 Carbon hotkey cleanup deinit 넣으니 `swift build` 에러:
+  ```
+  error: cannot access property 'eventHandler' with a non-Sendable type 'EventHandlerRef?' (aka 'Optional<OpaquePointer>') from nonisolated deinit
+  ```
+- **Cause**: Swift 6 strict concurrency (language mode v6). `@MainActor` class의 `deinit`은 nonisolated가 기본. @MainActor-isolated stored property (`eventHandler`, `hotKeyRef`)를 deinit에서 접근 불가.
+- **Fix**: deinit 제거. cleanup을 별도 `unregister()` @MainActor method로. HotKeyManager는 앱 lifetime 내내 살아있어 process 종료 시 OS가 global hotkey 자동 해제 — deinit cleanup 사실상 불필요.
+- **Commit**: `Swift Phase 0.2 commit` (hash는 commit 후 backfill)
+- **Pattern**: Swift 6 @MainActor class의 deinit은 nonisolated — isolated property 접근하려면 별도 @MainActor method. lifetime-long object는 OS 정리에 맡기고 cleanup 생략 가능.
+
+<!-- macOS Carbon (deprecated) global hotkey가 Swift 6에서도 정상 동작 — InstallEventHandler + RegisterEventHotKey. C function pointer 콜백은 Unmanaged로 self 전달. -->
+

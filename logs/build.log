@@ -1269,3 +1269,4 @@ M Al
 2026-05-27T20:20:48.647745000Z | runtime | info:frontend | overlay hidden
 2026-05-27T20:20:48.648492000Z | runtime | info:frontend | overlay hidden
 2026-05-27T20:20:58.198081000Z | runtime | info:frontend | trigger panel hidden
+2026-05-27T19:30:00Z | swift 0.2 | menu-bar shell | AppDelegate .accessory + NSStatusItem + Carbon RegisterEventHotKey 오ption+Space + NSPanel trigger. swift build 2.26s. Swift 6 deinit @MainActor 함정 1건 (docs/troubleshooting.md).
