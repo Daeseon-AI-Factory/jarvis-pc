@@ -1,0 +1,233 @@
+---
+title: "Tauri 2로 macOS HUD overlay 박은 진실 — 16개 native layer를 매번 trial-and-error로"
+date: "2026-05-27"
+project: "jarvis-pc"
+kind: "troubleshoot"
+visibility: "public"
+language: "ko"
+summary: "Tauri 2 React/Rust로 ScreenBridge의 transparent click-through HUD overlay를 박는 동안 macOS-native API가 한 줄로 해결하는 16개의 layer를 매번 발견. capability scoping / macOSPrivateApi / collectionBehavior / DPR 4-layer / setIgnoreCursorEvents / multi-monitor / cursor timing 등 각 사건을 시간순으로."
+tags: ["macos", "tauri", "hud", "transparent", "click-through", "multi-monitor", "dpr", "accessibility"]
+---
+
+## 컨텍스트
+
+ScreenBridge v0.1 Tauri stack 완성 후 (`2026-05-26-v0-1-tauri-build.mdx`) macOS에서 실제 사용 시도. dogfooding 진입까지 각 macOS-native API layer를 매번 발견했다. 16 layer가 각각 *Apple SDK에선 한 줄짜리*다. 시간순 trial-and-error.
+
+## Layer 1 — overlay 윈도우가 fullscreen으로 화면 가림
+
+**Symptom**: `npm run tauri dev` 후 흰색 (또는 회색) 윈도우가 화면 전체. dev 터미널도 가려져서 종료 어려움.
+
+**Cause (정답)**: `tauri.conf.json`에 `"fullscreen": true` + `"visible": false`. macOS는 fullscreen 윈도우를 별도 Space에 그리면서 `visible:false`보다 먼저 paint. 추가로 `"transparent": true`만 두고 `macos-private-api` Cargo feature + `macOSPrivateApi: true` config 미설정 → transparent 안 됨. 흰색 윈도우.
+
+**Fix**: `commit a4a76f6`
+- `fullscreen: true` 제거 → `width: 1, height: 1`로 작게 시작
+- setup hook에서 명시적 `w.hide()` + `w.set_ignore_cursor_events(true)`
+- `app.macOSPrivateApi: true` config + `tauri features=["macos-private-api"]`
+- frontend가 listen 시점에 `currentMonitor()` 사이즈로 setSize + show
+
+macOS native: `NSWindow.isOpaque = false; .backgroundColor = .clear` 두 줄.
+
+## Layer 2 — capability `windows:["main"]`이 새 라벨 안 잡음 (silent fail)
+
+**Symptom**: `tauri-plugin-global-shortcut` Alt+Space 등록 성공, backend가 `trigger pressed` 잘 찍는데 frontend의 `listen()` 콜백이 *한 번도* 발화 안 함.
+
+**Cause**: Tauri 2 capability는 *윈도우 라벨* 기준 매칭. `capabilities/default.json`의 `"windows": ["main"]`인데 우리는 라벨을 `trigger` / `overlay`로 변경. 라벨 안 맞으면 그 webview에 default permission 적용 X. frontend `listen()`은 silent fail.
+
+**Fix**: `commit a4a76f6`
+- `"windows": ["trigger", "overlay"]`로 변경
+
+macOS native: NSWindow는 capability 자체 없음. AppKit notification 직접 구독.
+
+## Layer 3 — `core:default`가 `window.show` 자동 미포함
+
+**Symptom**: capability 라벨 fix 후 listen 동작 시작, 그러나 `win.show()`에서 frontend 가 silent throw. try-catch 박았더니:
+```
+window.show not allowed. Permissions associated with this command: core:window:allow-show
+```
+
+**Cause**: Tauri 2 v2.0+에서 보안 강화. `core:default`는 안전한 기본만. `show`, `hide`, `setFocus`, `setPosition`, `setSize`, `setIgnoreCursorEvents` 같이 *상태 변경* 메서드는 명시적 allow.
+
+**Fix**: capability에 8개 권한 추가
+```json
+"core:window:allow-show",
+"core:window:allow-hide",
+"core:window:allow-set-focus",
+"core:window:allow-set-position",
+"core:window:allow-set-size",
+"core:window:allow-set-ignore-cursor-events",
+"core:window:allow-current-monitor",
+"core:event:allow-emit",
+"core:event:allow-listen"
+```
+
+macOS native: NSWindow.makeKeyAndOrderFront(_:) 권한 없음. 호출하면 호출됨.
+
+## Layer 4 — Event 이름의 `://` (이전 가설)
+
+**Symptom**: trigger 이벤트 emit이 frontend listener 안 도달.
+
+**Cause (시도)**: 이벤트 이름이 `screenbridge://trigger` — 콜론+슬래시. Tauri 내부 prefix(`tauri://`)와 충돌 의심해 단순한 `sb-trigger`로 변경. 효과 0 (진짜 원인은 layer 2의 capability scoping).
+
+**Fix**: `commit 935f6dd` (이름 변경) — 진짜 원인 fix는 layer 2.
+
+**교훈**: WebSearch / 문서가 명확 X일 때 *내가 의심하는 가설*이 진짜인지 확인 없이 fix 박는 비효율. 실제 진단은 capability error 메시지가 명확히 알려줌.
+
+## Layer 5 — webview `:root background`가 overlay 흰색 가림
+
+**Symptom**: transparent + click-through 박은 후에도 사용자 "여전히 가린다" 반복.
+
+**Cause**: `App.css`의 `:root { background-color: #f6f6f6 }`가 같은 React 번들 로드하는 *overlay webview*까지 흰색 칠함. Tauri `transparent:true` config는 *webview content가 transparent여야* 의미 있음. content가 흰색 그리면 OS는 흰색.
+
+**Fix**: `commit ed7c39f`
+- `:root background: transparent`
+- `html, body { background: transparent }` 명시
+- `.trigger-panel`에만 색
+- dark mode 분기도 동일
+
+**교훈**: multi-window Tauri에서 transparent 윈도우 + 색 있는 윈도우 한 React 번들 안 공존 시 :root/html/body에 색 두지 말 것.
+
+## Layer 6 — DPR 4-layer 좌표 변환
+
+**Symptom**: 좌표 변환 동작했는데 빨간 박스가 의도 위치의 *2배 멀리* 그려짐.
+
+**Cause**: 좌표 4-layer 중 한 단계(CSS logical) 빠뜨림.
+```
+1. capture physical          (3456×2234 on Retina MacBook)
+2. 다운스케일 sent           (1568×1014) [모델 좌표 응답 기준]
+3. monitor physical scale-up (3456×2234) [lib.rs::analyze]
+4. CSS logical               (1728×1117) [Overlay.tsx, 이번에 추가]
+                                          ← 빠져있었음
+```
+
+physical 좌표를 CSS px에 직접 박았으니 Retina DPR=2 → 2배 멀리 그려짐.
+
+**Fix**: `commit 4c38f73`
+- `currentMonitor().scaleFactor` → dpr 저장
+- 모든 coords / dpr 후 CSS 적용
+
+macOS native: `NSScreen.convertRect(_:from:)` 한 함수가 위 4-layer 다 처리.
+
+## Layer 7 — `visibleOnAllWorkspaces` 부작용
+
+**Symptom**: "어디 가도 따라옴". 다른 Space로 가도 trigger panel + overlay가 stick.
+
+**Cause**: macOS NSWindowCollectionBehavior 옵션이 boolean 두 극단 (canJoinAllSpaces vs default home Space stick) 외에 *moveToActiveSpace* (활성화 시 active로 이동)이 있지만 Tauri의 `visibleOnAllWorkspaces` boolean은 그것 매핑 X.
+
+**Fix**: `commit 4c38f73`
+- 두 윈도우 다 `visibleOnAllWorkspaces` 옵션 제거 (default false)
+- macOS "Switch automatically to a Space" 자동 동작 의존
+
+macOS native: `.collectionBehavior = [.moveToActiveSpace]` 명시.
+
+## Layer 8 — overlay 클릭 차단 → 진짜 안경 click-through
+
+**Symptom**: overlay 떠도 마우스 클릭이 *overlay에 막혀* desktop의 진짜 버튼 못 누름. 사용자 "가린다" 체감.
+
+**Cause**: Phase 5.2에서 `setIgnoreCursorEvents(false)`로 overlay 활성 중 클릭 받음. *desktop 작업 차단* = "가려져 있음" 체감. PRODUCT.md 본질 (안경) 깸.
+
+**Fix**: `commit 06e2c6c`
+- `setIgnoreCursorEvents(true)` 영구
+- 닫기는 backend의 ⌥+Space broadcast → overlay listen 핸들러 close
+- 마우스 클릭으로 닫는 기능 포기 (피드백 버튼 v0.2 micro-window로)
+
+macOS native: `NSWindow.ignoresMouseEvents = true` 한 줄.
+
+## Layer 9 — Gemini free-form 응답 → responseSchema 강제
+
+**Symptom**: Gemini 3회 호출에서 2회 parse 실패. raw_len 173-174의 짧은 응답은 SYSTEM_PROMPT "JSON 외 텍스트 금지" 무시.
+
+**Cause**: Gemini는 `responseMimeType: "application/json"` + `responseSchema`로 *강제* JSON 출력 가능. SYSTEM_PROMPT 안 텍스트로만 "JSON으로 답해"는 비결정적.
+
+**Fix**: `commit 1428843`
+- `generationConfig.responseMimeType: "application/json"`
+- `responseSchema` 정의 (screen_state/next_action/coordinates/reasoning)
+
+**교훈**: vendor별 strict JSON 메커니즘 다름. Anthropic SYSTEM_PROMPT만 OK, Gemini는 responseSchema 명시, Groq는 json_object, OpenAI는 response_format.
+
+## Layer 10 — reqwest default timeout 없음 → 3분 hang
+
+**Symptom**: Gemini schema 박은 후 첫 호출 3분+ hang. `begin` 라인 후 `ok`/`fail` 없음.
+
+**Cause**: `reqwest::Client::builder().build()`는 default timeout 없음. 서버가 응답 안 주면 영원히 await.
+
+**Fix**: `commit 4674914`
+- `HTTP_TIMEOUT=60s` 상수
+- 모든 reqwest Client에 `.timeout(HTTP_TIMEOUT)`
+
+**교훈**: 모든 외부 HTTP 호출은 timeout 명시. reqwest default 무한대가 함정.
+
+## Layer 11 — LLM 좌표 추정 ~70% 정확도
+
+**Symptom**: 좌표 변환 다 박은 후에도 빨간 박스가 *진짜 버튼이 아닌 옆 텍스트*에 그려짐. Vision LLM (Gemini Flash) 픽셀 추정 한계.
+
+**Cause**: vision 모델이 1568×1014 이미지에서 작은 UI 요소 픽셀 위치 추정할 때 ±50-100px 오차 일상. 큰 영역은 정확, 작은 버튼은 어렵.
+
+**Fix**: `commit b9188b9` (architecture)
+- LLM에게 *좌표 추정 시키지 말고* element identification만
+- `target_text` 필드로 *visible text* 그대로
+- backend가 OCR (macocr) list에서 fuzzy 매칭 → 정확한 픽셀 좌표
+
+macOS native: `AXUIElement` (Accessibility) = OS UI tree, ~99-100% 정확.
+
+## Layer 12 — multi-monitor: primary 아닌 cursor monitor 캡처
+
+**Symptom**: 사용자 Chrome (왼쪽 monitor) + VS Code (오른쪽). 빨간 박스가 *VS Code monitor 우상단 빈 영역*. OCR miss + LLM 좌표 잘못된 위치.
+
+**Cause**: `monitors.iter().find(|m| m.is_primary())` — primary monitor만. 사용자가 본 Chrome은 그 monitor가 아님.
+
+**Fix**: `commit cf4ea23`
+- `core-graphics` crate으로 cursor logical position
+- `Monitor::from_point(cursor)` → 사용자 본 monitor
+- `CapturedScreen.monitor_position` 추가
+- `AnalysisResult.monitor_rect` → frontend로 전달
+- Overlay가 그 monitor에 setPosition + setSize
+
+macOS native: `NSScreen.screens` 순회 + `NSEvent.mouseLocation`로 매칭.
+
+## Layer 13 — hotkey 시점 vs analyze 시점 cursor 분리
+
+**Symptom**: layer 12 fix 후 *또* monitor 어긋남. 사용자 Chrome 보면서 ⌥+Space → panel home monitor 등장 → cursor를 panel monitor로 이동 → Analyze 시점 cursor는 panel monitor → capture가 panel monitor (Chrome 아님).
+
+**Cause**: analyze 시점 cursor가 *⌥+Space 누른 시점 cursor*라는 implicit 가정. multi-monitor에선 깨짐.
+
+**Fix**: `commit ea7390e`
+- `LAST_TRIGGER_CURSOR` static (OnceLock<Mutex<Option>>)
+- hotkey + tray trigger callback에서 `record_trigger_cursor()`
+- capture가 stored cursor 우선, fallback 현재 cursor
+
+**교훈**: cursor position이 "사용자가 본 화면"의 proxy로 좋은데, *어느 시점의* cursor냐가 결정적. 사용자 입력 stream의 *시작점* (trigger) 시점이 intent의 가장 명확한 signal.
+
+## Layer 14 — macocr이 SPEC tree 위반 + cargo install 마찰
+
+`src-tauri/src/ocr.rs` 새 모듈은 SPEC v0.1 트리에 없음 (룰 4 위반). SCRATCHPAD에 1줄 기록. dogfooding signal 기반 정당화.
+
+추가로 macocr binary 자체 설치 필요 (`cargo install macocr`) — 사용자 마찰 추가.
+
+macOS native: `VNRecognizeTextRequest` 직접. binary 설치 불필요.
+
+## Layer 15 — Groq Llama 4 Scout 17B vision 실측 76초 (예상 1-5초)
+
+**Symptom**: SB_DISPATCHER=groq 시도. 76,625ms (76초). claude CLI 41초의 2배. 좌표 인식 실패.
+
+**Cause**: WebSearch의 Groq sub-200ms TTFT / 300-1000 tps는 *텍스트 모델* 기준. Vision은 image encoder + token generation 두 단계 — preview Llama 4 Scout 17B는 vision LPU 최적화 부족 가능. 1MB PNG base64 ~1.3MB 업로드 시간도 추가.
+
+**Fix**: dispatcher 비교 매트릭스 (DECISIONS.md) — Groq 폐기.
+
+**교훈**: 텍스트 inference 벤치마크를 vision에 그대로 외삽하지 말 것. WebSearch 결과 인용 시 *어느 모달리티 측정이었는지* 확인.
+
+## Layer 16 — sessions test struct literal 누락 (cargo check 통과, cargo test 실패)
+
+**Symptom**: `cargo check`는 통과하는데 `cargo test`에서 `E0063: missing field session_dir`.
+
+**Cause**: `cargo check`는 default profile만 빌드. `#[cfg(test)]` 모듈은 test profile에서만 컴파일. 새 필드 추가하고 default profile에서만 검증하면 test 모듈의 struct literal이 통과한 척.
+
+**Fix**: `commit daf6a5e`
+- `..Default::default()`를 struct literal 끝에 추가
+
+**교훈**: Phase commit 직전 `cargo test --no-run`까지 돌리면 test profile compilation도 같이 검증.
+
+## 종합
+
+16 layer 매트릭스는 다음 mdx (`2026-05-27-tauri-to-swift-swap.mdx`)에서 *왜 Swift native swap이 정답인지*의 evidence가 된다. 각 layer가 SDK 한 줄짜리 → 우리가 16번 비싼 비용 지불한 셈.
+
+학습 자산은 stack 무관 transferable — Swift에서도 같은 함정들 (Spaces / DPR / multi-monitor / cursor timing / vision model 정확도 한계 / vendor JSON 강제 메커니즘) 안 밟는다.

@@ -1,0 +1,64 @@
+---
+title: "ScreenBridge v0.1 Tauri stack — 6 Phase 한 세션 완성 (1세션 30 commits)"
+date: "2026-05-26"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge v0.1을 Tauri 2 + Rust + React/TS로 한 세션에 6 Phase (bootstrap → foundation → dispatcher → system integration → trigger panel → overlay → polish) 완성. 30 commits, BUILD_REPORT.md. 자율 빌드 룰 R1-R7 따라 atomic commit + 매 phase verify."
+tags: ["macos", "tauri", "rust", "react", "swiftui", "autonomous-build", "v0.1"]
+---
+
+## 컨텍스트
+
+`SPEC.md` 작성 의도 = *세션이 한도로 잘려도 다음 세션이 정확히 이어갈 수 있는 자율 빌드*. R1-R7 룰 (atomic commit, STATE.md 갱신, RESUME PROTOCOL, verify-before-commit 등) 정의. 첫 세션에서 그 룰 따라 v0.1 6 Phase 끝까지.
+
+## Phase 매트릭스 (한 세션 완성)
+
+| Phase | Commit | 메모 |
+| --- | --- | --- |
+| 0.0 | `7775b8e` | session bootstrap (STATE/SCRATCHPAD/.gitignore/logs/build.log) |
+| 0.1 | `600d430` | Tauri 2 React-TS scaffold (npm create tauri-app, rsync 머지) |
+| 0.2 | `9b4b886` | 11 stub 파일 + dispatcher_tests integration |
+| 0.3 | `cfacbe1` | .gitignore audit |
+| 0.4 | `82056be` | scripts/verify_key.sh (placeholder 인식 SKIP) |
+| 0.5 | `da020d9` | **Phase 0 COMPLETE** — Info.plist (NSScreenCaptureUsageDescription) |
+| 1.1 | `7417314` | tracing + BarFormatter (4-pipe build.log 형식) + log_event IPC |
+| 1.2 | `1936247` | fixtures.rs + load_fixtures (3 entries) |
+| 1.3 | `426b2bb` | project_root + anthropic_api_key + is_api_key_available |
+| 2.1 | `c39faba` | prompts.rs SYSTEM_PROMPT (SPEC 그대로) |
+| 2.2 | `796b4cd` | LLMDispatcher trait + AnalysisResult + DispatchError |
+| 2.3 | `6ecb6da` | AnthropicDispatcher (reqwest + base64) + parse_analysis (markdown-fence-tolerant) |
+| 2.4 | `324dc63` | **Phase 2 COMPLETE** — fixture loop tokio::test |
+| 3.1 | `4969cf4` | xcap 0.8 capture_active_screen() |
+| 3.2 | `ea1ef43` | tauri-plugin-global-shortcut Alt+Space |
+| 3.3 | `bf8702d` | **Phase 3 COMPLETE** — tray (Trigger/Settings/Quit) |
+| 4.1 | `b9dcbfc` | trigger window (520×280, alwaysOnTop, invisible) |
+| 4.2 | `8db9f81` | **Phase 4 COMPLETE** — analyze command + invokeAnalyze |
+| 5.1 | `ce3fe24` | overlay window (transparent fullscreen) |
+| 5.2/5.3 | `36c195e` | **Phase 5 COMPLETE** — overlay HUD render + trigger→overlay flow |
+| 6.1 | `0e2282d` | sessions.rs (save + record_feedback) |
+| 6.2 | `f3a4224` | AnalysisResult.session_dir + 👍/👎 |
+| 6.3 | `ca52d97` | tray "Open sessions folder" (minimal) |
+| 6.4 | `df5add2` | **Phase 6 COMPLETE** — README.md + BUILD_REPORT.md |
+
+## 자율 빌드 룰의 효과
+
+- **R1 (atomic commit)** → 30 commit의 각각이 single concern. 검토 쉬움.
+- **R2 (STATE.md per commit)** → 세션 잘려도 다음 세션이 정확한 위치.
+- **R4 (cargo check / tsc --noEmit / test 모두 통과 후 commit)** → 한 번도 broken state commit X.
+- **R5 (todo!() 또는 컴파일 fail 금지)** → 진행 동안 항상 동작 상태.
+- **R6 (사용량 캡 가까울 때 atomic까지)** → 이번 세션엔 한 번도 발동 X.
+- **R7 (Phase COMPLETE 메시지)** → git log가 phase 마커.
+
+## 다음 단계로 가던 신호
+
+`v0.1` 코드 차원 완성 후 dogfooding 진입 시도. *코드는 빌드되고 테스트 통과하지만 실제 macOS에서 실행해보면 다른 layer 등장*했다. 그것이 다음 mdx 주제 (`2026-05-27-tauri-macos-hud-traps.mdx`).
+
+## 회복력 룰 자체 평가
+
+R1-R7이 *세션 단위 안정성*에는 효과적. 그러나 *dogfooding 단계 (실제 사용)*는 별도. R1-R7이 "build + test 통과"를 보장하지만 "실제 사용자가 daily 사용"은 보장 X — 그게 v0.1의 진입 조건 ("주 5회 자발적 사용")의 의미.
+
+## 교훈
+
+자율 빌드 룰은 *시작과 완성을 잇는 다리*. 1세션에 6 Phase 완성한 게 그 증거. 다만 *완성 후의 dogfooding 단계*는 다른 룰이 필요 (R8 troubleshoot, R9 trade-off — 다음 사건에서 도입).

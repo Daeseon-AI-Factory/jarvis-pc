@@ -1,0 +1,105 @@
+---
+title: "학습 자산 강제: R8/R9 + git pre-commit hook으로 troubleshoot/decision 의무화"
+date: "2026-05-27"
+project: "jarvis-pc"
+kind: "ux-retro"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge dogfooding 중 16 layer trial-and-error를 commit 메시지에만 묻히게 두지 않고 TROUBLESHOOTING.md / DECISIONS.md로 강제 기록. R8/R9 룰 + .claude/settings.json Stop hook + .git/hooks/pre-commit 차단으로 4단 강제. 매 commit에 학습 자산 동반 의무."
+tags: ["meta", "workflow", "claude-code", "hooks", "learning-asset", "git-hooks", "pre-commit"]
+---
+
+## 문제
+
+ScreenBridge v0.1 dogfooding 중 발견한 16 layer (`2026-05-27-tauri-macos-hud-traps.mdx`)가 *commit 메시지에만 묻혀* 다음 세션 자신에게 휘발될 위험. 사용자 명시:
+
+> "지금 우리가 하는 이런 개선 작업들 전부다 로깅하고있냐? 이런 이슈 핸들링이나 전체적인 개발하면서 겪었던 트러블슈팅들을 확실히 기록해서 내가 이걸 단순히 만드는게 아니고 배우고싶다.. 매번 그리고 이런거 기록하게 확실히 hook 설정같은거 되어있음?"
+
+즉 학습 자산을 *내가 의식 못 해도 박히도록* 시스템적 강제.
+
+## R8 + R9 룰
+
+`CLAUDE.md` 회복력 룰에 두 항목 추가:
+
+**R8 (Troubleshoot-or-Forget)**: 디버그하는 동안 *어디서 막혔고 어떤 가설을 세웠고 무엇이 진짜 원인이었는지* 발견 즉시 `TROUBLESHOOTING.md`에 4-파트 (증상/가설·시도/원인/해결+학습) 엔트리 추가. 미루지 말 것 — 다음 세션 자신에게 가장 값진 자산이다. 사후 정리 X, 디버그 끝나면 같은 commit에 포함.
+
+**R9 (Trade-off Trail)**: 두 개 이상의 합리적 선택지가 있고 그 사이에서 골랐다면 `DECISIONS.md`에 (선택지/Trade-off/선택/근거/되돌리기 비용) 5-파트 엔트리 추가. crate 선택, 모듈 위치, 디자인 패턴, 에러 처리 방식, 모델/dispatcher swap 등 전부. "그냥 더 깔끔해서"는 근거 X — 시간/돈/유지보수/학습 중 하나 이상의 축으로 justify.
+
+## 4단 강제
+
+### 1단: Rule 문서화 (`CLAUDE.md`)
+
+세션 시작 시 LLM이 읽는 룰 파일. R8/R9 명시 + "사후 정리 금지" 강조. *LLM의 자체 적용*에 의존 (약함).
+
+### 2단: Stop hook (`.claude/settings.json`)
+
+매 세션 종료 시 systemMessage로 reminder inject:
+```json
+{
+  "Stop": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "echo '⚑ R8/R9 check — 이번 세션에서 디버그/이슈가 있었으면 TROUBLESHOOTING.md, 두 개 이상 선택지 사이에서 결정했으면 DECISIONS.md에 엔트리 추가했는지 확인. 없다면 그게 정말 맞는지 한 번 더 점검.' >&2"
+        }
+      ]
+    }
+  ]
+}
+```
+
+PostToolUse도 추가 — Edit/Write 후 reminder.
+
+### 3단: git pre-commit 차단 (`.git/hooks/pre-commit`)
+
+진짜 강제. 코드 변경 staged인데 학습 자산 (TROUBLESHOOTING / DECISIONS / PROJECT_TIMELINE) 변경 없으면 commit *차단*:
+
+```bash
+#!/usr/bin/env bash
+staged_all=$(git diff --cached --name-only)
+staged_code=$(echo "$staged_all" | grep -E '\.(rs|ts|tsx|js|json|toml|css|html)$' \
+  | grep -vE 'TROUBLESHOOTING\.md|DECISIONS\.md|...' || true)
+staged_meta=$(echo "$staged_all" | grep -E 'TROUBLESHOOTING\.md|DECISIONS\.md|PROJECT_TIMELINE\.md' || true)
+
+if [ -n "$staged_code" ] && [ -z "$staged_meta" ]; then
+  echo "⚠️  코드 변경이 staged인데 학습 자산 변경 없음."
+  echo "    R8/R9 정신. 우회: --no-verify"
+  exit 1
+fi
+```
+
+우회: `git commit --no-verify` (의식적 행동). 진짜 routine commit엔 OK, 매번 무의식 우회면 룰 의미 잃음.
+
+### 4단: dual-write log system (사용자 블로그 시스템 도입)
+
+`docs/troubleshooting.md` (terse publish ref) + `content/logs/jarvis-pc/<date>-<slug>.mdx` (블로그 narrative). 사용자 정의: `daeseon.ai/posts/install-claude-code-project-log`. anti-hallucination 7 rules + 2분 commit 감지 Stop hook. 학습 자산의 *publish layer* 추가.
+
+## 효과
+
+R8/R9 도입 후 commit:
+- 16 layer 각각 `TROUBLESHOOTING.md`에 4-파트 entry (총 ~20 entries)
+- 매 큰 결정 `DECISIONS.md`에 5-파트 entry (총 ~15 entries)
+- 매 phase / stack swap `PROJECT_TIMELINE.md`에 timestamp entry
+- pre-commit hook이 실제로 차단 (사용자가 우회 의식한 적 0회 — 매번 entry 박힘)
+
+dual-write 도입 후:
+- 첫 narrative `2026-05-27-tauri-to-swift-swap.mdx` 박힘
+- backfill 진행 (이 mdx 포함)
+- 블로그 publish 시 cross-project ledger
+
+## 트레이드오프
+
+비용:
+- 매 commit이 1-3분 더 (entry 작성)
+- 학습 자산이 *어디까지 자세*해야 하는지 매번 판단
+
+이득:
+- 다음 세션에 같은 함정 안 밟음 (16 layer 중 비슷한 거 *Swift native rewrite*에서 미리 회피)
+- 블로그 publish로 다른 사람도 함정 회피
+- product 의사 결정 traceability (왜 Gemini Flash? 왜 Swift swap?)
+
+## 한 줄
+
+학습 자산은 *commit 직후*가 가장 정확하고 그 뒤로는 매 분 휘발된다. R8/R9 + hook으로 그 분 안에 박힐 강제. 사용자 본인이 *배우고 싶다*는 의도를 시스템에 박은 케이스.

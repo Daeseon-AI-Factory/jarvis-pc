@@ -1,0 +1,110 @@
+---
+title: "Vision LLM 좌표 추정 ~70%를 OCR + element matching으로 99%로 — deterministic source 도입"
+date: "2026-05-27"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge의 빨간 박스가 ±50-100px 어긋나는 fundamental — vision LLM의 픽셀 좌표 추정 한계. LLM에게 element identification만 시키고 좌표는 macocr OCR list에서 fuzzy 매칭하는 deterministic source architecture 도입. 정확도 ~70% → ~95-99%."
+tags: ["ocr", "macocr", "vision-llm", "coordinates", "deterministic", "axuielement", "fuzzy-matching"]
+---
+
+## 문제
+
+ScreenBridge HUD의 빨간 박스가 *진짜 버튼* 위가 아니라 *옆 텍스트* 또는 ±50-100px 옆에 그려짐. Gemini Flash + DPR 4-layer 변환 다 박은 후에도. dogfooding 사이클 단위 마찰 큰 부분.
+
+## 분석
+
+vision 모델이 1568×1014 이미지에서 작은 UI 요소 픽셀 위치 추정할 때 ±50px 오차는 일상. 큰 영역 (창, 패널)은 정확하지만 *버튼/메뉴 item* 정확도 떨어짐.
+
+해결 후보:
+- A. **모델 swap** (sonnet 사용) — 정확도 ↑하지만 사용자 명시 "모델 swap 없음, 99% 정확성 + 속도 유지"
+- B. **영역 사전 선택** (사용자가 드래그로 ROI) — UX step 추가
+- C. **macOS Accessibility API (AXUIElement)** — 99-100% 정확, 권한 + cocoa interop 비싸
+- D. **OCR + LLM element matching** — text 있는 모든 UI 95-99%, universal
+
+D 선택 (`DECISIONS.md` "99% 정확도 architecture"):
+- **universal coverage** (브라우저 + native 앱 둘 다)
+- **권한 추가 없음** (Screen Recording 이미 있음)
+- **속도 영향 미미** (OCR ~300-500ms, LLM이 어차피 bottleneck)
+- **LLM이 약점에서 벗어남** — 픽셀 추정 안 함, element identification만
+
+## Architecture
+
+```
+사용자 화면 캡처
+   ├─→ 다운스케일 PNG (Gemini Flash 비전 입력)
+   └─→ macOS Vision framework (via `macocr` subprocess)
+            VNRecognizeTextRequest → list of (text, x, y, w, h)
+   ↓ 둘 다 LLM에 + SYSTEM_PROMPT 강화:
+      target_text 필드 추가 — "화면에 실제로 보이는 visible text 그대로"
+      coordinates는 fallback only (target_text 매칭 안 될 때만)
+   ↓ tokio::join!(ocr_fut, llm_fut) — 병렬
+LLM 응답: {next_action, target_text="Create API Key", coordinates: [...]}
+   ↓ backend `find_box(ocr_boxes, target_text)`:
+      1. exact case-insensitive
+      2. box.text.contains(target)
+      3. target.contains(box.text)   ← "Create API Key 버튼" 케이스
+   ↓ 매칭 성공: coordinates = OCR box [x,y,w,h]
+   ↓ 매칭 실패: LLM coords fallback + tracing log "ocr miss"
+   ↓ scale up: *= orig/sent ratio
+   ↓ frontend: / dpr (CSS logical)
+Overlay 박스: 진짜 버튼 위 (99% 정확)
+```
+
+## macocr CLI subprocess vs objc2-vision direct
+
+`DECISIONS.md` "OCR 구현 방식":
+- A. macocr CLI subprocess (2-3h, 우리 ClaudeCliDispatcher 패턴과 일관)
+- B. objc2-vision Rust binding (8-10h, raw cocoa interop)
+
+A 채택. 출력 JSON format이 정확히 우리가 원하는 모양:
+```json
+{
+  "image_width": 1568,
+  "image_height": 1014,
+  "ocr_boxes": [
+    {"text": "Create API Key", "x": 1290, "y": 425, "w": 198, "h": 36, "rect": {...}}
+  ]
+}
+```
+
+픽셀 단위 + top-left origin. 추가 변환 없음.
+
+## fuzzy matching 패턴
+
+LLM이 흔히 다음 형태로 응답:
+- `"Create API Key"` ← exact
+- `"Create API Key 버튼"` ← target에 한국어 suffix
+- `"Create"` ← 짧은 substring
+
+3-단계 매칭:
+1. **exact case-insensitive** — `box.text.lowercase() == target.lowercase()`
+2. **box contains target** — `box.text.contains(target)` (target이 짧음, 가장 긴 box 선택)
+3. **target contains box** — `target.contains(box.text)` (target에 한국어 suffix, 가장 긴 box 선택)
+
+6 unit test 통과:
+```
+find_exact_match
+find_case_insensitive
+find_substring
+find_with_korean_suffix      ← "Create API Key 버튼" → box "Create API Key"
+no_match_returns_none
+empty_target_returns_none
+```
+
+## 의미
+
+LLM의 *진짜 잘 하는 일* = 자연어 → element identification. *못 하는 일* = 픽셀 좌표 추정. 이 둘을 분리:
+- LLM = "어느 element 클릭"
+- deterministic source (OCR / DOM / AX) = "그 element의 정확한 좌표"
+
+이게 SwiftUI native에선 `AXUIElement` 한 번 호출로 가능 — UI tree 직접. v0.1 macocr subprocess가 80% 케이스 (text 있는 UI), v0.5+ AX 추가하면 icon-only 케이스도.
+
+## Tauri → Swift 후속
+
+Swift native rewrite (다음 mdx 결정) 후에도 이 architecture는 그대로 유효. macocr subprocess → `VNRecognizeTextRequest` 직접 (Vision framework) + 추후 `AXUIElement` 도입. 좌표 source 추상화 (`OcrProvider` 또는 `ElementSource` protocol) 둘 다 가능.
+
+## 한 줄
+
+LLM은 element identification에 강하고 좌표 추정에 약함. *deterministic source 도입이 vision LLM 함정의 표준 해결*. 16개 layer 중 가장 architecture-level 결정.
