@@ -138,4 +138,29 @@ production `.app` bundle은 후속 (`swift-bundler` 또는 Xcode build phase). �
 
 ---
 
+## 2026-05-27 — Project log dual-write system 도입
+
+사용자가 [블로그 글](https://www.daeseon.ai/posts/install-claude-code-project-log)에서 정의한 dual-write log system 도입. ScreenBridge 외 다른 plot도 같은 mechanism으로 publish.
+
+추가:
+- `docs/troubleshooting.md` — terse problem-indexed reference (Symptom / Cause / Fix / Commit / Pattern)
+- `content/logs/jarvis-pc/<YYYY-MM-DD>-<short-slug>.mdx` — dated narrative + frontmatter (title/date/project/kind/visibility/language/summary/tags)
+- `.claude/settings.json` Stop hook — 2분 내 commit 있으면 systemMessage로 dual-write reminder
+- `CLAUDE.md`에 "Project log (required, dual-write)" section + anti-hallucination 7 rules
+
+기존 학습 자산과의 layer 관계:
+- `TROUBLESHOOTING.md` (자세히, repo 내부, R8 강제) → *학습 자산 layer*
+- `DECISIONS.md` (trade-off, repo 내부, R9 강제) → *결정 layer*
+- `PROJECT_TIMELINE.md` (history, append-only) → *이 파일*
+- `docs/troubleshooting.md` (terse, publish용 ref) → *새*
+- `content/logs/jarvis-pc/` (narrative, blog post) → *새*
+
+첫 entry 작성:
+- `docs/troubleshooting.md`: Tauri → Swift swap (terse)
+- `content/logs/jarvis-pc/2026-05-27-tauri-to-swift-swap.mdx`: 같은 사건 narrative (tech-retro, public, 한국어)
+
+다음 commit부터 모든 non-trivial 변경은 dual-write 동반.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

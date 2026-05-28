@@ -1,0 +1,120 @@
+---
+title: "Tauri에서 Swift macOS native로 stack swap — 16 layer trial-and-error의 결말"
+date: "2026-05-27"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge v0.1을 Tauri로 박는 동안 macOS HUD overlay의 16개 native layer를 매번 trial-and-error로 발견했다. 'macOS HUD = Apple SDK 표준 use case'라는 단순한 진실을 dogfooding signal로 확인하고 Swift native로 rewrite 결정. 학습 자산은 stack 무관 보존."
+tags: ["macos", "tauri", "swift", "swiftui", "stack-swap", "hud", "axuielement", "dogfooding"]
+---
+
+## 컨텍스트
+
+ScreenBridge — *AI가 시키는 추상적 지시를 사용자의 실제 화면에 맞는 구체적 지시로 실시간 번역*하는 macOS 도구. "안경 메타포" = transparent HUD overlay + 빨간 박스 + bubble + click-through.
+
+`PRODUCT.md`/`SPEC.md`는 stack을 `Tauri 2.0 + Rust + React/TS + Anthropic API`로 박았다. 근거:
+- Rust 학습
+- React/TS frontend 익숙
+- cross-platform 옵션 보존
+- Electron 대비 가벼움 (메모리/번들)
+
+v0.1 6 phase를 30+ commit으로 끝냈다 (`BUILD_REPORT.md`). 그 후 dogfooding 진입을 시도하면서 layer들이 등장하기 시작했다.
+
+## 16 layer trial-and-error 매트릭스
+
+각 layer가 *macOS native SDK에선 한 줄*인데 Tauri 추상화 위에 재발견하는 데 1-2 commit씩 박혔다:
+
+| 발견 | macOS native SDK |
+| --- | --- |
+| `visible:false` + `fullscreen:true` + `transparent` 충돌 | `NSWindow.isOpaque = false; .backgroundColor = .clear` |
+| capability `windows:["main"]`이 새 라벨 silent fail | NSWindow에 권한 자체 없음 |
+| `core:default`가 `window.show` 자동 미포함 | `NSWindow.makeKeyAndOrderFront(_:)` |
+| transparent + macOSPrivateApi feature 둘 다 필요 | NSWindow native opacity 표준 |
+| webview :root background가 흰색으로 칠함 | (Tauri/WebView 고유 — native 무관) |
+| DPR 4-layer 좌표 변환 | `NSScreen.convertRect(_:from:)` 한 함수 |
+| `visibleOnAllWorkspaces:true` 부작용 | `.collectionBehavior = [.moveToActiveSpace]` |
+| overlay 클릭 차단 → click-through | `.ignoresMouseEvents = true` |
+| Gemini free-form 응답 → schema 강제 | (vendor 무관, stack과 무관) |
+| reqwest default timeout 없음 → 3분 hang | (Rust HTTP 클라이언트 패턴) |
+| LLM 좌표 추정 정확도 70% | `AXUIElement` (Accessibility) ~100% |
+| OCR architecture 결정 (macocr subprocess) | `VNRecognizeTextRequest` 직접 |
+| multi-monitor — primary monitor만 캡처 | `NSScreen.screens` + `NSEvent.mouseLocation` |
+| hotkey 시점 cursor vs analyze 시점 cursor | (intent signal, 일반 패턴) |
+
+`TROUBLESHOOTING.md`에 각각 *증상/가설/원인/해결+학습* 4-파트로 박힘. `PROJECT_TIMELINE.md`에 timestamp 순.
+
+## 깨달은 진실
+
+> Tauri는 *cross-platform desktop UI framework*이지 *macOS-native HUD app* 도구가 아니다.
+
+ScreenBridge product 카테고리 = macOS-native HUD. Apple SDK의 textbook use case (VoiceOver, Switch Control, Cluely, 등이 같은 카테고리). SDK가 이미 정답 정해놨음:
+
+```
+ScreenCaptureKit          ← capture
+AXUIElement               ← UI element + 좌표 (deterministic)
+NSScreen.convertRect      ← DPR 변환
+NSWindow.collectionBehavior + .ignoresMouseEvents
+                          ← HUD overlay (transparent, click-through, all spaces)
+NSEvent.mouseLocation     ← cursor 위치
+Vision framework          ← OCR fallback
+Carbon RegisterEventHotKey ← global ⌥+Space
+NSStatusItem              ← menu bar tray
+```
+
+Tauri 위에 *각각을 재발견*하는 게 우리 한 일의 80%. 진짜 product (LLM 통합, 좌표 매칭, dogfooding sticky 디자인 등)는 20%.
+
+## 사용자 결정
+
+dogfooding 신호 — "박스가 엉뚱한 곳에 있다", "또 가린다", "어디 가도 따라온다". 매번 fix 후 또 발견.
+
+사용자 명시: **"냉정하게 사용성 최대화"**.
+
+옵션 셋 trade-off (DECISIONS.md "STACK SWAP"):
+- A. Tauri 그대로 — sunk cost 보존, 그러나 추가 feature마다 또 layer 발견
+- **B. Swift native rewrite** ← 채택
+- C. Tauri + 점진적 native (objc2) — A의 다른 모양
+
+B 선택 근거:
+- macOS HUD = Apple SDK 표준 use case
+- 좌표 정확도: AXUIElement ~99-100% (Tauri OCR+matching ~95-99% 한 단계 ↑)
+- 개발 속도: SDK 한 줄 vs Tauri 추상화 우회 매번
+- 학습 자산 (`TROUBLESHOOTING.md`, `DECISIONS.md`, `PROJECT_TIMELINE.md`) = stack 무관 transferable
+
+비용:
+- Tauri 코드 ~3000줄 / 30 commits sunk (학습 가치는 보존)
+- 1-2주 rewrite
+- cross-platform 포기
+
+## 백업 + 보존
+
+학습 자산이 사라지지 않게 영구 보존:
+
+```bash
+git tag v0.1-tauri-attempt    # 영구 마커
+git branch tauri-archive      # 영구 branch
+git push --tags
+git push origin tauri-archive
+```
+
+복원이 필요한 미래 시점:
+```bash
+git checkout tauri-archive               # 전체
+git checkout v0.1-tauri-attempt -- <path>  # 일부
+```
+
+또는 GitHub UI: `/tauri-archive` branch 또는 `/v0.1-tauri-attempt` tag.
+
+`TROUBLESHOOTING.md` 16 entries + `DECISIONS.md` matrix + `PROJECT_TIMELINE.md` history는 main에 *그대로 가져갔다* — macOS HUD app 작성 시 함정들이 stack 무관 transferable이라.
+
+## 다음
+
+`main`에서 `SwiftPM` scaffold (`Package.swift` + `Sources/ScreenBridge/ScreenBridgeApp.swift`, macOS 14+, Swift 6). `swift build` 9.37s 첫 통과. 다음 phase 0.2부터 NSApplicationDelegateAdaptor + LSUIElement + NSStatusItem + Carbon global hotkey.
+
+Tauri attempt에서 박은 16 layer가 Swift에서 *각각 SDK 한 줄로 사라지는지* 측정. 그 자체가 검증.
+
+## 교훈 (한 줄)
+
+> Stack 선택은 *product 카테고리*와 framework sweet spot의 match가 우선. cross-platform 욕심이 native-only 제품에 비싼 trade-off다.
+
+학습 자산 보존 mechanism (tag + branch + 자세한 학습 문서)이 있으면 swap은 *되돌릴 수 있는 결정*이 된다. 그게 swap의 비용을 *현재 시간*으로만 한정시킨다.
