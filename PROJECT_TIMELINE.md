@@ -178,4 +178,28 @@ Swift Phase 0.2 (menu-bar shell + Carbon hotkey + NSPanel, `63c0568`) 후 사용
 
 ---
 
+## 2026-05-29 — Swift Phase 2.1 시작 (sweep workflow → 본격 implementation)
+
+이전 session에서 STATE.md HANDOFF 정리 + memory에 *번역기 정체성* 박음 (`product-identity-screenbridge`: 비-AI-native 타겟, "AI가 시키는 거 모르는 사람에게 알기쉽게 지시"). 이번 session 시작에 사용자 신호: "확실히 고도화", "제대로 원하는 제품이 나오게" → ultracode 모드 + workflow tool 본격 사용.
+
+**Sweep + Synthesize workflow** (`screenbridge-restart-deep-prep`, 12 agents / 469k tokens / 12분):
+- 11개 영역 병렬 — code audit / decisions audit / Tauri 학습자산 / SPEC stale / HUD click-through / multi-monitor+DPR / permission / NSPanel 분리 / ScreenCaptureKit API / Vision OCR API / Gemini API.
+- 1개 synth — Phase 2-6 plan + 5개 phase별 deliverable_files/sequence/key_decisions/risk_mitigations/code_hint + cross_cutting 13개 + 첫 atomic + Swift phase 순서 advice.
+
+**Sweep advice 채택 (STATE.md Next step 순서 swap):**
+1. **AnalysisResult struct가 첫** atomic — Prompts/Dispatcher 모두 의존, 가장 작은 단위. (원래 STATE에선 #4였음)
+2. Phase 5를 **5.0 (빈 골격, dispatcher 무관 검증) + 5.x (실 데이터)**로 쪼개 Phase 3.1 직후 5.0 끼움. 후속 phase에서 좌표 디버그 시 "window/dispatcher/OCR" 3-way 모호함 사전 차단.
+3. **권한 다이얼로그를 Phase 3.1보다 0.5단계 빨리** (AppDelegate startup).
+4. Phase 6.1 OCR은 Phase 5 HUD 완성 *후* — 시각적 eyeball 검증 가능해야 fuzzy threshold 튜닝이 추측 X.
+
+**Phase 2.1 완료 (이 commit):**
+- `Sources/ScreenBridge/AnalysisResult.swift` — Codable, Sendable, Equatable struct.
+- 핵심: `targetText` (visible text 그대로, OCR matcher source), `coordinates: [Int]?` (LLM fallback only — 번역기 본질 "99% 좌표는 OCR이 source"), `raw` Codable 분리 + `withRaw(_:)` builder (R9 5-파트 DECISIONS × 2).
+- `Tests/ScreenBridgeTests/AnalysisResultTests.swift` 6/6 통과 — snake_case decode, optional coordinates, encode raw 제외, withRaw builder, missing field throws.
+- `swift build` 1.41s, `swift test` 0.002s (R4 통과).
+
+**다음:** Phase 2.2 — `Prompts.swift` (한국어 SYSTEM_PROMPT, target_text 필수, ✗/✓ 페어, "여기 [버튼] 누르세요" 톤) + `Env.swift` (GEMINI_API_KEY 로드, dep 0).
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

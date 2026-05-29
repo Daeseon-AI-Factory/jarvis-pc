@@ -1,0 +1,75 @@
+---
+title: "Phase 2.1 — AnalysisResult Codable struct: raw 분리 + coordinates optional"
+date: "2026-05-29"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Swift 본격 Phase 2 시작. LLM dispatcher 응답 contract를 가장 먼저 박았다 — coordinates는 LLM fallback only (OCR이 source of truth), raw는 Codable 분리 (responseSchema 1:1 보존). sweep workflow 12분 후 첫 atomic commit."
+tags: ["swift", "codable", "llm", "schema-design", "screenbridge"]
+---
+
+ScreenBridge가 Tauri에서 Swift native로 swap된 후 첫 본격 commit. Tauri 시절의 16 layer 디버깅을 다시 안 밟기 위해 *시작 전 sweep workflow*를 한 번 돌렸다 — code audit / 결정 정리 / Tauri 학습자산 / Apple SDK API spec / Gemini API spec 11개 영역 병렬 + plan 합성 (12 agents, 12분, 469k tokens). 그 결과 sweep advice 4개 중 가장 결정적인 게 "**첫 atomic은 dispatcher가 아니라 AnalysisResult struct**" 였다.
+
+## 왜 struct가 *첫*인가
+
+STATE.md HANDOFF에는 Phase 2.x 순서가 (1) Prompts (2) LLMDispatcher protocol (3) GeminiDispatcher (4) AnalysisResult로 적혀있었다. sweep agent는 이 순서를 뒤집길 권했다 — 이유:
+
+- AnalysisResult는 *가장 작은 atomic 단위* (~50줄). R6 (사용량 캡) 안전.
+- Prompts.swift의 `SYSTEM_PROMPT`도 이 struct shape에 의존 ("`target_text` 필수" 룰이 struct 필드와 1:1 매칭되어야 명시적).
+- LLMDispatcher protocol의 return type, GeminiDispatcher의 `responseSchema` 모두 이 shape이 anchor.
+- 첫 commit에 `target_text` 필드를 박아두면 "LLM이 좌표 추정 → 70%" 함정을 *코드 차원*에서 차단 (LLM 응답 schema가 visible text를 강제).
+
+## 본질 박는 두 결정
+
+### `coordinates: [Int]?` optional (fallback only)
+
+번역기의 본질은 "99% 좌표 정확도" — vision LLM의 픽셀 추정은 ~70%로 못 미친다. 그래서 Phase 6.1에서 OCR + ElementMatcher가 deterministic 좌표를 결정하고, LLM의 `coordinates`는 *fallback only*다. 평소값 nil.
+
+코드로 박는 방식: optional + 주석 "OCR 매칭이 성공하면 무시". Phase 6.1에서 ElementMatcher가 `targetText`로 매칭 시도 → 성공 시 `coordinates` 무시 → 실패 시 `coordinates` fallback → 그것도 없으면 bubble만 (잘못된 빨간 박스보다 안전).
+
+### `raw`는 Codable에서 분리
+
+DECISIONS.md R9 5-파트 entry — `raw` 필드(LLM 응답 전체 텍스트)를 CodingKeys에 넣을지 vs 분리할지. **선택 A (분리)**. 이유:
+
+AnalysisResult의 Codable shape은 **LLM의 responseSchema 그 자체다**. Gemini dispatcher가 `responseMimeType='application/json'` + `responseSchema={...}`로 JSON 강제할 때, 그 schema는 struct가 1:1 mirror. `raw`는 LLM이 채우는 게 아니라 dispatcher가 *디버깅용 메타데이터*로 후채우는 거라 schema 밖이어야 한다.
+
+해결: stored property로 두되 CodingKeys에서 제외 + custom `init(from:)`/`encode(to:)` + `withRaw(_:)` builder. ~25줄 boilerplate < schema 명확성.
+
+```swift
+func withRaw(_ raw: String) -> AnalysisResult { ... }
+```
+
+Phase 2.3 GeminiDispatcher 호출 끝에:
+
+```swift
+let result = try JSONDecoder().decode(AnalysisResult.self, from: data)
+return result.withRaw(String(data: data, encoding: .utf8) ?? "")
+```
+
+## CodingKeys: snake_case 명시
+
+`screen_state` ↔ `screenState` 매핑을 (A) CodingKeys에 명시 vs (B) `JSONDecoder.keyDecodingStrategy=.convertFromSnakeCase`. **A 선택**.
+
+Tauri 시절 LLM 응답 키 변경 (`step_text` → `next_action`) 디버그한 경험상 — grep 가능한 명시 키가 결정적이었다. 또한 Phase 2.3에서 GeminiDispatcher가 *responseSchema*를 JSON으로 보낼 때 키가 snake_case여야 → encoding/decoding 양방향에서 같은 키 명시가 안전. JSONDecoder strategy로 숨기면 encoder도 따로 strategy set 필요 (비대칭 위험).
+
+## 6 tests, build 1.41s, test 0.002s
+
+실측:
+
+```
+swift build  → Build complete! (1.41s)
+swift test   → Test run with 6 tests in 1 suite passed after 0.002 seconds.
+```
+
+Test cases:
+
+1. snake_case JSON → camelCase fields decode
+2. coordinates omitted → nil
+3. encode → snake_case JSON without raw
+4. withRaw builder → 다른 fields unchanged
+5. missing required field → `DecodingError`
+
+## 다음 atomic
+
+Phase 2.2 — `Prompts.swift` (한국어 SYSTEM_PROMPT, `target_text` 필수, ✗/✓ 페어, "여기 [버튼] 누르세요" 비-AI-native 친화 톤) + `Env.swift` (`GEMINI_API_KEY` ProcessInfo + `.env` 폴백, dep 0).

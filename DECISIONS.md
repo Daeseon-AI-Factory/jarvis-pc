@@ -554,4 +554,59 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — AnalysisResult: `raw`는 Codable에서 분리 vs CodingKeys 포함
+
+**선택지:**
+- **A. `raw`를 CodingKeys에서 제외** — `init(from:)`/`encode(to:)` custom, raw는 stored property로 dispatcher가 `withRaw(_:)` builder로 후채움. struct shape ↔ LLM JSON 1:1.
+- **B. `raw`를 CodingKeys 포함 + `decodeIfPresent` default ""** — Codable 자동 syntheses 가까움. LLM 응답엔 raw 키가 없으므로 매번 빈 문자열 받음.
+- C. ~~`raw` 필드 제거 + dispatcher가 별도 `AnalysisEnvelope { result, raw }` wrapper~~ — call site에서 두 객체 다루기 번거롭고 sessions/logs 저장 시 raw가 result에 동반되어야 함.
+
+**Trade-off:**
+
+| 축 | A (분리) | B (포함) |
+| --- | --- | --- |
+| Codable boilerplate | init(from:)+encode(to:) custom 필요 (~25줄) | 자동 syntheses (0줄) |
+| LLM JSON 매핑 명확도 | 1:1 — LLM이 안 주는 필드는 schema 밖 | raw가 schema에 있는데 LLM이 안 줌 → 의미 모호 |
+| dispatcher 호출 코드 | `result.withRaw(raw)` 한 줄 | decoder만으로 raw="" 통과 |
+| 후처리 명시성 | builder로 raw 주입이 visible | 외부에서 raw 채우려면 새 struct 만들어 copy |
+| OCR fallback 정신 일치도 | dispatcher가 raw 직접 관리 → 디버깅 시 dispatcher만 보면 됨 | raw가 어디서 채워지는지 흐릿 |
+
+**선택:** **A**.
+
+**근거:**
+- AnalysisResult의 Codable shape은 **LLM의 응답 schema 그 자체**다. Phase 2.3 Gemini dispatcher가 `responseSchema`를 강제할 때 struct가 schema와 1:1이어야 한다. raw는 LLM이 채우는 게 아니라 dispatcher가 채우는 메타데이터 → schema 밖.
+- 25줄 boilerplate < schema 매핑의 명확성. + Phase 2.3에서 `JSONEncoder().encode(AnalysisResult)` 결과를 그대로 `responseSchema` keys 검증에 쓸 수 있음. raw가 포함되면 그 검증 깨짐.
+
+**되돌리기 비용:** 1 파일 — `AnalysisResult.swift`의 CodingKeys에 `raw` 추가 + custom init/encode 제거 + `withRaw(_:)` 호출 callsite 제거 (Phase 2.3 미작성이라 현재 0 callsite). 5분.
+
+**미해결:** Phase 2.3에서 `responseSchema`를 AnalysisResult shape에서 자동 derive할지 (Mirror) vs 수동 mirror할지 — 현재는 수동 예상 (Swift Codable에 schema 추출 표준 없음).
+
+---
+
+## 2026-05-29 — CodingKeys: snake_case 명시 vs `convertFromSnakeCase` 전략
+
+**선택지:**
+- **A. CodingKeys에 `case screenState = "screen_state"` 직접 명시** — 키 매핑이 한 곳에 visible.
+- **B. `JSONDecoder.keyDecodingStrategy = .convertFromSnakeCase`** — 자동 변환, struct에 enum 없어도 됨.
+- C. ~~Swift macro `@CodingKey(.snakeCase)`~~ — A의 syntactic sugar + dependency 추가 (CLAUDE.md 절대규칙: dep 0 우선).
+
+**Trade-off:**
+
+| 축 | A (명시) | B (자동 변환) |
+| --- | --- | --- |
+| 키 가시성 | grep "screen_state" → 한 줄 | grep 안 잡힘 — implicit |
+| Encode/Decode 대칭 | 양방향 OK | encoder도 `convertToSnakeCase` 별도 set 필요 — 비대칭 위험 |
+| LLM JSON spec 변경 시 디버그 | `target_text` 검색 → AnalysisResult.swift 즉시 | LLM 키와 코드 식별자 직접 연결 없음 |
+
+**선택:** **A**.
+
+**근거:**
+- LLM dispatcher 응답 schema는 *vendor 계약*에 가까움. 키 매핑은 grep 가능한 한 곳 (CodingKeys)에 명시되어야 schema audit 가능.
+- Phase 2.3 GeminiDispatcher가 `responseSchema`를 보낼 때 key가 snake_case여야 → encoding/decoding 양방향에서 같은 키 명시가 안전.
+- Tauri 시절 LLM 응답 키 변경 (`step_text` → `next_action`) 디버그 경험: grep 가능한 명시 키가 결정적이었음.
+
+**되돌리기 비용:** 1 파일. CodingKeys enum 제거 + `keyDecodingStrategy=.convertFromSnakeCase` set in dispatcher. 5분.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

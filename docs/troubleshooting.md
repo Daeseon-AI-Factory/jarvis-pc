@@ -150,3 +150,13 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 
 <!-- macOS Carbon (deprecated) global hotkey가 Swift 6에서도 정상 동작 — InstallEventHandler + RegisterEventHotKey. C function pointer 콜백은 Unmanaged로 self 전달. -->
 
+---
+
+## AnalysisResult: LLM 응답 schema 1:1 + raw는 dispatcher가 후채움 (Phase 2.1)
+
+- **Symptom**: LLM dispatcher 응답에 raw text도 보관해야 하는데, raw를 struct에 포함하면 Gemini `responseSchema`와 LLM JSON엔 raw 키가 없어 mapping 의미 모호.
+- **Cause**: `AnalysisResult` Codable shape이 곧 LLM의 `responseSchema`. raw는 LLM이 채우는 게 아니라 dispatcher가 채우는 메타데이터 → schema에 섞이면 안 됨.
+- **Fix**: raw를 stored property로 두되 `CodingKeys`에서 제외 + custom `init(from:)`/`encode(to:)` + `withRaw(_:)` builder. dispatcher가 decode 후 raw 주입.
+- **Commit**: (이 commit, hash 다음 commit에 갱신)
+- **Pattern**: LLM 응답 struct의 Codable shape = vendor responseSchema. 메타데이터(raw, latency 등)는 Codable 밖 + builder로 후주입.
+
