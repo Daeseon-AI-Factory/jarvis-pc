@@ -609,4 +609,44 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — .env parser: 직접 구현 vs DotEnv 라이브러리
+
+**선택지:**
+- **A. 직접 구현** — `Env.parse(_:)` ~25줄. KEY=VALUE / `#` 주석 / quote / `export` prefix.
+- B. SPM dotenv package (`SwiftDotenv`, `DotEnv` 등). 기능 풍부 (variable interpolation, override 우선순위 등).
+
+**Trade-off:** dep 0 (cold start, 빌드 시간, audit 표면, supply-chain) vs 풍부한 기능.
+
+**선택:** **A**.
+
+**근거:**
+- CLAUDE.md 절대규칙 6 ("외부 LLM 라이브러리 v0.1 추가 금지")의 정신 = 보수적 dep 관리. 25줄 parser << dep 1개 + transitive supply-chain audit.
+- v0.1 단일 사용자 단계. variable interpolation/override 같은 풍부 기능 불필요 — 우리 use case = API key 한 줄 로드.
+- `.env`가 표준 형식이라 직접 구현이 brittle 우려 없음. 8 unit tests로 형식 커버 (KEY=VALUE / 주석 / 빈 줄 / quote / export / whitespace / invalid line / nonexistent key).
+
+**되돌리기 비용:** 1 파일 — `Env.swift` 삭제 + `Package.swift` dep 추가 + import 한 줄. 10분.
+
+---
+
+## 2026-05-29 — SYSTEM_PROMPT: 한국어 강제 (v0.1) + ✗/✓ 페어 직역
+
+**선택지:**
+- **A. 한국어 SYSTEM_PROMPT** — `next_action` 등 모든 응답 한국어.
+- B. 영어 SYSTEM_PROMPT — "LLM이 영어를 더 잘 따른다" 통설.
+- C. 동적 i18n — locale에 따라 자동 swap.
+
+**Trade-off:** 톤 자연스러움 (v0.1 user = 한국어 native) + bubble copy 직결 vs 영어 LLM 성능 + 미래 i18n.
+
+**선택:** **A**.
+
+**근거:**
+- 사용자(v0.1 dogfooding) = 한국어 native + 본질이 "AI 추상 지시를 *친근하게* 설명". 영어 응답을 frontend에서 한국어로 번역하면 톤이 부자연 + latency.
+- Gemini 2.5 Flash는 한국어를 충분히 잘 따름 (Vision OCR `ko-KR` 정식 지원).
+- ✗/✓ 페어 (Tauri Layer 16 학습) 직역: `"auth button"` ✗ vs `"Sign in"` ✓, `"the create button"` (군더더기) ✗ vs `"Create API Key"` ✓. visible text 룰을 *예시로 강제 학습*.
+- v0.2+에서 영어/일본어 사용자 발생 시 `Prompts.systemPrompt(for: Locale)` factory로 확장. 현재 dep 0.
+
+**되돌리기 비용:** `Prompts.systemPrompt` 상수 한 곳. 또는 factory function 한 개 추가. 10분.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

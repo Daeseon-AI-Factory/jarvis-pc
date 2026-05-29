@@ -1,0 +1,86 @@
+---
+title: "Phase 2.2 — SYSTEM_PROMPT에 번역기 본질 4개 박기 + .env parser 직접"
+date: "2026-05-29"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge가 추상 지시를 화면에 박는 *번역기*인데, 그 정체성은 SYSTEM_PROMPT 상수에서 결정된다. target_text 룰 + 친화 톤 + 한 화면 한 동작 + coordinates fallback — 4개를 ✗/✓ 페어 직역으로 박았다. .env parser는 dep 0 직접 구현."
+tags: ["swift", "system-prompt", "llm", "translator-identity", "screenbridge"]
+---
+
+ScreenBridge의 본질은 *번역기*다 — AI가 추상으로 시킨 걸 사용자의 *지금 이 화면*에 맞는 *친근한 구체 지시*로 옮긴다. 그 정체성을 코드에 박는 자리는 단 한 곳, `SYSTEM_PROMPT` 상수다. Phase 2.2의 작업이 그것.
+
+## 코드에 박은 본질 4개
+
+### 1. target_text — "한 글자도 임의로 바꾸지 마라"
+
+번역기의 deterministic 좌표 architecture (Phase 6.1 OCR + ElementMatcher)가 동작하려면 LLM이 반환하는 `target_text`가 *화면에 실제 보이는 텍스트 그대로*여야 한다. LLM이 자기 판단으로 라벨을 정규화/번역/축약하면 OCR matcher가 못 찾는다.
+
+SYSTEM_PROMPT 텍스트 룰만으론 부족 — Tauri Layer 16에서 검증됨. ✗/✓ 페어 직역:
+
+```
+✗ "auth button"        ← 영어 라벨 임의 명명
+✗ "로그인 버튼"        ← 화면에 "Sign in"이 적혔으면 그대로
+✗ "settings icon"      ← 아이콘은 텍스트 없음 → coordinates
+✗ "the create button"  ← "the" 같은 군더더기 X
+
+✓ "Sign in"
+✓ "Create API Key"
+✓ "환경 변수 추가"
+✓ "Save changes"
+```
+
+### 2. next_action 톤 — "여기 [버튼] 누르세요"
+
+타겟이 *AI가 시킨 게 정확히 뭔지 처 모르는 사람*이다. jargon·추상·영어 동사 모두 금지. 친근한 한국어 한 문장.
+
+```
+✗ "Click the Settings element"
+✗ "Navigate to authentication section"
+✗ "Settings 버튼 클릭"               ← 무뚝뚝, 라벨 강조 X
+
+✓ "여기 [Settings] 버튼 보이죠? 한 번 누르세요."
+✓ "오른쪽 위 [Sign in]을 눌러 먼저 로그인해주세요."
+```
+
+### 3. 한 화면 = 한 동작
+
+다단계 응답("먼저 settings로 이동 후 …") 금지. *지금 보이는 이 화면*의 *다음 한 동작*만. 그래야 HUD bubble이 단순해지고, 사용자가 한 번에 한 곳만 누르면 된다.
+
+### 4. coordinates fallback only
+
+평소엔 `coordinates` 키 *자체를 생략*하라고 명시. 화면에 visible text가 정말 없는 아이콘/이미지 메뉴를 가리킬 때만 `[x, y, w, h]`. 이게 곧 "99% 좌표는 OCR이 결정한다"의 *프롬프트 면 표현*.
+
+## 한국어 강제 vs 영어 vs i18n (DECISIONS R9)
+
+세 옵션 중 한국어 강제 선택. 근거:
+
+- v0.1 사용자 = 한국어 native. 영어 응답을 frontend에서 변환하면 톤이 부자연 + latency.
+- Gemini 2.5 Flash는 한국어를 충분히 잘 따름 (Vision OCR도 `ko-KR` supported).
+- v0.2+ 외국어 사용자 발생 시 `Prompts.systemPrompt(for: Locale)` factory로 확장 — 10분.
+
+## Env: dep 0 직접 parser
+
+`Env.parse(_:)` ~25줄. `KEY=VALUE` / `#` 주석 / 빈 줄 / quote 자동 strip / `export` prefix 허용. SwiftPM dep 추가 안 함.
+
+CLAUDE.md 절대규칙 6 ("외부 LLM 라이브러리 v0.1 추가 금지")의 정신 = supply-chain 보수. 25줄 << dep + transitive audit.
+
+`ProcessInfo.processInfo.environment` 우선, 없으면 `cwd/.env` → `~/.screenbridge/.env` 순서 탐색. 8 unit tests로 형식 커버 (KEY=VALUE / 주석 / 빈 줄 / quote / export / whitespace / invalid line / nonexistent key).
+
+## 18 tests, build 1.41s, test 0.002s
+
+실측:
+
+```
+swift build  → Build complete! (1.41s)
+swift test   → Test run with 18 tests in 3 suites passed after 0.002 seconds.
+```
+
+내역: 6 AnalysisResult + 4 Prompts + 8 Env.
+
+PromptsTests는 SYSTEM_PROMPT가 schema 5 키 + ✗/✓ 페어 + 본질 룰 키워드 (`"target_text"`, `"Sign in"`, `"여기 [Settings]"`, `"한국어"`, `"한 동작"`, `"AI가 시킨 게 정확히 뭔지 처 모르는 사람"`)를 *literal로 포함*하는지 검증. SYSTEM_PROMPT가 silent drift 못 하게 — 누가 톤을 무뚝뚝하게 바꾸면 테스트가 잡는다.
+
+## 다음 atomic
+
+Phase 2.3 — `LLMDispatcher.swift` protocol + `GeminiDispatcher.swift` (URLSession POST `gemini-2.5-flash:generateContent`, `responseMimeType` + `responseSchema` 강제, `timeoutInterval=30`, retry 429/500/503 exp backoff max 3). 사용자가 실제 API key로 첫 vision 호출 검증 — 8-15s latency 실측 + Korean 응답 자연도 + target_text가 visible text 그대로인지.

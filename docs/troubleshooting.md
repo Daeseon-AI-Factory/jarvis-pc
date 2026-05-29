@@ -157,6 +157,16 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: LLM dispatcher 응답에 raw text도 보관해야 하는데, raw를 struct에 포함하면 Gemini `responseSchema`와 LLM JSON엔 raw 키가 없어 mapping 의미 모호.
 - **Cause**: `AnalysisResult` Codable shape이 곧 LLM의 `responseSchema`. raw는 LLM이 채우는 게 아니라 dispatcher가 채우는 메타데이터 → schema에 섞이면 안 됨.
 - **Fix**: raw를 stored property로 두되 `CodingKeys`에서 제외 + custom `init(from:)`/`encode(to:)` + `withRaw(_:)` builder. dispatcher가 decode 후 raw 주입.
-- **Commit**: (이 commit, hash 다음 commit에 갱신)
+- **Commit**: `e075f0f`
 - **Pattern**: LLM 응답 struct의 Codable shape = vendor responseSchema. 메타데이터(raw, latency 등)는 Codable 밖 + builder로 후주입.
+
+---
+
+## SYSTEM_PROMPT의 ✗/✓ 페어가 visible-text 룰을 강제 (Phase 2.2)
+
+- **Symptom**: LLM이 `target_text`에 임의로 번역/축약한 라벨 ("auth button", "로그인 버튼")을 넣어 OCR matcher가 화면 텍스트와 substring 매칭 못 함 (Tauri Layer 16 재발 위험).
+- **Cause**: SYSTEM_PROMPT 텍스트 룰만으론 LLM이 "한 글자도 바꾸지 마라"를 안 지킴. 추상↔구체의 *경계*를 예시로 보여줘야 학습.
+- **Fix**: SYSTEM_PROMPT에 ✗/✓ 페어 4 × 2 직역. 예: `"auth button"` ✗ vs `"Sign in"` ✓, `"the create button"` (군더더기 `the`) ✗ vs `"Create API Key"` ✓, `"settings icon"` (아이콘 = 텍스트 없음) ✗ → `coordinates` 사용. PromptsTests에 ✗/✓ literal 포함 검증 — silent drift 차단.
+- **Commit**: (Phase 2.2 — 다음 commit에 hash 갱신)
+- **Pattern**: vision LLM의 "visible text 정확" 룰 = 텍스트 룰 + ✗/✓ 예시 페어 둘 다. 예시 없으면 LLM이 자기 판단으로 라벨 정규화 → backend OCR matcher 실패.
 

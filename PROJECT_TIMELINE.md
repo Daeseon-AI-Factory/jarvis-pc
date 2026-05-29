@@ -202,4 +202,23 @@ Swift Phase 0.2 (menu-bar shell + Carbon hotkey + NSPanel, `63c0568`) 후 사용
 
 ---
 
+## 2026-05-29 — Swift Phase 2.2: Prompts + Env (번역기 본질 SYSTEM_PROMPT에 박음)
+
+**Phase 2.1 commit hash backfill:** `e075f0f`.
+
+**Phase 2.2 완료 (이 commit):**
+- `Sources/ScreenBridge/Prompts.swift` — SYSTEM_PROMPT 상수. 번역기 본질 4개 코드화:
+  1. *target_text 룰*: "한 글자도 임의로 바꾸지 마라". ✗/✓ 페어 (`"auth button"` ✗ vs `"Sign in"` ✓, `"the create button"` ✗ vs `"Create API Key"` ✓).
+  2. *next_action 톤*: "여기 [Settings] 버튼 보이죠? 누르세요" 같은 비-AI-native 친화. jargon 금지.
+  3. *한 화면 = 한 동작*: 다단계 응답 금지.
+  4. *coordinates fallback only*: 화면 텍스트 없는 아이콘에만 사용, 평소 키 자체 생략 (OCR이 source).
+- `Sources/ScreenBridge/Env.swift` — `GEMINI_API_KEY` 로드. ProcessInfo + `.env` 폴백 (현재 working dir + `~/.screenbridge/.env`). dep 0 (R9 DECISIONS).
+- `Tests/.../PromptsTests.swift` (4 tests) + `EnvTests.swift` (8 tests). 누적 18/18 통과 (`swift build` 1.41s, `swift test` 0.002s).
+
+**R9 결정 2건 박음** (DECISIONS.md): `.env` parser dep 0 직접, SYSTEM_PROMPT 한국어 강제.
+
+**다음:** Phase 2.3 — `LLMDispatcher.swift` (protocol) + `GeminiDispatcher.swift` (URLSession POST `gemini-2.5-flash:generateContent`, `responseMimeType`+`responseSchema` 강제, `timeoutInterval=30`, retry 429/500/503 exp backoff max 3) + fixture-based test (`XCTSkipUnless GEMINI_API_KEY`).
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

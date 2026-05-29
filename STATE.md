@@ -13,18 +13,19 @@
 
 - [x] Swift Phase 0.1 — SwiftPM scaffold (`571e213`)
 - [x] Swift Phase 0.2 — menu-bar shell (`63c0568`): `.accessory` dock 숨김 + NSStatusItem 트레이 (eyeglasses, Trigger/Open sessions/Quit) + Carbon `RegisterEventHotKey` ⌥+Space + NSPanel trigger panel (cursor monitor 중앙). `swift build` 2.26s.
-- [x] Swift Phase 2.1 — AnalysisResult Codable struct (이 commit): snake_case CodingKeys 명시 (R9), `coordinates: [Int]?` optional (OCR fallback only — 번역기 본질 "99% 좌표는 OCR source"), `raw`는 Codable 분리 + `withRaw(_:)` builder (R9, `responseSchema` 1:1 보존). 6 tests 통과 (`swift build` 1.41s, `swift test` 0.002s).
+- [x] Swift Phase 2.1 — AnalysisResult Codable struct (`e075f0f`): snake_case CodingKeys 명시 (R9), `coordinates: [Int]?` optional (OCR fallback only — 번역기 본질 "99% 좌표는 OCR source"), `raw`는 Codable 분리 + `withRaw(_:)` builder (R9, `responseSchema` 1:1 보존). 6 tests 통과.
+- [x] Swift Phase 2.2 — Prompts.swift + Env.swift (이 commit): SYSTEM_PROMPT 4개 본질 (target_text 정확/친화 톤/한 화면 한 동작/coordinates fallback) ✗/✓ 페어 직역 (R9). `.env` parser dep 0 직접 (R9). 18 tests 통과 (`swift build` 1.41s, `swift test` 0.002s).
 
-**Last commit:** Phase 2.1 (hash 다음 commit에 갱신)
+**Last commit:** Phase 2.2 (hash 다음 commit에 갱신)
 **검증 안 됨:** `swift run` 실제 smoke (menu bar 아이콘 + ⌥Space → panel). 사용자 manual 필요 — GUI라 agent가 직접 못 띄움.
 
 ## Next step (다음 세션 시작점)
 
 **Phase 2.x — LLM dispatcher (Swift)** — 2026-05-29 sweep workflow advice 반영 (AnalysisResult 첫, dispatcher 다음, Phase 5.0 빈 골격 끼움, OCR forward declare):
 
-1. ✅ Phase 2.1 — `Sources/ScreenBridge/AnalysisResult.swift` Codable struct. **완료** (이 commit).
-2. **Phase 2.2 (다음)** — `Sources/ScreenBridge/Prompts.swift` SYSTEM_PROMPT 한국어 + `target_text` 필수 + ✗/✓ 페어 (Tauri Layer 16 학습 직역) + "여기 [버튼명] 누르세요" 비-AI-native 친화 톤. + `Sources/ScreenBridge/Env.swift` `GEMINI_API_KEY` 로드 (ProcessInfo + .env 폴백, dep 0).
-3. Phase 2.3 — `Sources/ScreenBridge/LLMDispatcher.swift` (protocol) + `GeminiDispatcher.swift` (URLSession POST `gemini-2.5-flash:generateContent`, `responseMimeType`+`responseSchema` 강제, `timeoutInterval=30`, retry 429/500/503 exp backoff max 3). + `Tests/.../GeminiDispatcherTests.swift` fixture-based (`XCTSkipUnless GEMINI_API_KEY`).
+1. ✅ Phase 2.1 — AnalysisResult struct (`e075f0f`).
+2. ✅ Phase 2.2 — Prompts + Env (이 commit). SYSTEM_PROMPT 4개 본질 ✗/✓ 페어 직역, `.env` parser dep 0.
+3. **Phase 2.3 (다음)** — `Sources/ScreenBridge/LLMDispatcher.swift` (protocol) + `GeminiDispatcher.swift` (URLSession POST `gemini-2.5-flash:generateContent`, `responseMimeType`+`responseSchema` 강제, `timeoutInterval=30`, retry 429/500/503 exp backoff max 3). + `Tests/.../GeminiDispatcherTests.swift` fixture-based (`XCTSkipUnless GEMINI_API_KEY`).
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).
 5. Phase 5.0 (sweep swap) — `HUDOverlayWindow.swift` 빈 골격, dispatcher 무관 검증 (`level=.screenSaver` / `ignoresMouseEvents=true` 영구 / collectionBehavior 셋 / multi-monitor frame pin).
 6. Phase 4.2 — AnalyzeCoordinator (actor + async let 병렬, OCR forward declare stub) + TriggerPanel onSubmit 배선 + 한국어 에러 메시지 매핑 (network/timeout/permission/json → 비-AI-native 친화).
