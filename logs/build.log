@@ -1270,3 +1270,4 @@ M Al
 2026-05-27T20:20:48.648492000Z | runtime | info:frontend | overlay hidden
 2026-05-27T20:20:58.198081000Z | runtime | info:frontend | trigger panel hidden
 2026-05-27T19:30:00Z | swift 0.2 | menu-bar shell | AppDelegate .accessory + NSStatusItem + Carbon RegisterEventHotKey 오ption+Space + NSPanel trigger. swift build 2.26s. Swift 6 deinit @MainActor 함정 1건 (docs/troubleshooting.md).
+2026-05-28T00:00:00Z | handoff | 다음 세션 정리 | STATE.md HANDOFF 재작성 + SCRATCHPAD Swift 기준 정리 + CLAUDE.md 환경/모델/R4 swift + SPEC.md STALE 경고 + disk 정리 (7.3GB→164MB, src-tauri/node_modules 제거, source는 tauri-archive). 다음=Swift Phase 2.x GeminiDispatcher.

@@ -26,12 +26,12 @@ ScreenBridge — macOS 데스크톱 도구. AI가 시키는 추상적 지시를 
 - **DECISIONS.md** — trade-off 있는 선택의 기록. 무엇을 골랐고 왜, 무엇을 안 골랐고 왜.
 - **PROJECT_TIMELINE.md** — 전체 history (phase 전환, stack swap, 큰 결정 흐름). 사후 정리 금지, append-only.
 
-## 회복력 규칙 핵심 (전체는 SPEC.md R1-R7)
+## 회복력 규칙 핵심 (전체는 SPEC.md R1-R7 — 단 SPEC.md는 Tauri 기준 stale, STATE.md 우선)
 
 - **R1**: 매 atomic 작업 후 즉시 commit.
 - **R2**: STATE.md를 매 commit과 함께 갱신.
-- **R3**: 새 세션 시작 시 위의 8단계 RESUME PROTOCOL.
-- **R4**: Commit 전 `cargo check`, `tsc --noEmit`, Phase verify 모두 통과 필수.
+- **R3**: 새 세션 시작 시 위의 8단계 RESUME PROTOCOL. **단 step 2의 `cat PRODUCT.md` 다음 `cat STATE.md`가 가장 정확한 현재 상태 (SPEC.md stale).**
+- **R4 (Swift)**: Commit 전 **`swift build` + `swift test`** 통과 필수. (과거 Tauri: `cargo check`, `tsc --noEmit`.)
 - **R5**: 함수 body가 `todo!()`이거나 컴파일 안 되면 commit 금지. Blockers에만 기록.
 - **R6**: 사용량 캡 가까울 때 새 큰 작업 시작 금지. atomic까지만 마무리, 아니면 stash.
 - **R7**: Phase 완료 시 commit 메시지 = `Phase X.Y COMPLETE: <설명>`.
@@ -65,19 +65,21 @@ SCRATCHPAD.md 형식:
 **사용자 답 필요:** ...
 ```
 
-## 환경
+## 환경 (Swift swap 후, 2026-05-27)
 
-- macOS 13+
-- Rust + Cargo
-- Node 20+ + npm
-- Tauri 2.0
-- `.env`에 ANTHROPIC_API_KEY (gitignore됨, 사용자가 제공)
+- macOS 14+ (Sonoma) / 개발 환경은 macOS 26 (Tahoe)
+- Swift 6.3 + Xcode 26 (`/Applications/Xcode.app`)
+- SwiftPM (`swift build` / `swift run`). production `.app`은 swift-bundler 또는 Xcode (후속).
+- `.env`에 `GEMINI_API_KEY` (채택 dispatcher) + `ANTHROPIC_API_KEY` (옵션). gitignore됨, 사용자 제공. 또는 셸 process env.
+- **(과거) Rust+Cargo+Node+Tauri는 `tauri-archive` branch — main에 없음.**
 
-## 모델 사용
+## 모델 사용 (Swift 기준)
 
-- vision 호출: `claude-sonnet-4-6`
-- 텍스트만 호출 시: `claude-haiku-4-5-20251001` (학습용 저렴)
-- v0.1 코드에 모델명 하드코딩하지 말고 `src-tauri/src/dispatcher.rs`에 const로 둘 것
+- **vision 호출 (채택): `gemini-2.5-flash`** (무료 250 RPD, 8-15s). responseSchema로 JSON 강제 필수.
+- 대안: `claude-sonnet-4-6` (Anthropic API, 정확도 최고, 유료) / claude CLI subprocess (Pro 구독, 느림).
+- Groq Llama 4 Scout 17B는 vision 76초 실측 → 폐기 (DECISIONS.md).
+- 모델명 하드코딩하지 말고 `Sources/ScreenBridge/GeminiDispatcher.swift` 등에 const로.
+- 좌표는 LLM 추정 X — Vision framework OCR + AXUIElement deterministic source (DECISIONS.md "99% 정확도 architecture").
 
 ## 한 줄 요약
 

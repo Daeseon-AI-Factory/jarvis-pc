@@ -1,5 +1,7 @@
 # ScreenBridge v0.1 — Autonomous Build Spec (Tauri)
 
+> ⚠️ **STALE (2026-05-27 Swift swap)**: 이 문서는 *Tauri stack 기준*이다. Phase 매트릭스 (0.1 tauri scaffold 등), 디렉토리 트리 (`src-tauri/`), R4 (`cargo check`)가 전부 Tauri. **Swift native로 swap한 현재 진행은 `STATE.md`의 Swift Phase 매트릭스 + `DECISIONS.md`를 따른다.** 이 SPEC.md는 (1) PRODUCT 본질 요약 (2) 자율 빌드 룰 R1-R7 정신 (3) Tauri attempt 기록으로만 참조. Tauri 코드는 `tauri-archive` branch.
+
 ## 사명
 여러 세션에 걸쳐 자율적으로 ScreenBridge v0.1 MVP를 완성한다. 사용량 한도로 세션이 예고 없이 잘릴 수 있다. 언제 잘려도 다음 세션이 정확히 이어갈 수 있게 작업한다.
 

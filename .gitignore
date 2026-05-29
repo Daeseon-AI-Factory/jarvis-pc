@@ -27,3 +27,4 @@ Package.resolved
 
 # Fixtures override (in case global *.png ignore is ever added)
 !fixtures/*.png
+node_modules

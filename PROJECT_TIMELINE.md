@@ -163,4 +163,19 @@ production `.app` bundle은 후속 (`swift-bundler` 또는 Xcode build phase). �
 
 ---
 
+## 2026-05-28 — Swift Phase 0.2 완료 + 다음 세션 HANDOFF 정리
+
+Swift Phase 0.2 (menu-bar shell + Carbon hotkey + NSPanel, `63c0568`) 후 사용자가 *다른 Claude Code 세션*에서 이어갈 준비. HANDOFF 정리:
+
+- `STATE.md` → HANDOFF 수준 재작성: 현재(Swift 0.2 완료) + Next step(Phase 2.x dispatcher) + 확정 결정 매트릭스 8개 + SYSTEM_PROMPT 골자 + 학습 자산 5 layer + 룰 (R4 swift). **새 세션이 이거 하나로 위치 파악.**
+- `SCRATCHPAD.md` → Swift 기준 재정리. Tauri 시절 항목 (ocr.rs/macocr/tests 위치) obsolete 처리. 미해결 4건 (SPEC stale 경고 / disk 정리 / hook portable / fixture 이미지 / Screen Recording 권한).
+- `CLAUDE.md` → 환경 (Swift 6.3 + Xcode 26), 모델 (Gemini Flash 채택), R4 (`swift build`+`swift test`), RESUME PROTOCOL에 "SPEC.md stale, STATE.md 우선" 경고.
+- `SPEC.md` → 헤더에 ⚠️ STALE 경고 (Tauri 기준, Swift는 STATE.md 따름).
+- `docs/troubleshooting.md` → Swift 6 deinit entry hash backfill (`63c0568`).
+- disk 정리: `rm -rf src-tauri node_modules` (Tauri 빌드 캐시 7.2GB + 84MB). source는 tauri-archive branch에 보존. repo 7.3GB → 164MB.
+
+**새 세션 RESUME 핵심: STATE.md → DECISIONS.md → SCRATCHPAD.md. SPEC.md 따라가지 말 것 (Tauri stale).** 다음 작업 = Swift Phase 2.x (GeminiDispatcher).
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)
