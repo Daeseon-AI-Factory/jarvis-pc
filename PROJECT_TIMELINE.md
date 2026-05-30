@@ -472,4 +472,51 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-29 — 🌍 Vision Update: global + multi-platform + 5-layer security
+
+**Trigger (사용자 verbatim):**
+> "한국 시장만이 아니다... 세계를 대상으로 할거다 가장 큰 문제는 보안이될거같네.. 그리고 지금은 맥북이지만 스마트폰도 같이 대상으로할거다.. swift로 진행중이니..."
+> "이 큰 결정과 커다란 청사진은 꼭 log화시키자"
+
+청사진 큰 진화 — code 변경 X, *vision lock-in*.
+
+**3가지 큰 결정:**
+
+1. **시장 → 글로벌** (한국 단일 X). 시니어 + 비-AI-native가 global trend. 일본/미국/유럽 모두 고령화. niche 동일 + 시장 압도적 큼.
+
+2. **Multi-platform — Android first phone**. iOS는 Apple sandbox로 macOS-style 다른 앱 가이드 *원천 불가능* (Screen recording / system overlay / cross-app input 다 X). Android는 AccessibilityService로 overlay + 입력 simulation 가능. 시니어 점유율 한국 50% / 글로벌 70% — phone 시장 fit.
+
+3. **보안 5-layer가 빅테크 대비 결정적 차별** — secret regex masking / app exclusion / sensitive region / **local-first LLM** (Apple Foundation Model on-device / Ollama) / audit log. 빅테크는 cloud 강제 (수익화) — local-first는 enterprise/정부/금융/일본 시장의 결정적 매력.
+
+**Platform Roadmap (갱신):**
+
+| 단계 | 시장 | platform | feature |
+| --- | --- | --- | --- |
+| v0.1 (지금) | dogfooding + 어머님 | macOS | 번역기 quality lock |
+| v0.2 | 한·일·영어권 시니어 가족 | macOS App Store | senior UX + secret masking |
+| v0.3 | global Mac | macOS | multi-step + clipboard auto |
+| **v0.4** | **global phone** | **+ Android (AccessibilityService)** | continuous overlay agent |
+| v0.5 | enterprise + 정부 | + Windows (WinUI) | local-first LLM |
+| v0.6 | full mobile | + iOS companion (제한 형태) | Mac → iPhone notification sync |
+| v1.0 Jarvis | mass market global | all 4 platforms | continuous agent + multi-modal |
+
+**Code architecture 사전 인지** — Sources/ScreenBridge의 *backend* (AnalysisResult / Prompts / LLMDispatcher / GeminiDispatcher / ElementMatcher / OCRBox / DispatcherError / UserMessage / AnalyzeRequest / AnalyzeStage / Env / Logging) 모두 cross-platform 가능. v0.4 Android port 시점에 SwiftPM library 분리 → Swift→Kotlin gRPC bridge 또는 Swift on Android.
+
+*Platform-specific frontend* (HUDOverlayWindow / ScreenCapture / TriggerPanel / HotKeyManager / AppDelegate) 만 per-platform 재작성.
+
+**Reality check (1인 자원 vs 빅테크):**
+
+Apple Intelligence / Microsoft Copilot / Anthropic Computer Use / OpenAI Operator 모두 같은 vision 추진. 1인 개발자 생존:
+- **niche speed**: 시니어 + 보안 + 한·일·영 localized
+- **on-device privacy**: 빅테크는 cloud (수익화) — local-first 결정적 차별
+- **family pricing**: 자녀 결제 + 가족 단위 — 빅테크 enterprise 위주
+- **Android first phone**: iOS sandbox 회피
+- **community UGC**: 자녀가 부모용 step 공유 — v0.5+ 모드
+
+**우선순위 lock-in:** v0.1 quality 마무리 → v0.2 senior UX + secret masking → v0.3 backend SwiftPM split → v0.4 Android start. 빌딩 순서 명확.
+
+**상세:** memory `product-vision-global-multi-platform` (디테일 보안 정규식 / Android NodeInfo / iOS companion mode etc.).
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)
