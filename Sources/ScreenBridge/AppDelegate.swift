@@ -139,8 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // 1. loading HUD
-        hud.presentLoading(message: "분석 중...", on: screen)
+        // 1. loading HUD — 친화 메시지 + 예상 시간 (사용자 burden 작게).
+        hud.presentLoading(message: "AI에 물어보는 중... (3~5초)", on: screen)
         let req = AnalyzeRequest(instruction: instruction, triggeredAt: Date())
 
         Task { @MainActor in

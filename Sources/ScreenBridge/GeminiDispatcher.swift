@@ -172,7 +172,7 @@ actor GeminiDispatcher: LLMDispatcher {
                 responseMimeType: "application/json",
                 responseSchema: Self.responseSchema,
                 temperature: 0.2,
-                maxOutputTokens: 8192
+                maxOutputTokens: 2048
             )
         )
     }

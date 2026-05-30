@@ -12,8 +12,11 @@ import Foundation
 import ScreenCaptureKit
 
 enum ScreenCapture {
-    /// 다운스케일 cap. Gemini vision 1 tile + 토큰/시간 절감.
-    static let maxDimension: CGFloat = 1568
+    /// 다운스케일 cap — ship mode 가속.
+    /// 1568 → 1024: Gemini latency ~30%↓ + 토큰 ~40%↓ + OCR ~30%↓ (총 ~1-2s 가속).
+    /// 정확도 trade-off: 작은 텍스트 (사이드바 파일명) 손해 가능. 큰 button/menu/icon OK.
+    /// dogfooding 후 갱신 — 어머님 use case는 *큰 element*가 대부분.
+    static let maxDimension: CGFloat = 1024
 
     enum CaptureError: Error, Sendable {
         case permissionDenied

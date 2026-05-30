@@ -956,4 +956,26 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 ---
 
+## 2026-05-30 — Latency speedup: image 1568 → 1024 (정확도 vs 속도 trade-off, ship mode)
+
+**Pragmatic ship mode** (memory `pragmatic-ship-mode`) — 완벽 X, 속도 우선.
+
+**선택지:**
+- A. **maxDimension 1024** ← 선택. Gemini latency ~30%↓ + OCR ~30%↓ + 토큰 ~40%↓. 작은 텍스트 정확도 약간↓.
+- B. maxDimension 1568 유지 — 정확도 최우선. 단 latency 3-10s 사용자 burden.
+- C. maxDimension 768 — 가장 빠름. 단 정확도 큰 손해.
+
+**선택:** A.
+
+**근거:**
+- 어머님 use case는 *큰 button/menu/Dock 아이콘* — 작은 텍스트 손해 OK.
+- 사용자 burden (3-10s 기다림) > 정확도 marginal 손해.
+- dogfooding 자료 후 갱신 가능 — 1024 부족하면 1280 등.
+
+**되돌리기 비용:** `ScreenCapture.maxDimension` 상수 한 줄. 1분.
+
+**미해결:** dogfooding 후 정확도 실측 — 작은 텍스트 (사이드바 파일명 / 메뉴 단축키 등) 손해 정도. 1280 또는 1408 검토.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
