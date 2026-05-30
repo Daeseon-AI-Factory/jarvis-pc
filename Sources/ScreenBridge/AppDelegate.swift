@@ -146,21 +146,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             let stage = await coordinator.run(req)
             switch stage {
-            case .done(let result, let geometry, let matchedRect):
-                // 1. OCR 매칭 우선 (deterministic 99%) — Phase 6.1
-                if let rect = matchedRect {
-                    Log.app.info("[analyze] HUD annotated (OCR-matched) — target_text=\"\(result.targetText, privacy: .public)\"")
-                    self.hud.presentAnnotation(HUDAnnotation(rect: rect), on: screen)
+            case .done(let result, let geometry, let matched):
+                // 1. OCR/AX matched (deterministic) — bubble에 한글 next_action + sourceTag
+                if let m = matched {
+                    Log.app.info("[analyze] HUD annotated (\(m.sourceTag, privacy: .public)) — target_text=\"\(result.targetText, privacy: .public)\"")
+                    self.hud.presentAnnotation(
+                        HUDAnnotation(
+                            rect: m.rect,
+                            nextAction: result.nextAction,
+                            sourceTag: m.sourceTag
+                        ),
+                        on: screen
+                    )
                     return
                 }
                 // 2. fallback — LLM 추정 coordinates (있으면)
                 if let coords = result.coordinates,
                    let local = geometry.logicalRectFromSentBox(coords) {
                     Log.app.info("[analyze] HUD annotated (LLM-fallback) — target_text=\"\(result.targetText, privacy: .public)\"")
-                    self.hud.presentAnnotation(HUDAnnotation(rect: local), on: screen)
+                    self.hud.presentAnnotation(
+                        HUDAnnotation(
+                            rect: local,
+                            nextAction: result.nextAction,
+                            sourceTag: "LLM"
+                        ),
+                        on: screen
+                    )
                     return
                 }
-                // 3. 둘 다 실패 — 사용자 친화 에러. 「」 corner quote (postposition 회피 — verify fix).
+                // 3. 둘 다 실패 — 한국어 친화 에러. 「」 corner quote (postposition 회피).
                 Log.app.notice("[analyze] no match (OCR + LLM coords both nil) — target_text=\"\(result.targetText, privacy: .public)\"")
                 let truncated = result.targetText.count > 30
                     ? String(result.targetText.prefix(30)) + "…"

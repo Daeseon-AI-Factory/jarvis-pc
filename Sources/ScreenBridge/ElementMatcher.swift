@@ -27,6 +27,13 @@ struct MatchCandidate: Sendable {
     }
 }
 
+/// 매칭 결과 — bubble UI에서 어디서 매칭됐는지 (OCR vs AX) 사용자/디버그용 표시.
+struct MatchResult: Sendable, Equatable {
+    let rect: CGRect            // screen-local logical pt
+    let matchedText: String     // 실제 매칭된 element text
+    let sourceTag: String       // "OCR" / "AX:AXDockItem" / etc.
+}
+
 enum ElementMatcher {
 
     /// 기본 threshold — Phase 6.1 commit 시 fixed. dogfooding 후 DECISIONS R9 entry로 튜닝.
@@ -163,7 +170,7 @@ enum ElementMatcher {
         llmHintRect: CGRect? = nil,
         proximityRadius: CGFloat = 100,
         threshold: Double = defaultThreshold
-    ) -> CGRect? {
+    ) -> MatchResult? {
         let normalizedTarget = normalize(targetText)
         guard !normalizedTarget.isEmpty, !candidates.isEmpty else { return nil }
 
@@ -205,7 +212,11 @@ enum ElementMatcher {
             Log.dispatcher.info(
                 "[match] substring hit — target=\"\(targetText, privacy: .public)\" element=\"\(best.text, privacy: .public)\" source=\(sourceTag(best.source), privacy: .public)"
             )
-            return best.rectInLogicalPt
+            return MatchResult(
+                rect: best.rectInLogicalPt,
+                matchedText: best.text,
+                sourceTag: sourceTag(best.source)
+            )
         }
 
         // 2. fuzzy — Levenshtein normalized similarity, length-aware threshold.
@@ -225,7 +236,11 @@ enum ElementMatcher {
         Log.dispatcher.info(
             "[match] fuzzy hit — target=\"\(targetText, privacy: .public)\" element=\"\(best.0.text, privacy: .public)\" source=\(sourceTag(best.0.source), privacy: .public) sim=\(String(format: "%.2f", best.1), privacy: .public)"
         )
-        return best.0.rectInLogicalPt
+        return MatchResult(
+            rect: best.0.rectInLogicalPt,
+            matchedText: best.0.text,
+            sourceTag: sourceTag(best.0.source)
+        )
     }
 
     private static func isAX(_ source: MatchCandidate.Source) -> Bool {
@@ -234,8 +249,8 @@ enum ElementMatcher {
 
     private static func sourceTag(_ source: MatchCandidate.Source) -> String {
         switch source {
-        case .ocr: return "ocr"
-        case .ax(let role): return "ax:\(role)"
+        case .ocr: return "OCR"
+        case .ax(let role): return "AX:\(role)"
         }
     }
 

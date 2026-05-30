@@ -128,8 +128,9 @@ struct AnalyzeCoordinatorTests {
         #expect(result.targetText == "Save")
         // OCR 매칭 → "Save" box (x:50, y:60, w:80, h:25)
         #expect(matched != nil)
-        #expect(matched?.minX == 50)
-        #expect(matched?.minY == 60)
+        #expect(matched?.rect.minX == 50)
+        #expect(matched?.rect.minY == 60)
+        #expect(matched?.sourceTag == "OCR")
     }
 
     @Test("run — AX 매칭 성공 시 matchedRect (icon-only UI, OCR이 못 잡는 case, Phase 6.2)")
@@ -163,8 +164,9 @@ struct AnalyzeCoordinatorTests {
             return
         }
         #expect(matched != nil)
-        #expect(matched?.minX == 1200)
-        #expect(matched?.minY == 1000)
+        #expect(matched?.rect.minX == 1200)
+        #expect(matched?.rect.minY == 1000)
+        #expect(matched?.sourceTag == "AX:AXDockItem")
     }
 
     @Test("run — AX 권한 거부 시 OCR만으로 graceful (Phase 6.2)")

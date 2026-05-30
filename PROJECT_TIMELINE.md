@@ -472,6 +472,52 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-30 — Swift Phase 5.x bubble: 한글 next_action + sourceTag (OCR/AX) + 화면 가장자리 clamping
+
+**Phase 6.2 fix commit hash backfill:** `cdd092b`.
+
+**번역기 본질 완성 단계 — *어머님이 박스 보고도 뭘 할지 알게* 됨.**
+
+빨간 박스만으론 *의도 전달 부족*. 사용자가 박스 보고 "이게 뭐?" 의문. bubble이 "여기 [Slack] 아이콘 누르세요" 명시.
+
+**Phase 5.x 완료 (이 commit):**
+
+- `MatchResult` struct — `rect + matchedText + sourceTag`. ElementMatcher.match 반환 type 변경.
+- `AnalyzeStage.done(result, geometry, matched: MatchResult?)` — `matchedRect: CGRect?` → `matched: MatchResult?`.
+- `HUDAnnotation` — `rect + nextAction + sourceTag` (default empty strings, backward compatible).
+- `HUDOverlayView` — GeometryReader + `BoxAndBubble` + `BubbleView` (한글 `next_action` 큰 글씨 + sourceTag 작게).
+- `BubblePositioner` enum — 박스 아래 우선 + 화면 가장자리 4면 clamping (좌/우/상/하).
+- `AppDelegate.handleAnalyze` — `result.nextAction` + `matched.sourceTag` → `HUDAnnotation`. LLM fallback 시 `sourceTag = "LLM"`.
+
+**Bubble UI:**
+
+```
+┌─────────────────┐
+│ 🔴 Slack 아이콘  │  ← 빨간 박스
+└─────────────────┘
+          ↓
+    ┌─────────────────────────────────────┐
+    │ 여기 [Slack] 아이콘 누르세요         │  ← 한글 next_action (title3 큰 글씨)
+    │ [AX:AXDockItem]                     │  ← sourceTag (caption2, 신뢰 + 디버그)
+    └─────────────────────────────────────┘
+```
+
+**Tests (6 new BubblePositioner)**: 박스 아래 / 박스 위 (하단 끝) / 좌측 / 우측 / 우하단 (둘 다) / 정중앙. 누적 86/86 통과 (`swift build` 2.37s, `swift test` 0.211s).
+
+**번역기 본질 완성**:
+- text-rich UI: OCR (Phase 6.1)
+- icon-only UI: AX (Phase 6.2)
+- intent disambiguation: SYSTEM_PROMPT (6.2 fix)
+- 사용자 facing UX: bubble (Phase 5.x)
+
+→ **어머님이 박스 + bubble만 보고도 *진짜* 동작 가능 단계.**
+
+**다음:**
+- ★ 어머님 첫 dogfooding (1-2주 안) — 카톡 / Safari / Finder 같은 진짜 케이스
+- v0.2: secret regex masking (보안 layer A — Jarvis vision의 결정적 차별) + senior UX (큰 글씨 / 음성 / 항상 떠있는 도우미)
+
+---
+
 ## 2026-05-30 — Phase 6.2 fix: SYSTEM_PROMPT 강화 (target_text 빈 string 금지 + intent-aware)
 
 **Phase 6.2 commit hash backfill:** `d68746e`.

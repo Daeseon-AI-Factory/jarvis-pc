@@ -25,9 +25,10 @@
 - [x] Swift Phase 6.1 verify fix (`f08a603`): adversarial verify 3 HIGH + 2 MEDIUM. NFC normalize + short text 0.85 + Task + tiebreaker + punctuation strip.
 - [x] Swift Phase 6.1 spatial fusion (`fcc95b0`): LLM coords hint + OCR proximity filter (radius 200pt) → wrong-box 차단. SYSTEM_PROMPT hint 권장 (강제 X).
 - [x] Swift Phase 6.2 — AXUIElement matcher (`d68746e`): icon-only UI 풀이. OCR + AX hybrid + MatchCandidate unified type.
-- [x] Swift Phase 6.2 fix — SYSTEM_PROMPT 강화 (이 commit): 사용자 dogfooding 발견 `target_text=""` 빈 string → LLM이 SYSTEM_PROMPT 룰 안 따름. fix: target_text 빈 string 절대 금지 + 아이콘은 AX label/앱 이름 줘 + 같은 텍스트 여러 곳 시 *사용자 동작 의도* 한 곳만 (intent-aware ranking) + reasoning에 의도 추론. **한계 인정 — Phase 7+ multi-target architecture** (사용자 통찰 "박스 하나만 치네... 질문 의도 어찌"). memory `intent-disambiguation-multi-target` 박음. 80 tests 통과 (`swift build` 2.97s).
+- [x] Swift Phase 6.2 fix — SYSTEM_PROMPT 강화 (`cdd092b`): target_text 빈 string 금지 + intent-aware ranking. 사용자 검증 OK (Slack 아이콘 정확).
+- [x] Swift Phase 5.x bubble (이 commit, **번역기 본질 완성 — 어머님 dogfooding 가능 단계**): MatchResult struct (rect + matchedText + sourceTag) + AnalyzeStage.done matched: MatchResult?. HUDAnnotation 확장 (nextAction + sourceTag). HUDOverlayView GeometryReader + BoxAndBubble + BubbleView (한글 title3 + sourceTag caption2). BubblePositioner (박스 아래 우선 + 4면 가장자리 clamping). AppDelegate.handleAnalyze nextAction/sourceTag 전달. 6 new BubblePositioner tests. 86 tests 통과 (`swift build` 2.37s, `swift test` 0.211s). **번역기 본질 도달**: 박스 + 한글 안내 + source 신뢰 표시.
 
-**Last commit:** Phase 6.2 fix (hash 다음 commit에 갱신)
+**Last commit:** Phase 5.x bubble (hash 다음 commit에 갱신)
 **검증 안 됨:** `swift run` 실제 smoke (menu bar 아이콘 + ⌥Space → panel). 사용자 manual 필요 — GUI라 agent가 직접 못 띄움.
 
 ## Next step (다음 세션 시작점)
@@ -45,10 +46,11 @@
 7. ✅ Phase 6.1 — Vision OCR + ElementMatcher → 99% + R9 swap back (`95d4c57`).
 7b. ✅ Phase 6.1 verify fix (`f08a603`) — NFC + short text + Task + tiebreaker + punctuation strip.
 7c. ✅ Phase 6.1 spatial fusion (`fcc95b0`) — LLM coords hint + OCR proximity → wrong-box 차단.
-7d. ✅ Phase 6.2 AXUIElement matcher (이 commit) — icon-only UI 풀이 (Slack/Dock).
-8. **Phase 5.x (다음)** — HUDOverlayView bubble (한글 `next_action` 박스 옆, 화면 가장자리 clamping, source tag 표시 OCR/AX:role).
-9. ★ 어머님 첫 dogfooding (1-2주 안) — *진짜 product fit 검증*. honest feedback이 v0.2 senior UX 방향 결정.
-10. v0.2 첫 작업: secret regex masking (보안 layer A) + senior UX layer.
+7d. ✅ Phase 6.2 AXUIElement matcher (`d68746e`) — icon-only UI 풀이 (Slack/Dock).
+7e. ✅ Phase 6.2 fix (`cdd092b`) — SYSTEM_PROMPT intent-aware. 사용자 검증 OK.
+8. ✅ Phase 5.x bubble (이 commit) — 한글 next_action + sourceTag + clamping. **번역기 본질 완성.**
+9. ★ **어머님 첫 dogfooding** (1-2주 안) — *진짜 product fit 검증*. honest feedback이 v0.2 방향 결정.
+10. v0.2 첫 작업: secret regex masking (보안 layer A) + senior UX layer (큰 글씨 / 음성 / 항상 떠있는 도우미).
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).
 5. Phase 5.0 (sweep swap) — `HUDOverlayWindow.swift` 빈 골격, dispatcher 무관 검증 (`level=.screenSaver` / `ignoresMouseEvents=true` 영구 / collectionBehavior 셋 / multi-monitor frame pin).
 6. Phase 4.2 — AnalyzeCoordinator (actor + async let 병렬, OCR forward declare stub) + TriggerPanel onSubmit 배선 + 한국어 에러 메시지 매핑 (network/timeout/permission/json → 비-AI-native 친화).

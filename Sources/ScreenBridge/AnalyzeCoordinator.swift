@@ -149,10 +149,10 @@ actor AnalyzeCoordinator {
         )
 
         let totalElapsed = Date().timeIntervalSince(started)
-        let matchTag = matched != nil ? "matched" : "LLM-fallback"
+        let matchTag = matched?.sourceTag ?? "LLM-fallback"
         Log.dispatcher.info(
             "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public) (ocr=\(ocrBoxes.count, privacy: .public) ax=\(axElements.count, privacy: .public))"
         )
-        return .done(result: result, geometry: geometry, matchedRect: matched)
+        return .done(result: result, geometry: geometry, matched: matched)
     }
 }
