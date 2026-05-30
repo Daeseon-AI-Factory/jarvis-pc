@@ -805,4 +805,28 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — v0.1 임시: `coordinates` fallback only → 반드시 강제 (OCR 도입 전 가교)
+
+**배경**: Phase 4.2 첫 사용자 dogfooding — LLM (Gemini 2.5 Flash)이 SYSTEM_PROMPT 룰 잘 따름 → `coordinates` 키 생략 (target_text만 반환, backend OCR 매칭 기대). 그러나 Phase 6.1 OCR matcher 미작성 → 모든 분석이 "정확한 위치를 못 찾았어요" 에러. 사용자 dogfooding 흐름 끊김.
+
+**선택지:**
+- **A. v0.1 임시: `coordinates` 항상 강제** — SYSTEM_PROMPT 룰 swap + `responseSchema.required`에 추가. LLM 추정 좌표 ~70% 정확도지만 *뭐든 시각화*.
+- B. 즉시 Phase 6.1 — Vision OCR + ElementMatcher. deterministic 99%.
+
+**Trade-off:** dogfooding 흐름 유지 vs 본질 정확도 (99%).
+
+**선택:** **A** (v0.1 한정) → 그 다음 Phase 6.1 (정답).
+
+**근거:**
+- 본질 ("99% 좌표는 OCR이 source") 일관 — *v0.1 한정 명시*. Phase 6.1 commit 시점에 다시 swap.
+- v0.1 dogfooding 가치: latency 실측 (Gemini 2.4s total — 가설 8-15s 대비 ~5배 빠름) / target_text 정확도 / HUD UX 검증 — 모두 OCR 정확도와 *독립적*. 임시 fix가 그 검증 가능하게 함.
+- A의 boilerplate: SYSTEM_PROMPT 2 곳 + responseSchema `required` 1 곳 + tests 2 곳 = ~10줄. 5분.
+- B는 1-2시간 — 사용자 dogfooding 흐름 끊김 동안 latency / target_text / UX 자료 못 얻음.
+
+**되돌리기 비용:** SYSTEM_PROMPT coordinates 룰 섹션 + 응답 형식 메시지 + responseSchema `required`에서 `coordinates` 제거 + tests 2개 업데이트. Phase 6.1 commit 직전 5분.
+
+**미해결 / lock-in 위험**: LLM 추정 좌표 ~70% — 사용자가 빗나간 박스 봄. dogfooding 자료로 OCR 가치 명확화. Phase 6.1 commit 시점에 *반드시* swap 다시 — 안 그러면 본질 ("99% 좌표는 OCR이 source") 자기 모순 (verify workflow가 잡을 패턴).
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

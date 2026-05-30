@@ -187,7 +187,7 @@ actor GeminiDispatcher: LLMDispatcher {
             "coordinates": .array(items: .integer),
             "reasoning": .string,
         ],
-        required: ["screen_state", "next_action", "target_text", "reasoning"]
+        required: ["screen_state", "next_action", "target_text", "coordinates", "reasoning"]
     )
 }
 

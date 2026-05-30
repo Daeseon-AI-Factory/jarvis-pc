@@ -257,6 +257,26 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: `error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit` — `Log.app.info("... \(contentKind(content), privacy: .public) ...")` 같은 패턴.
 - **Cause**: `os.Logger` string interpolation의 `\(...)` arguments는 *escaping autoclosure*로 평가됨 (지연 evaluation — log level filtering 시 호출 안 함). Swift 6 strict concurrency는 escaping closure 안 instance method/property 접근 시 `self.` 명시 강제.
 - **Fix**: `self.contentKind(content)` — 명시. 변수/literal은 영향 없음, *instance method/property*만.
-- **Commit**: (Phase 4.2 — 다음 commit에 hash 갱신)
+- **Commit**: `1862076`
 - **Pattern**: `os.Logger` interpolation 안에서 method 호출 또는 instance property 사용 시 — Swift 6에서 `self.` 명시 강제. (`Log.X.info("\(self.method(), privacy: .public)")`). plain literal/변수는 무관.
+
+---
+
+## Gemini 2.5 Flash latency: 가설 8-15s vs 실측 2.4s (Phase 4.2 첫 dogfooding)
+
+- **Symptom (긍정적 surprise)**: 사용자 첫 `./dev.sh` analyze — 가설 8-15s vs **실측 2.4s** (capture 0.1s + Gemini 2.3s). HUD "분석 중..." spinner 잠깐 보임.
+- **Cause**: Gemini 2.5 Flash가 vision multimodal에서 sweep workflow agent의 docs 인용 추정보다 빠름. 692KB PNG (1568×1014 다운스케일) → 2.3s.
+- **Fix**: 가설 갱신. Phase 5.x bubble UI 작성 시 latency 가설 = **2-5s** (8-15s 아님). loading message 친화 톤 가능 (`"AI한테 물어보는 중..."` 등) — 사용자 burden 작음. PROJECT_TIMELINE에 실측 자료 박음.
+- **Commit**: (Phase 4.2 fix — 다음 commit에 hash 갱신)
+- **Pattern**: vendor SDK latency 가설은 sweep agent의 docs 인용만으론 실측과 다를 수 있음. *첫 dogfooding 호출이 결정적 자료* — 가설을 lock하지 말고 실측으로 갱신.
+
+---
+
+## LLM이 SYSTEM_PROMPT "fallback only" 룰 잘 따라 OCR 매칭 의존, OCR 없으면 epoch fail (Phase 4.2 fix)
+
+- **Symptom**: 사용자 첫 분석 시도 — 모든 호출이 "이 화면에선 정확한 위치를 못 찾았어요" 에러. log: `[analyze] no coordinates from LLM — OCR matcher (Phase 6.1) 필요`.
+- **Cause**: SYSTEM_PROMPT(Phase 2.2)가 "`coordinates`는 fallback only. 평소엔 키 생략 — backend OCR가 `target_text`로 위치 정확히 찾는다" 명시 → LLM이 좋은 시민으로 키 생략. 그러나 Phase 6.1 OCR matcher 미작성 → AppDelegate.handleAnalyze의 fallback branch가 매번 trigger.
+- **Fix (v0.1 임시)**: Prompts.swift SYSTEM_PROMPT 룰 swap (`fallback only` → `반드시 줘 (v0.1)`) + GeminiDispatcher responseSchema `required`에 `coordinates` 추가 + tests 업데이트. Phase 6.1 commit 시점에 다시 swap. DECISIONS R9 entry.
+- **Commit**: (Phase 4.2 fix — 다음 commit에 hash 갱신)
+- **Pattern**: SYSTEM_PROMPT 룰과 backend 구현 *gap*은 dogfooding 전엔 안 보임. LLM이 *너무 잘* 룰 따르면 — 룰이 미래 구현에 의존하는 경우 첫 호출이 전부 fail. 임시 fix + Phase 마일스톤 동기화.
 

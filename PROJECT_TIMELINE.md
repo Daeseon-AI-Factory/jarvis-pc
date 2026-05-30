@@ -361,4 +361,40 @@ NSWindow 5개 본질 사용자 검증 — Keynote 풀스크린/Mission Control/S
 
 ---
 
+## 2026-05-29 — Phase 4.2 fix: `coordinates` 반드시 강제 (v0.1 임시 swap, OCR 도입 전 가교)
+
+**Phase 4.2 commit hash backfill:** `1862076`.
+
+**첫 사용자 dogfooding 자료 (Phase 4.2 직후, log paste):**
+```
+[trigger] cursor=(809,386) screen=1728x1117@2.0x display=1
+[capture] physical 3456x2234 scale=2.0x display=1
+[capture] sent 1568x1014 (692692 bytes)
+[analyze] captured 692692 bytes in 0.1s
+[gemini] ok 2.3s — target_text="Terminal"        ← 실측!
+[analyze] complete 2.4s
+[analyze] no coordinates from LLM — OCR matcher (Phase 6.1) 필요
+[hud] present content type=error
+```
+
+**3가지 발견:**
+1. **Latency 실측 2.4s** (가설 8-15s 대비 ~5배 빠름) — Phase 5.x bubble UI 가설 갱신 (R8).
+2. **`target_text="Terminal"`** — LLM이 visible text 정확 룰 따랐음 (번역기 본질 동작 확인).
+3. **`coordinates` 키 LLM이 생략** — SYSTEM_PROMPT "fallback only" 룰 *잘 따라서*. Phase 6.1 OCR 없으니 모든 분석 fail → dogfooding 흐름 끊김 (R8).
+
+**v0.1 임시 fix (이 commit) — Phase 6.1까지 가교:**
+- `Prompts.swift` SYSTEM_PROMPT — `coordinates` 룰 swap: "fallback only" → "반드시 줘 (v0.1)". `x`, `y`, `w`, `h` 각 의미 + 이미지 좌표계 (좌상단 = `(0, 0)`) 명시. 아이콘처럼 visible text 없어도 `coordinates`는 줘.
+- `GeminiDispatcher.swift` responseSchema — `required`에 `coordinates` 추가. LLM이 schema-level로 강제.
+- `GeminiDispatcherTests` — 2 tests `required` set 업데이트.
+- 55/55 통과 (`swift build` 2.29s, `swift test` 0.213s).
+
+**R9** (DECISIONS.md): v0.1 임시 정책 swap (코드 안 `v0.1` 명시 + Phase 6.1 commit 시점에 다시 swap 강제).
+**R8 × 2** (docs/troubleshooting.md): Gemini 2.5 Flash latency 가설 갱신 (8-15s → 2.4s), LLM "fallback only" 룰 잘 따라 OCR 없으면 epoch fail.
+
+**한계 유지**: LLM 추정 좌표 ~70% — 박스 빗나갈 수 있음. 사용자가 빗나감 정도 확인 → OCR 가치 dogfooding 측정. Phase 6.1 commit 시점에 정책 다시 swap (verify workflow가 자기 모순 잡을 패턴).
+
+**다음:** Phase 6.1 — Vision OCR + ElementMatcher → deterministic 99% 좌표 → 정책 다시 fallback only로 swap.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)
