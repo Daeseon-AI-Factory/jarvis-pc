@@ -287,6 +287,46 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: `VNRecognizedTextObservation.boundingBox`는 normalized 0..1 *bottom-left* origin. 그대로 sent image px (top-left origin)로 곱하면 Y축 뒤집힘 — 박스가 위/아래 거꾸로.
 - **Cause**: Vision framework 좌표계는 *Core Graphics/SwiftUI* (bottom-left) 표준. CGImage / SCScreenshotManager 결과는 top-left. ElementMatcher는 sent image 좌표계 (top-left, DisplayGeometry와 일관) 가정.
 - **Fix**: OCRService에서 변환 한 줄로 명시 — `y = (1.0 - bb.maxY) * h`. `bb.maxY` 사용 이유: bottom-left bbox는 위쪽 모서리가 `maxY` (높은 y) → top-left에선 위쪽 모서리가 작은 y. 1에서 빼면 top-left y 좌표.
-- **Commit**: (Phase 6.1 — 다음 commit에 hash 갱신)
+- **Commit**: `95d4c57`
 - **Pattern**: Vision framework 좌표계 변환은 *한 곳*에서. 여러 곳에 흩어지면 top-left/bottom-left mix 함정 (Tauri Layer 6 유사). DisplayGeometry의 4-layer 변환과 일관 — `OCRService.recognize`가 sent image px (top-left) 반환, `ElementMatcher`가 그걸 `DisplayGeometry.logicalRectFromSentBox`로 logical pt 변환.
+
+---
+
+## ElementMatcher Unicode NFC/NFD silent mismatch — 한국어 매칭 fail (Phase 6.1 verify fix)
+
+- **Symptom**: 한국어 화면에서 LLM `target_text`와 OCR 결과가 *동일한 글자*인데 `ElementMatcher` 매칭 fail. 예: `"한글 메뉴"` target이 `"한글 메뉴"` box를 못 잡음.
+- **Cause**: macOS HFS+/APFS filename은 NFD(자모 분해, `ㅎ+ㅏ+ㄴ`)로 저장되고 Finder UI/OCR은 NFC(완성, `한`)로 표시되는 경우 흔함. Swift String `==`은 canonical equivalent로 같다고 인식하지만, **codepoint-level 비교** (`unicodeScalars`)는 다름. ElementMatcher의 Levenshtein 안 `Array<Character>` 비교가 *grapheme cluster* 기반이지만, 디버그 trace 어려움 + 정규화 누락 자체가 future risk.
+- **Fix**: `normalize()` 시작에 `.precomposedStringWithCanonicalMapping` 호출 (NFC 강제). defensive measure. Test가 `Array(s.unicodeScalars)` 비교로 sanity 검증.
+- **Commit**: (Phase 6.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: 한국어/일본어/베트남어 등 conjoining script 매칭 시 항상 NFC normalize 명시. Swift String `==`이 자동 처리하지만, codepoint 비교 (Array<UnicodeScalar>), Levenshtein, OCR 외부 source는 별도 보장 필요.
+
+---
+
+## ElementMatcher punctuation strip — md vs txt 다른 파일 정확 reject (Phase 6.1 verify fix)
+
+- **Symptom**: `target_text="CLAUDE.md"` 검색 시 OCR 결과 `"CLAUDE md"` (점 drop) 박스 매칭 fail. 반대로 `"CLAUDE.txt"` 박스가 0.78 sim으로 잘못 매칭.
+- **Cause**: substring 매칭은 punctuation 일치 요구 — OCR이 흔히 `.`, `,`, `:`, `·` 같은 typographic chars 누락 또는 다르게 인식. fuzzy fallback도 punctuation 차이로 sim 낮아짐.
+- **Fix**: `normalize()`에서 `CharacterSet.punctuationCharacters` strip. `"CLAUDE.md"` → `"claudemd"`, `"CLAUDE md"` → `"claudemd"` → substring 매칭. 단 `"CLAUDE.md"` vs `"CLAUDE.txt"` strip 후 `"claudemd"` vs `"claudetxt"` 여전히 다름 → 정확히 reject (다른 파일).
+- **Commit**: (Phase 6.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: 텍스트 매칭에서 punctuation은 OCR error의 가장 흔한 source. normalize 단계에서 strip — 정확도 ↑. 단 *의미 있는 punctuation 차이* (`.md` vs `.txt`)는 Levenshtein distance가 여전히 잡음 — 자동 reject.
+
+---
+
+## ElementMatcher 짧은 텍스트 fuzzy false positive — 'Save' vs 'Same' (Phase 6.1 verify fix)
+
+- **Symptom**: `target_text="Save"` 검색 시 화면의 다른 단어 `"Same"`이 wrong-box로 잡힘. Levenshtein 1/4 = 0.75 ≥ 기본 threshold 0.7 → fuzzy 통과.
+- **Cause**: 짧은 텍스트(≤6자)는 1자 차이 비율이 큼 — `"Save"` vs `"Same"` 0.75, `"Cancel"` vs `"Cancer"` 0.83. fuzzy 0.7 threshold는 *긴 텍스트*용 안전치. bubble UX는 매칭 박스를 직접 표시 → wrong-box가 가장 위험 fail mode.
+- **Fix**: `ElementMatcher`에 `shortTextThreshold = 0.85` 추가. `normalizedTarget.count <= 6`이고 caller가 default threshold 사용 시 auto-tighten. 명시적 caller threshold는 그대로 (test용 escape hatch). `"Save"` vs `"Same"` 0.75 < 0.85 → reject.
+- **Commit**: (Phase 6.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: fuzzy threshold는 텍스트 길이에 비례 — 짧은 텍스트 stricter. 매칭 알고리즘의 false positive 비용 (wrong-box 표시) > false negative (사용자 다시 시도) — stricter 기본 안전.
+
+---
+
+## Vision sync cancel API 부재 — async let 빠른 fail 시 OCR implicit wait (Phase 6.1 verify, SDK 한계 인정)
+
+- **Symptom**: `AnalyzeCoordinator`의 `async let dispatcherFuture + ocrFuture` 병렬에서 dispatcher 빨리 실패 시 — function return 전 `async let scope 종료` = `ocrFuture` implicit await. Vision sync는 끝까지 실행. 결과: `isRunning` defer는 풀리지만 *사용자 응답 지연*.
+- **Cause**: `VNRequest`에 `.cancel()` API 없음 (Apple SDK 한계). `Task.checkCancellation()`은 `perform()` *시작 전*에만 체크 가능, perform 중간 cancel 무시. `Task.detached` → `Task` 변경으로 isolation 일관성 + cancellation signal 전달은 하지만, Vision sync는 그 signal을 무시.
+- **Fix (부분)**: `Task.detached` → `Task` 변경 (parent isolation 상속, perform 전 `Task.checkCancellation` 체크). 미래 fix: `withTimeout(5s)` wrapper. 실측 mitigation: OCR latency (~1-2s) < dispatcher latency (3-4s) — 일반적으로 OCR이 먼저 끝남.
+- **Commit**: (Phase 6.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: Apple SDK의 sync API는 cancel 불가능. async let scope 종료 시 implicit wait는 *Vendor SDK 한계 인정*. 완벽 fix는 timeout + best-effort cleanup. Phase 7+ 시점에 `withTimeout` 도입 검토.
 

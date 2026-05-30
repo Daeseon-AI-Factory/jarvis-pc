@@ -853,6 +853,36 @@ Overlay box: 99% 정확
 
 **미해결:** dogfooding 자료 (false positive vs false negative 비율) 후 갱신. 또는 D (confidence-weighted) 도입.
 
+**[2026-05-29 갱신, Phase 6.1 verify fix]** Adversarial verify workflow가 짧은 텍스트 false positive HIGH 발견 (`"Save"` vs `"Same"` 0.75 통과). Length-aware threshold 추가:
+- `defaultThreshold = 0.7` (긴 텍스트, ≥7자)
+- `shortTextThreshold = 0.85` (≤6자 auto-tighten — caller가 default threshold 사용 시만)
+- 명시 caller threshold는 그대로 (test용 escape hatch)
+
+short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직격).
+
+---
+
+## 2026-05-29 — ElementMatcher 정규화 강화 (NFC + punctuation strip + tiebreaker)
+
+**배경:** Phase 6.1 adversarial verify workflow가 한국어 NFC/NFD silent mismatch, punctuation 처리 부재, tiebreaker 미정의 발견.
+
+**3가지 변경:**
+
+1. **NFC Unicode normalization** — Swift String `==`은 canonical equivalent로 같지만 codepoint 비교 (`unicodeScalars`, Levenshtein 내부)는 다를 수 있음. `normalize()` 시작에 `.precomposedStringWithCanonicalMapping` 명시. 한국어/일본어/베트남어 conjoining script defensive.
+
+2. **Punctuation strip** — `CharacterSet.punctuationCharacters` 제거. OCR error의 가장 흔한 source. `"CLAUDE.md"` vs `"CLAUDE md"` (점 drop) → 매칭. `"CLAUDE.md"` vs `"CLAUDE.txt"` strip 후에도 `"md"` vs `"txt"` Levenshtein 차이로 정확히 reject (다른 파일).
+
+3. **Confidence tiebreaker** — 같은 길이 substring 매칭 시 `OCRBox.confidence` 높은 박스 우선. 동일 button text가 dialog/menubar 양쪽에 있을 때 비결정적 동작 차단.
+
+**Trade-off vs cost:**
+- Punctuation strip이 `.md` vs `.txt` 정확한 reject 유지하면서 — OCR error는 흡수.
+- Tiebreaker 추가 코드 (~5줄). Confidence는 OCRBox에 이미 있음 — extra cost 없음.
+- NFC normalize는 Swift 자동 처리 외 defensive — extra cost ~1줄.
+
+**되돌리기 비용:** `normalize()` 3줄 변경 + substring sort 변경. 10분. 단 한국어 매칭 silent fail / wrong-box false positive 위험 재발.
+
+**미해결:** OCR latency 측정 (실측), confidence-weighted matching (현재는 fail-over 우선만).
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

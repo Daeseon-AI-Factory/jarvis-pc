@@ -438,4 +438,38 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-29 — Swift Phase 6.1 verify fix: ElementMatcher 정규화 강화 + 한계 인정
+
+**Phase 6.1 commit hash backfill:** `95d4c57`.
+
+**Adversarial verify workflow** (`phase-6-1-verify`, 7 agents / 211k tokens / ~4분):
+- 6 dimensions: vision-ocr-api / y-flip / element-matcher-algorithm / 3-tier-fallback / concurrency / r9-swap-back.
+- **Verdict: FIX_FIRST, ready_for_phase_5x: false**. 3 HIGH + 2 MEDIUM (BLOCKER 없음).
+
+**HIGH 3건 (이 commit에서 fix):**
+1. ElementMatcher Unicode NFC/NFD silent mismatch — 한국어 매칭 fail 위험 (R8). → `normalize()` 시작에 `.precomposedStringWithCanonicalMapping`.
+2. 짧은 텍스트 fuzzy false positive — `"Save"` vs `"Same"` 0.75 통과, wrong-box (R8/R9). → `shortTextThreshold = 0.85` ≤6자 auto-tighten.
+3. Task.detached cancellation 끊김 — dispatcher fail 시 OCR implicit wait, `isRunning` leak (R8, SDK 한계 인정). → `Task.detached → Task` (parent isolation 상속). Vision sync 자체 cancel API 없음 (Apple SDK 한계). 실측 mitigation: OCR ~1-2s < dispatcher ~3-4s.
+
+**MEDIUM 2건 (같이 fix):**
+4. Tiebreaker — 동일 길이 substring 매칭 confidence 높은 박스 우선 (R9).
+5. `supportedRecognitionLanguages(for:revision:)` deprecated → instance method `request.supportedRecognitionLanguages()`. ko-KR 미지원 시 `Log.notice` 추가.
+
+**Improvements 같이:**
+- Punctuation strip (`CharacterSet.punctuationCharacters`) — OCR error 가장 흔한 source 흡수. `.md` vs `.txt` Levenshtein 차이로 정확 reject 유지.
+- DisplayGeometry `box[2]/box[3] >= 0` guard — malformed LLM 응답 방어.
+- AppDelegate 에러 메시지 「」 corner-quote + 30자 truncate (postposition 회피 + UI overflow 방어).
+- Vision orientation assumption 명시 주석 (CGImage from PNG = top-left native).
+
+**Tests (5 new + 3 갱신)**: NFC normalization + 짧은 텍스트 false positive 차단 + short text substring 유지 + punctuation strip + confidence tiebreaker + customThreshold logic 갱신 + fuzzy match 시나리오 갱신 + md vs txt reject. 74/74 통과 (`swift build` 2.57s, `swift test` 0.211s).
+
+**R8 학습 자산 4건** (docs/troubleshooting.md): NFC silent fail, punctuation strip, 짧은 텍스트 false positive, Vision sync cancel SDK 한계.
+**R9 갱신** (DECISIONS.md): ElementMatcher 정규화 강화 + length-aware threshold.
+
+**Sweep → Implement → Verify → Implement(fix) → Verify** 3단계 반복 입증 — verify가 *번역기 본질 (한국어 정확)*과 *사용자 dogfooding 가장 위험 fail mode (wrong-box)*를 잡음.
+
+**다음:** Phase 5.x — HUDOverlayView bubble (한글 `next_action` 박스 옆, 화면 가장자리 clamping). target_text + next_action 둘 다 visible. 사용자 dogfooding로 짧은 텍스트 false positive / NFC 매칭 / SDK cancel 한계 실측.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

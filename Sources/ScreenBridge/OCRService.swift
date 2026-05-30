@@ -26,8 +26,12 @@ struct VisionOCRService: OCRService {
 
     func recognize(pngData: Data, sentSize: CGSize) async throws -> [OCRBox] {
         // Vision은 sync API — background thread에서.
-        try await Task.detached(priority: .userInitiated) {
-            try Self.recognizeSync(pngData: pngData, sentSize: sentSize)
+        // Task.detached → Task로 변경 (verify HIGH): parent actor isolation/priority 상속.
+        // 단 Vision sync 자체 cancel 불가 (Apple SDK 한계) — Vision perform 중간엔 cancel 무시.
+        // perform 시작 전 Task.checkCancellation으로 early-exit 가능.
+        try await Task(priority: .userInitiated) {
+            try Task.checkCancellation()
+            return try Self.recognizeSync(pngData: pngData, sentSize: sentSize)
         }.value
     }
 
@@ -47,18 +51,21 @@ struct VisionOCRService: OCRService {
         request.usesLanguageCorrection = true
         request.revision = VNRecognizeTextRequestRevision3
 
-        // 지원 언어 사전 확인 — ko-KR 없으면 en-US만 (SCRATCHPAD 기록 후 dev)
-        let supported = (try? VNRecognizeTextRequest.supportedRecognitionLanguages(
-            for: .accurate,
-            revision: VNRecognizeTextRequestRevision3
-        )) ?? []
+        // 지원 언어 사전 확인 — request configure 후 instance method 사용
+        // (type method `supportedRecognitionLanguages(for:revision:)`는 macOS 12+ deprecated, verify fix).
+        let supported = (try? request.supportedRecognitionLanguages()) ?? []
         var langs: [String] = []
         if supported.contains("ko-KR") {
             langs.append("ko-KR")
+        } else {
+            Log.dispatcher.notice("[ocr] ko-KR not in supported list — falling back to en-US only (한국어 화면 인식 불가)")
         }
         langs.append("en-US")
         request.recognitionLanguages = langs
 
+        // CGImage from PNG is top-left native → default .up orientation correct.
+        // ⚠️ source가 CIImage(EXIF orientation 가질 수 있음) 또는 IOSurface로 바뀌면
+        //    Y-flip 수학 (line 78-84) 재검증 필요 — OCRService.recognize의 좌표계 가정 깨짐.
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         do {
             try handler.perform([request])
@@ -74,7 +81,8 @@ struct VisionOCRService: OCRService {
         let boxes: [OCRBox] = observations.compactMap { obs in
             guard let candidate = obs.topCandidates(1).first else { return nil }
             // Vision boundingBox: normalized 0..1, *bottom-left* origin.
-            // → sent image px, top-left origin. Y-flip: `(1 - maxY) * h`.
+            // → sent image px, top-left origin. Y-flip:
+            //   bb.maxY = top edge (bottom-left에서 큰 y) → 1 - maxY = distance from top = top-left y.
             let bb = obs.boundingBox
             let rect = CGRect(
                 x: bb.minX * w,

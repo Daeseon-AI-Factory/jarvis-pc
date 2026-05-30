@@ -156,10 +156,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self.hud.presentAnnotation(HUDAnnotation(rect: local), on: screen)
                     return
                 }
-                // 3. 둘 다 실패 — 사용자 친화 에러
+                // 3. 둘 다 실패 — 사용자 친화 에러. 「」 corner quote (postposition 회피 — verify fix).
                 Log.app.notice("[analyze] no match (OCR + LLM coords both nil) — target_text=\"\(result.targetText, privacy: .public)\"")
+                let truncated = result.targetText.count > 30
+                    ? String(result.targetText.prefix(30)) + "…"
+                    : result.targetText
                 self.hud.presentError(
-                    message: "\"\(result.targetText)\"을(를) 화면에서 못 찾았어요.\n다시 시도하거나 다른 화면에서 시도해주세요.",
+                    message: "화면에서 「\(truncated)」을(를) 찾을 수 없었어요.\n다시 시도하거나 다른 화면에서 시도해주세요.",
                     on: screen
                 )
             case .failed(let err):

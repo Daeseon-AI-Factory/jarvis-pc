@@ -33,6 +33,8 @@ struct DisplayGeometry: Sendable {
     func logicalRectFromSentBox(_ box: [Int]) -> CGRect? {
         guard box.count == 4 else { return nil }
         guard sentSize.width > 0, sentSize.height > 0, backingScaleFactor > 0 else { return nil }
+        // verify fix: malformed LLM 응답 (음수 width/height) 방어
+        guard box[2] >= 0, box[3] >= 0 else { return nil }
 
         // sent → physical 비례
         let scaleX = physicalSize.width / sentSize.width

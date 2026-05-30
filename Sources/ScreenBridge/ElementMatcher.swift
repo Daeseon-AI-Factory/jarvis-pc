@@ -18,6 +18,10 @@ enum ElementMatcher {
     /// 기본 threshold — Phase 6.1 commit 시 fixed. dogfooding 후 DECISIONS R9 entry로 튜닝.
     static let defaultThreshold: Double = 0.7
 
+    /// 짧은 텍스트(≤6자) length-aware threshold — "Save" vs "Same" (0.75) false positive 차단.
+    /// Phase 6.1 verify fix.
+    static let shortTextThreshold: Double = 0.85
+
     /// `targetText`를 `candidates` 중 가장 매칭 잘 되는 OCRBox에 매핑.
     /// 매칭 성공 시 screen-local logical pt CGRect 반환 (HUDAnnotation.rect용).
     static func match(
@@ -29,29 +33,35 @@ enum ElementMatcher {
         let normalizedTarget = normalize(targetText)
         guard !normalizedTarget.isEmpty, !candidates.isEmpty else { return nil }
 
-        // 1. substring 매칭 (case-insensitive + whitespace normalize)
-        // 가장 짧은 (즉 가장 specific한) 매칭 우선 — "Sign in" 검색 시 "Sign in with Google" 보다
-        // "Sign in" 자체가 정확.
+        // 1. substring 매칭 (case-insensitive + NFC normalize + whitespace + punctuation strip)
+        // 가장 짧은 (= 가장 specific) 매칭 우선. 같은 길이면 confidence 높은 박스 선택 (tiebreaker).
         let substringMatches = candidates.filter { box in
             normalize(box.text).contains(normalizedTarget)
         }
-        if let best = substringMatches.min(by: {
-            normalize($0.text).count < normalize($1.text).count
-        }) {
+        if let best = substringMatches.sorted(by: { lhs, rhs in
+            let lhsLen = normalize(lhs.text).count
+            let rhsLen = normalize(rhs.text).count
+            if lhsLen != rhsLen { return lhsLen < rhsLen }
+            return lhs.confidence > rhs.confidence    // tiebreaker
+        }).first {
             Log.dispatcher.info(
                 "[match] substring hit — target=\"\(targetText, privacy: .public)\" box=\"\(best.text, privacy: .public)\""
             )
             return geometry.logicalRectFromSentBox(toIntBox(best.rectInSentImage))
         }
 
-        // 2. fuzzy — Levenshtein normalized similarity
+        // 2. fuzzy — Levenshtein normalized similarity.
+        // 짧은 텍스트(≤6자) auto-tighten — 단 caller가 명시적으로 threshold 줬으면 그대로.
+        let effectiveThreshold: Double = (threshold == Self.defaultThreshold && normalizedTarget.count <= 6)
+            ? shortTextThreshold
+            : threshold
         let scored: [(OCRBox, Double)] = candidates.compactMap { box in
             let sim = similarity(normalize(box.text), normalizedTarget)
-            return sim >= threshold ? (box, sim) : nil
+            return sim >= effectiveThreshold ? (box, sim) : nil
         }
         guard let best = scored.max(by: { $0.1 < $1.1 }) else {
             Log.dispatcher.notice(
-                "[match] fail — target=\"\(targetText, privacy: .public)\" no candidate ≥ threshold \(threshold, privacy: .public)"
+                "[match] fail — target=\"\(targetText, privacy: .public)\" no candidate ≥ threshold \(effectiveThreshold, privacy: .public)"
             )
             return nil
         }
@@ -63,8 +73,18 @@ enum ElementMatcher {
 
     // MARK: - helpers
 
+    /// `target_text` ↔ OCR text 정규화. 4단계:
+    /// 1. **NFC Unicode normalization** — 한글 NFD(ㅎ+ㅏ+ㄴ) vs NFC(한) silent mismatch 차단 (verify HIGH).
+    /// 2. `lowercased()` — case-insensitive.
+    /// 3. Punctuation strip — `.txt` vs `txt`, `File:` vs `File` 같은 OCR error 흡수.
+    /// 4. Whitespace 정규화 — multi-space → single space.
     static func normalize(_ s: String) -> String {
-        s.lowercased()
+        s.precomposedStringWithCanonicalMapping    // NFC: 한글 자모 합성
+            .lowercased()
+            .unicodeScalars
+            .filter { !CharacterSet.punctuationCharacters.contains($0) }
+            .map { String($0) }
+            .joined()
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
