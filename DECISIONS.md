@@ -827,6 +827,32 @@ Overlay box: 99% 정확
 
 **미해결 / lock-in 위험**: LLM 추정 좌표 ~70% — 사용자가 빗나간 박스 봄. dogfooding 자료로 OCR 가치 명확화. Phase 6.1 commit 시점에 *반드시* swap 다시 — 안 그러면 본질 ("99% 좌표는 OCR이 source") 자기 모순 (verify workflow가 잡을 패턴).
 
+**[2026-05-29 갱신, Phase 6.1 commit] lock-in 약속 지킴**: OCR matcher 도입 후 SYSTEM_PROMPT "fallback only" 정책 + responseSchema required에서 `coordinates` 제거. 본질 정확히 일관 — verify workflow가 자기 모순 잡을 패턴 사전 차단.
+
+---
+
+## 2026-05-29 — ElementMatcher fuzzy threshold 0.7 (Levenshtein similarity)
+
+**선택지:**
+- A. threshold 0.6 — 관대 (false positive 위험: 무관 텍스트도 박스 그어짐).
+- **B. threshold 0.7** — 균형 (Levenshtein "CLAUDE.md" ↔ "CLAUDE.txt" = 0.78 → 매칭, "CLAUDE.md" ↔ "totally different" = 0.0~0.1 → 거부).
+- C. threshold 0.85 — 엄격 (소문자/whitespace 차이만 허용, OCR 인식 오류 1-2자 허용 X).
+- D. confidence-weighted (OCR confidence × Levenshtein) — 미래 옵션.
+
+**Trade-off:** 매칭 성공률 vs false positive 위험 vs OCR 인식 오류 허용도.
+
+**선택:** **B (0.7)**.
+
+**근거:**
+- LLM이 `target_text`를 visible text 정확히 줘서 (실측 "CLAUDE.md" 정확) — 표면 정확도 높음.
+- 그러나 OCR이 1-2자 잘못 인식 가능 (`l`/`1`, `O`/`0`, 한글 점 등) → 엄격하면 매칭 fail.
+- substring 매칭 (case-insensitive)이 *우선* — 0.7 fuzzy는 fallback. 대부분 substring 단계에서 hit.
+- Phase 6.1 첫 dogfooding 후 *false positive 빈도* / *false negative 빈도* 측정. 갱신 가능.
+
+**되돌리기 비용:** `ElementMatcher.defaultThreshold` 상수 한 줄. unit test `customThreshold` 추가/제거. 5분.
+
+**미해결:** dogfooding 자료 (false positive vs false negative 비율) 후 갱신. 또는 D (confidence-weighted) 도입.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

@@ -18,9 +18,9 @@ struct GeminiDispatcherTests {
             Issue.record("responseSchema must be .object")
             return
         }
-        // v0.1 임시 정책: coordinates도 required (OCR matcher 도입 전 LLM 추정 좌표 사용).
-        // Phase 6.1에서 OCR 도입 시 required에서 다시 제거 → fallback only로 swap.
-        #expect(Set(req) == Set(["screen_state", "next_action", "target_text", "coordinates", "reasoning"]))
+        // Phase 6.1 정책 (lock-in): coordinates는 fallback only. OCR matcher가 target_text로
+        // 99% deterministic 좌표 결정 — coordinates는 schema 외 (LLM 추정은 OCR 실패 시만).
+        #expect(Set(req) == Set(["screen_state", "next_action", "target_text", "reasoning"]))
         #expect(props["screen_state"] == .string)
         #expect(props["next_action"] == .string)
         #expect(props["target_text"] == .string)
@@ -38,7 +38,7 @@ struct GeminiDispatcherTests {
         )
         #expect(json["type"] as? String == "OBJECT")
         let required = try #require(json["required"] as? [String])
-        #expect(Set(required) == Set(["screen_state", "next_action", "target_text", "coordinates", "reasoning"]))
+        #expect(Set(required) == Set(["screen_state", "next_action", "target_text", "reasoning"]))
 
         // OneOf/anyOf 절대 등장 X (Gemini 미지원)
         let raw = try #require(String(data: data, encoding: .utf8))

@@ -277,6 +277,16 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: 사용자 첫 분석 시도 — 모든 호출이 "이 화면에선 정확한 위치를 못 찾았어요" 에러. log: `[analyze] no coordinates from LLM — OCR matcher (Phase 6.1) 필요`.
 - **Cause**: SYSTEM_PROMPT(Phase 2.2)가 "`coordinates`는 fallback only. 평소엔 키 생략 — backend OCR가 `target_text`로 위치 정확히 찾는다" 명시 → LLM이 좋은 시민으로 키 생략. 그러나 Phase 6.1 OCR matcher 미작성 → AppDelegate.handleAnalyze의 fallback branch가 매번 trigger.
 - **Fix (v0.1 임시)**: Prompts.swift SYSTEM_PROMPT 룰 swap (`fallback only` → `반드시 줘 (v0.1)`) + GeminiDispatcher responseSchema `required`에 `coordinates` 추가 + tests 업데이트. Phase 6.1 commit 시점에 다시 swap. DECISIONS R9 entry.
-- **Commit**: (Phase 4.2 fix — 다음 commit에 hash 갱신)
+- **Commit**: `e674aea`
 - **Pattern**: SYSTEM_PROMPT 룰과 backend 구현 *gap*은 dogfooding 전엔 안 보임. LLM이 *너무 잘* 룰 따르면 — 룰이 미래 구현에 의존하는 경우 첫 호출이 전부 fail. 임시 fix + Phase 마일스톤 동기화.
+
+---
+
+## Vision OCR 좌표계 Y-flip — normalized bottom-left → sent image top-left (Phase 6.1)
+
+- **Symptom**: `VNRecognizedTextObservation.boundingBox`는 normalized 0..1 *bottom-left* origin. 그대로 sent image px (top-left origin)로 곱하면 Y축 뒤집힘 — 박스가 위/아래 거꾸로.
+- **Cause**: Vision framework 좌표계는 *Core Graphics/SwiftUI* (bottom-left) 표준. CGImage / SCScreenshotManager 결과는 top-left. ElementMatcher는 sent image 좌표계 (top-left, DisplayGeometry와 일관) 가정.
+- **Fix**: OCRService에서 변환 한 줄로 명시 — `y = (1.0 - bb.maxY) * h`. `bb.maxY` 사용 이유: bottom-left bbox는 위쪽 모서리가 `maxY` (높은 y) → top-left에선 위쪽 모서리가 작은 y. 1에서 빼면 top-left y 좌표.
+- **Commit**: (Phase 6.1 — 다음 commit에 hash 갱신)
+- **Pattern**: Vision framework 좌표계 변환은 *한 곳*에서. 여러 곳에 흩어지면 top-left/bottom-left mix 함정 (Tauri Layer 6 유사). DisplayGeometry의 4-layer 변환과 일관 — `OCRService.recognize`가 sent image px (top-left) 반환, `ElementMatcher`가 그걸 `DisplayGeometry.logicalRectFromSentBox`로 logical pt 변환.
 

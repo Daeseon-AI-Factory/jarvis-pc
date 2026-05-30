@@ -31,7 +31,7 @@ enum Prompts {
     }
     ```
 
-    `coordinates`는 **항상 줘 (v0.1)** — 정확히 4개 정수, 클릭/입력 대상의 픽셀 위치. 이미지 좌상단이 `(0, 0)`.
+    `coordinates`는 선택 — 화면에 visible text 없는 아이콘/이미지 메뉴 가리킬 때만. 평소엔 키 자체를 생략. backend가 `target_text`로 OCR 매칭해 정확한 위치를 찾는다.
 
     ## target_text 룰 (가장 중요)
 
@@ -68,18 +68,10 @@ enum Prompts {
     AI가 시킨 동작이 현재 화면에서 한 번에 안 보이면, *다음으로 누를 단 한 곳*만 가리켜라.
     "먼저 settings로 이동 후 …" 같은 다단계 응답 금지 — 항상 *지금 화면*의 한 동작.
 
-    ## coordinates 룰 (v0.1 — 반드시 줘)
+    ## coordinates 룰
 
-    `coordinates`는 **반드시** `[x, y, w, h]` 정수 4개 배열. 클릭/입력 대상 UI 요소의 픽셀 위치:
-    - `x`: 좌상단 x (이미지 좌측이 0)
-    - `y`: 좌상단 y (이미지 상단이 0)
-    - `w`: 너비 (px)
-    - `h`: 높이 (px)
+    *fallback only* — 화면에 visible text가 정말 없는 아이콘/이미지 메뉴를 가리킬 때만 `[x, y, w, h]` 정수 4개 배열. 좌표는 사용자가 본 이미지의 픽셀 기준 (좌상단 `(0, 0)`).
 
-    좌표는 사용자가 본 *이미지의 크기 기준 px*. 이미지 좌상단 = `(0, 0)`, 우측 = `+x`, 아래 = `+y`.
-
-    `target_text`도 같이 줘 (visible text 그대로). v0.2에서 backend OCR가 `target_text`로 위치를 더 정확히 잡을 거다. 지금은 너의 픽셀 추정이 사용자에게 보이는 빨간 박스가 된다 — 정확하게 추정해줘.
-
-    visible text가 없는 아이콘이라도 `coordinates`는 줘 (`target_text`는 빈 문자열 `""` 가능).
+    **평소엔 `coordinates` 키 자체를 생략하라.** backend의 OCR(Vision framework)가 `target_text`로 화면 내 위치를 *deterministic하게* 찾아 99% 정확한 픽셀을 결정한다 — 너의 추정보다 정확하다.
     """
 }

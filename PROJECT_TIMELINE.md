@@ -397,4 +397,45 @@ NSWindow 5개 본질 사용자 검증 — Keynote 풀스크린/Mission Control/S
 
 ---
 
+## 2026-05-29 — Swift Phase 6.1: Vision OCR + ElementMatcher → 99% 좌표 + 정책 swap back
+
+**Phase 4.2 fix commit hash backfill:** `e674aea`.
+
+**사용자 dogfooding 자료 (Phase 4.2 fix 후):**
+- `target_text="CLAUDE.md"` 정확 (LLM visible text 룰 perfect — Phase 6.1 input ready)
+- Gemini 3.9s, 이미지 939KB (capture 0.2s + Gemini 3.7s)
+- coordinates 받음 + 박스 떴음 — 단 빗나감 (~70% LLM 추정 한계, 사용자 직접 봄)
+
+**Phase 6.1 완료 (이 commit) — 99% deterministic 좌표 + 정책 lock-in:**
+
+- `Sources/ScreenBridge/OCRBox.swift` — `(text, rectInSentImage, confidence)` Sendable struct. sent image px 좌표 (top-left).
+- `Sources/ScreenBridge/OCRService.swift` — `OCRService` protocol + `VisionOCRService` 구현. `VNRecognizeTextRequest` .accurate / `VNRecognizeTextRequestRevision3` 명시 / ko-KR+en-US (지원 사전 확인 후 fallback) / usesLanguageCorrection. **Y-flip 한 곳** (Vision normalized bottom-left → sent image top-left, R8). `Task.detached(priority: .userInitiated)` background thread.
+- `Sources/ScreenBridge/ElementMatcher.swift` — 매칭 알고리즘. (1) case-insensitive substring 우선 (가장 짧은 = 가장 specific 박스 선택) → (2) Levenshtein normalized similarity ≥ 0.7 fallback. `normalize` (lowercase + whitespace 정규화). `logicalRectFromSentBox` 호출로 screen-local logical pt 반환.
+- `AnalyzeRequest.AnalyzeStage` — `.done`에 `matchedRect: CGRect?` 추가 (OCR 매칭 결과 또는 nil).
+- `AnalyzeCoordinator` — `OCRService` 주입 + `async let` 병렬 (dispatcher + OCR). OCR 실패는 fatal X — LLM coords fallback 가능. ElementMatcher 호출 → matched rect.
+- `AppDelegate.handleAnalyze` — 3-tier fallback: (1) `matchedRect` 우선 (OCR deterministic 99%) → (2) `result.coordinates` LLM 추정 fallback → (3) 둘 다 nil이면 한국어 에러 `"\"target_text\"을(를) 화면에서 못 찾았어요"`.
+
+**R9 lock-in swap back** (DECISIONS):
+- Prompts.swift `coordinates` 룰 swap back: "반드시 줘 (v0.1)" → "fallback only — 평소엔 키 생략. backend OCR가 99% deterministic".
+- GeminiDispatcher `responseSchema.required`에서 `coordinates` 제거.
+- GeminiDispatcherTests 2 tests `required` set swap back.
+- 본질 "99% 좌표는 OCR이 source" 일관 — verify workflow 자기 모순 사전 차단.
+
+**Tests (13 new)**: ElementMatcher 11 (substring/case/partial/specific/fuzzy/threshold/custom/edge × 4 + levenshtein/similarity helpers) + AnalyzeCoordinator update 2 (OCR matched / OCR no match). 누적 68/68 통과 (`swift build` 3.86s + deprecation warning, `swift test` 0.214s).
+
+**R8** (docs/troubleshooting): Vision OCR Y-flip 좌표계 변환.
+**R9 × 2** (DECISIONS): Phase 6.1 swap back lock-in + ElementMatcher fuzzy threshold 0.7 (튜닝 자료 dogfooding 후).
+
+**사용자 검증 흐름 (Phase 6.1 후):**
+1. `./dev.sh`
+2. ⌥+Space → "CLAUDE.md 찾아줘" + Analyze
+3. **빨간 박스가 *정확히* CLAUDE.md 사이드바 항목 위에 박힘** (deterministic 99%)
+4. log: `[match] substring hit — target="CLAUDE.md" box="CLAUDE.md"` + `[analyze] complete N.Ns OCR-matched`
+
+LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정확도 lock.
+
+**다음:** Phase 5.x — HUDOverlayView bubble (한글 `next_action` 박스 옆 + 화면 가장자리 clamping). `target_text` + `next_action` 둘 다 사용자 facing visible.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

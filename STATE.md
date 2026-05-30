@@ -20,9 +20,10 @@
 - [x] Swift Phase 3.1 verify fix (`131da7b`): adversarial verify workflow 4 BLOCKER + 3 HIGH. SCContentFilter Apple shape, NSScreen.main 자기 모순 fix, `globalAppKitRect` helper, Permission denial 1.5s 재확인, LastTriggerContext fresh fetch, codesign `--identifier`. 33 tests.
 - [x] Swift Phase 5.0 — HUDOverlayWindow 빈 골격 (`a51dc09`): NSPanel 5 본질 (Layer 1/4/7/8/9) + presentPlaceholderCenter. **첫 *눈으로 보는* 단계** — 사용자 직접 검증: 빨간 박스 떠봄 + ⌥Space dismiss OK.
 - [x] Swift Phase 4.2 — AnalyzeCoordinator + UserMessage + HUDContent (`1862076`): 진짜 동작 시작. ScreenCaptureService protocol + AnalyzeCoordinator actor + UserMessage 한국어 매핑 + HUDContent 3 case. 12 new tests.
-- [x] Swift Phase 4.2 fix — `coordinates` 반드시 강제 (이 commit, **v0.1 임시 swap, OCR 도입 전 가교**): 사용자 첫 dogfooding 발견 (LLM이 "fallback only" 룰 잘 따라 keys 생략 → Phase 6.1 OCR 없으니 매번 fail). Prompts.swift `coordinates` 룰 swap ("fallback only" → "반드시 줘 (v0.1)" + x/y/w/h 의미 + 이미지 좌표계 명시). GeminiDispatcher responseSchema `required`에 `coordinates` 추가. 실측 자료: Gemini 2.5 Flash latency **2.4s** (가설 8-15s 대비 ~5배 빠름) — Phase 5.x bubble UI 가설 갱신. target_text="Terminal" LLM 정확 (visible text 룰 동작). R9 (DECISIONS) + R8 × 2 (docs/troubleshooting). 55 tests 통과.
+- [x] Swift Phase 4.2 fix — `coordinates` 반드시 강제 (`e674aea`, v0.1 임시 swap): SYSTEM_PROMPT + schema required에 추가. Gemini latency 실측 2.4s, target_text 정확.
+- [x] Swift Phase 6.1 — Vision OCR + ElementMatcher → **99% deterministic 좌표** + 정책 swap back (이 commit): OCRBox struct, OCRService protocol + VisionOCRService (`VNRecognizeTextRequest` .accurate + revision 3 + ko-KR+en-US + Y-flip R8), ElementMatcher (substring → Levenshtein 0.7 threshold R9), AnalyzeStage.done에 `matchedRect: CGRect?` 추가, AnalyzeCoordinator async let 병렬 (dispatcher + OCR), AppDelegate 3-tier fallback (OCR > LLM coords > 한국어 에러). **R9 lock-in swap back**: Prompts coordinates "fallback only" + schema required 제거 + tests revert. 13 new tests (ElementMatcher 11 + AnalyzeCoordinator update 2). 68 tests 통과 (`swift build` 3.86s, `swift test` 0.214s).
 
-**Last commit:** Phase 4.2 fix (hash 다음 commit에 갱신)
+**Last commit:** Phase 6.1 (hash 다음 commit에 갱신)
 **검증 안 됨:** `swift run` 실제 smoke (menu bar 아이콘 + ⌥Space → panel). 사용자 manual 필요 — GUI라 agent가 직접 못 띄움.
 
 ## Next step (다음 세션 시작점)
@@ -36,9 +37,9 @@
 4b. ✅ Phase 3.1 verify fix (`131da7b`) — BLOCKER 3 + HIGH 3 from adversarial workflow.
 5. ✅ Phase 5.0 — HUDOverlayWindow 빈 골격 (`a51dc09`). 사용자 검증 통과.
 6. ✅ Phase 4.2 — AnalyzeCoordinator + UserMessage + HUDContent (`1862076`). *진짜 동작*.
-6b. ✅ Phase 4.2 fix — `coordinates` 반드시 강제 v0.1 임시 swap (이 commit). 사용자 dogfooding 흐름 회복.
-7. **Phase 6.1 (다음, 우선순위 ↑)** — Vision OCR (`VNRecognizeTextRequest` .accurate ko-KR+en-US revision 3 + Y-flip) + `OCRBox` struct + `ElementMatcher` (fuzzy substring → Levenshtein escalate, threshold 0.7). AnalyzeCoordinator에 OCR fork (capture와 병렬 가능 — async let) + `target_text` 매칭 → deterministic 좌표 → HUDAnnotation 교체. **Phase 6.1 commit 시점에 `coordinates` 정책 다시 fallback only로 swap** (verify workflow가 자기 모순 잡을 패턴).
-8. **Phase 5.x** — HUDOverlayView bubble (한글 `next_action` 박스 옆 + 화면 가장자리 clamping). target_text/next_action 둘 다 사용자 facing visible.
+6b. ✅ Phase 4.2 fix — `coordinates` 반드시 강제 v0.1 임시 swap (`e674aea`).
+7. ✅ Phase 6.1 — Vision OCR + ElementMatcher → 99% deterministic + 정책 swap back lock-in (이 commit).
+8. **Phase 5.x (다음)** — HUDOverlayView bubble (한글 `next_action` 박스 옆 + 화면 가장자리 clamping). target_text + next_action 둘 다 사용자 facing visible. + bubble overflow clamping (화면 가장자리 시).
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).
 5. Phase 5.0 (sweep swap) — `HUDOverlayWindow.swift` 빈 골격, dispatcher 무관 검증 (`level=.screenSaver` / `ignoresMouseEvents=true` 영구 / collectionBehavior 셋 / multi-monitor frame pin).
 6. Phase 4.2 — AnalyzeCoordinator (actor + async let 병렬, OCR forward declare stub) + TriggerPanel onSubmit 배선 + 한국어 에러 메시지 매핑 (network/timeout/permission/json → 비-AI-native 친화).

@@ -142,19 +142,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             let stage = await coordinator.run(req)
             switch stage {
-            case .done(let result, let geometry):
+            case .done(let result, let geometry, let matchedRect):
+                // 1. OCR 매칭 우선 (deterministic 99%) — Phase 6.1
+                if let rect = matchedRect {
+                    Log.app.info("[analyze] HUD annotated (OCR-matched) — target_text=\"\(result.targetText, privacy: .public)\"")
+                    self.hud.presentAnnotation(HUDAnnotation(rect: rect), on: screen)
+                    return
+                }
+                // 2. fallback — LLM 추정 coordinates (있으면)
                 if let coords = result.coordinates,
                    let local = geometry.logicalRectFromSentBox(coords) {
-                    Log.app.info("[analyze] HUD annotated — target_text=\"\(result.targetText, privacy: .public)\"")
+                    Log.app.info("[analyze] HUD annotated (LLM-fallback) — target_text=\"\(result.targetText, privacy: .public)\"")
                     self.hud.presentAnnotation(HUDAnnotation(rect: local), on: screen)
-                } else {
-                    // LLM이 coordinates 안 줬음 — Phase 6.1 OCR matcher 도입 후 fallback.
-                    Log.app.notice("[analyze] no coordinates from LLM — OCR matcher (Phase 6.1) 필요")
-                    self.hud.presentError(
-                        message: "이 화면에선 정확한 위치를 못 찾았어요.\n다음 버전에서 개선될 예정이에요.",
-                        on: screen
-                    )
+                    return
                 }
+                // 3. 둘 다 실패 — 사용자 친화 에러
+                Log.app.notice("[analyze] no match (OCR + LLM coords both nil) — target_text=\"\(result.targetText, privacy: .public)\"")
+                self.hud.presentError(
+                    message: "\"\(result.targetText)\"을(를) 화면에서 못 찾았어요.\n다시 시도하거나 다른 화면에서 시도해주세요.",
+                    on: screen
+                )
             case .failed(let err):
                 let msg = UserMessage.from(err)
                 Log.app.error("[analyze] failed → \(msg, privacy: .public)")

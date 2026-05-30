@@ -51,6 +51,19 @@ struct AnalyzeCoordinatorTests {
         }
     }
 
+    struct MockOCR: OCRService {
+        let boxes: [OCRBox]
+        func recognize(pngData: Data, sentSize: CGSize) async throws -> [OCRBox] {
+            boxes
+        }
+    }
+
+    struct EmptyOCR: OCRService {
+        func recognize(pngData: Data, sentSize: CGSize) async throws -> [OCRBox] {
+            []
+        }
+    }
+
     // MARK: - Fixtures
 
     private func mockGeometry() -> DisplayGeometry {
@@ -76,27 +89,50 @@ struct AnalyzeCoordinatorTests {
 
     // MARK: - Tests
 
-    @Test("run — capture + dispatcher 성공 → .done with result + geometry")
-    func runHappyPath() async {
+    @Test("run — OCR 매칭 성공 시 matchedRect 포함 (deterministic 99%)")
+    func runOCRMatched() async {
+        let ocrBoxes = [
+            OCRBox(text: "Save", rectInSentImage: CGRect(x: 50, y: 60, width: 80, height: 25), confidence: 0.95),
+            OCRBox(text: "Cancel", rectInSentImage: CGRect(x: 200, y: 60, width: 80, height: 25), confidence: 0.92),
+        ]
         let coord = AnalyzeCoordinator(
             capture: MockCapture(data: Data([1, 2, 3]), geometry: mockGeometry()),
-            dispatcher: MockDispatcher(result: mockResult())
+            dispatcher: MockDispatcher(result: mockResult()),    // target_text="Save"
+            ocr: MockOCR(boxes: ocrBoxes)
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
-        guard case .done(let result, let geom) = stage else {
+        guard case .done(let result, _, let matched) = stage else {
             Issue.record("expected .done, got \(stage)")
             return
         }
         #expect(result.targetText == "Save")
-        #expect(result.coordinates == [10, 20, 100, 30])
-        #expect(geom.displayID == 1)
+        // OCR 매칭 → "Save" box (x:50, y:60, w:80, h:25)
+        #expect(matched != nil)
+        #expect(matched?.minX == 50)
+        #expect(matched?.minY == 60)
+    }
+
+    @Test("run — OCR 매칭 실패 시 matchedRect nil (caller가 LLM fallback)")
+    func runOCRNoMatch() async {
+        let coord = AnalyzeCoordinator(
+            capture: MockCapture(data: Data(), geometry: mockGeometry()),
+            dispatcher: MockDispatcher(result: mockResult()),    // target_text="Save"
+            ocr: MockOCR(boxes: [])    // OCR 결과 없음
+        )
+        let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
+        guard case .done(_, _, let matched) = stage else {
+            Issue.record("expected .done")
+            return
+        }
+        #expect(matched == nil)
     }
 
     @Test("run — dispatcher throw → .failed(DispatcherError)")
     func runDispatcherFailure() async {
         let coord = AnalyzeCoordinator(
             capture: MockCapture(data: Data(), geometry: mockGeometry()),
-            dispatcher: ThrowingDispatcher(error: .maxTokens)
+            dispatcher: ThrowingDispatcher(error: .maxTokens),
+            ocr: EmptyOCR()
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
         guard case .failed(let err) = stage else {
@@ -112,7 +148,8 @@ struct AnalyzeCoordinatorTests {
     func runCapturePermissionDenied() async {
         let coord = AnalyzeCoordinator(
             capture: ThrowingCapture(error: .permissionDenied),
-            dispatcher: MockDispatcher(result: mockResult())
+            dispatcher: MockDispatcher(result: mockResult()),
+            ocr: EmptyOCR()
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
         guard case .failed = stage else {
@@ -134,7 +171,8 @@ struct AnalyzeCoordinatorTests {
         }
         let coord = AnalyzeCoordinator(
             capture: MockCapture(data: Data(), geometry: mockGeometry()),
-            dispatcher: SlowDispatcher(result: mockResult())
+            dispatcher: SlowDispatcher(result: mockResult()),
+            ocr: EmptyOCR()
         )
 
         // 동시 두 호출
