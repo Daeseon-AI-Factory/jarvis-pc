@@ -20,6 +20,7 @@ struct AnalysisResult: Codable, Sendable, Equatable {
     let screenState: String
     let nextAction: String
     let targetText: String
+    let targetRole: String?       // AX role hint (Phase 5.x multi-target ambiguity 차단)
     let coordinates: [Int]?
     let reasoning: String
     let raw: String
@@ -28,6 +29,7 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         screenState: String,
         nextAction: String,
         targetText: String,
+        targetRole: String? = nil,
         coordinates: [Int]? = nil,
         reasoning: String,
         raw: String = ""
@@ -35,6 +37,7 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         self.screenState = screenState
         self.nextAction = nextAction
         self.targetText = targetText
+        self.targetRole = targetRole
         self.coordinates = coordinates
         self.reasoning = reasoning
         self.raw = raw
@@ -44,6 +47,7 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         case screenState = "screen_state"
         case nextAction = "next_action"
         case targetText = "target_text"
+        case targetRole = "target_role"
         case coordinates
         case reasoning
     }
@@ -54,6 +58,7 @@ struct AnalysisResult: Codable, Sendable, Equatable {
             screenState: try c.decode(String.self, forKey: .screenState),
             nextAction: try c.decode(String.self, forKey: .nextAction),
             targetText: try c.decode(String.self, forKey: .targetText),
+            targetRole: try c.decodeIfPresent(String.self, forKey: .targetRole),
             coordinates: try c.decodeIfPresent([Int].self, forKey: .coordinates),
             reasoning: try c.decode(String.self, forKey: .reasoning),
             raw: ""
@@ -65,6 +70,7 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         try c.encode(screenState, forKey: .screenState)
         try c.encode(nextAction, forKey: .nextAction)
         try c.encode(targetText, forKey: .targetText)
+        try c.encodeIfPresent(targetRole, forKey: .targetRole)
         try c.encodeIfPresent(coordinates, forKey: .coordinates)
         try c.encode(reasoning, forKey: .reasoning)
     }
@@ -74,6 +80,7 @@ struct AnalysisResult: Codable, Sendable, Equatable {
             screenState: screenState,
             nextAction: nextAction,
             targetText: targetText,
+            targetRole: targetRole,
             coordinates: coordinates,
             reasoning: reasoning,
             raw: raw

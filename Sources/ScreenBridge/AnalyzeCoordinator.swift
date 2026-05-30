@@ -142,10 +142,17 @@ actor AnalyzeCoordinator {
             guard coords.count == 4 else { return nil }
             return geometry.logicalRectFromSentBox(coords)
         }
-        // Intent inference: instruction의 "켜기/열기" → AXDockItem 우선 (Chrome Dock vs MenuBar 모호함 차단)
-        let preferredRole = ElementMatcher.inferPreferredRole(from: req.instruction)
-        if let role = preferredRole {
-            Log.dispatcher.info("[match] preferred role from instruction: \(role, privacy: .public)")
+        // Preferred role: LLM이 명시한 target_role 우선, 없으면 instruction keyword 추론.
+        // LLM target_role이 더 정확 (instruction 분석 + 화면 context 둘 다 봄).
+        let preferredRole: String?
+        if let llmRole = result.targetRole, !llmRole.isEmpty {
+            preferredRole = llmRole
+            Log.dispatcher.info("[match] preferred role from LLM: \(llmRole, privacy: .public)")
+        } else if let inferred = ElementMatcher.inferPreferredRole(from: req.instruction) {
+            preferredRole = inferred
+            Log.dispatcher.info("[match] preferred role from instruction keyword: \(inferred, privacy: .public)")
+        } else {
+            preferredRole = nil
         }
         // Multi-target: top 2 distinct candidates. 사용자가 1번/2번 시각 선택 (user-in-the-loop).
         let matches = ElementMatcher.matchTop(

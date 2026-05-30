@@ -184,6 +184,7 @@ actor GeminiDispatcher: LLMDispatcher {
             "screen_state": .string,
             "next_action": .string,
             "target_text": .string,
+            "target_role": .string,                       // optional — AX role hint
             "coordinates": .array(items: .integer),
             "reasoning": .string,
         ],

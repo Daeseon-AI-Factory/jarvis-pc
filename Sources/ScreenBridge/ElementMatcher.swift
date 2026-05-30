@@ -368,7 +368,10 @@ enum ElementMatcher {
         }
 
         if !results.isEmpty {
-            Log.dispatcher.info("[match] top \(results.count, privacy: .public) — primary=\(results[0].sourceTag, privacy: .public)")
+            let rectsLog = results.enumerated().map { idx, r in
+                "#\(idx+1) \(r.sourceTag)@(\(Int(r.rect.minX)),\(Int(r.rect.minY)),\(Int(r.rect.width))x\(Int(r.rect.height)))"
+            }.joined(separator: " | ")
+            Log.dispatcher.info("[match] top \(results.count, privacy: .public): \(rectsLog, privacy: .public)")
         }
         return results
     }

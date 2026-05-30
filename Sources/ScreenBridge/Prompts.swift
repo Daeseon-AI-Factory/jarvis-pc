@@ -26,6 +26,7 @@ enum Prompts {
       "screen_state": "<화면이 무엇처럼 보이는지 한 문장>",
       "next_action": "<사용자에게 보여줄 다음 한 동작 — 친근한 한국어 한 문장>",
       "target_text": "<클릭/입력 대상 UI의 *실제 보이는* 텍스트 그대로>",
+      "target_role": "<UI 요소의 종류 — 아래 ## target_role 룰 참조>",
       "coordinates": [x, y, w, h],
       "reasoning": "<왜 이 동작인지 한 문장>"
     }
@@ -84,6 +85,28 @@ enum Prompts {
 
     AI가 시킨 동작이 현재 화면에서 한 번에 안 보이면, *다음으로 누를 단 한 곳*만 가리켜라.
     "먼저 settings로 이동 후 …" 같은 다단계 응답 금지 — 항상 *지금 화면*의 한 동작.
+
+    ## target_role 룰 (선택, 명시하면 정확도 ↑)
+
+    화면 *여러 위치*에 같은 텍스트가 있을 때 — `target_role`로 *어떤 종류*인지 명시. backend matcher가 그 종류 element 우선 선택. macOS Accessibility role 사용:
+
+    - `"AXDockItem"` — Dock 아이콘 (앱 launcher)
+       - "Chrome 켜기" / "Slack 열기" / "Finder로 가기" → AXDockItem
+    - `"AXMenuItem"` — 메뉴 항목 (앱 메뉴 / 컨텍스트 메뉴)
+       - "환경설정" / "Settings" / "Quit" / "복사" → AXMenuItem
+    - `"AXMenuBarItem"` — 메뉴바 최상단 (Apple / Chrome / File 같은)
+       - "메뉴바의 Chrome 메뉴 열기" → AXMenuBarItem
+    - `"AXButton"` — 일반 버튼 (dialog의 OK/Cancel/Save 등)
+       - "저장" / "확인" / "다음" → AXButton
+    - `"AXLink"` — 하이퍼링크 (웹사이트 / 본문)
+    - `"AXTextField"` — 입력 필드
+       - "주소창에 입력" / "검색창" → AXTextField
+    - `"AXCell"` / `"AXRow"` — 리스트 항목 (사이드바 파일 / 표 row)
+    - `"AXTab"` — 탭 (Chrome 탭 등)
+    - `"AXCheckBox"` / `"AXRadioButton"` — 체크박스 / 라디오
+    - `"AXImage"` — 텍스트 없는 이미지 메뉴 / 아이콘 (드뭄, 보통 위 role 중 하나)
+
+    **모르면 생략** — `target_text`만으로도 충분히 동작.
 
     ## coordinates 룰
 
