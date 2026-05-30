@@ -93,7 +93,12 @@ struct LiveAXService: AXService {
             let appElement = AXUIElementCreateApplication(app.pid)
             walkTree(element: appElement, appName: app.name, depth: 0, results: &elements)
         }
-        Log.dispatcher.info("[ax] queried \(elements.count, privacy: .public) clickable elements from \(apps.count, privacy: .public) apps")
+        // Dock items 명시 log — 디버그 시 "Chrome이 Dock에 있나" 즉시 확인 가능.
+        let dockItems = elements.filter { $0.role == "AXDockItem" }
+        let dockTexts = dockItems.map { $0.text }.joined(separator: ", ")
+        Log.dispatcher.info(
+            "[ax] queried \(elements.count, privacy: .public) elements from \(apps.count, privacy: .public) apps · dock=[\(dockTexts, privacy: .public)]"
+        )
         return elements
     }
 

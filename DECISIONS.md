@@ -1003,6 +1003,8 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **미해결:** keyword list dogfooding 후 확장 (한국어 + 영어 + 일본어). Phase 7+에 LLM이 직접 target_role 줄 수도.
 
+**[2026-05-30 갱신, prefer-only mode]**: 처음 fix는 *sort tiebreaker*만 — 약해서 wrong-box (Chrome menubar) 그대로. Strengthen: **preferred role 매칭 *있으면* 그것만 candidates** (다른 role 무시). 매칭 0개면 fallback to all (log notice). + AXService에 *Dock items 명시 log* — 디버그 시 "Chrome 진짜 Dock에 있나" 즉시 확인.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

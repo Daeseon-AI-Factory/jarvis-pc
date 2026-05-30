@@ -206,12 +206,6 @@ enum ElementMatcher {
             let lhsLen = normalize(lhs.text).count
             let rhsLen = normalize(rhs.text).count
             if lhsLen != rhsLen { return lhsLen < rhsLen }
-            // 동일 길이 — preferredRole 매칭이 최우선 (instruction intent)
-            if let role = preferredRole {
-                let lhsMatch = roleMatches(lhs.source, preferred: role)
-                let rhsMatch = roleMatches(rhs.source, preferred: role)
-                if lhsMatch != rhsMatch { return lhsMatch }
-            }
             // AX 우선 (deterministic 좌표), confidence tiebreaker
             let lhsAX = isAX(lhs.source)
             let rhsAX = isAX(rhs.source)
