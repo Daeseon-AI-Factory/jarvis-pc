@@ -244,4 +244,25 @@ Swift Phase 0.2 (menu-bar shell + Carbon hotkey + NSPanel, `63c0568`) 후 사용
 
 ---
 
+## 2026-05-29 — Swift Phase 3.1: ScreenCaptureKit + Permissions + 좌표 변환
+
+**Phase 2.3 commit hash backfill:** `8a60c2f`.
+
+**Phase 3.1 완료 (이 commit):**
+- `Sources/ScreenBridge/Permissions.swift` — Screen Recording (`CGPreflightScreenCaptureAccess` / `CGRequestScreenCaptureAccess`) + Accessibility (`AXIsProcessTrustedWithOptions`) + Settings URL fallback.
+- `Sources/ScreenBridge/TriggerContext.swift` — `LastTriggerContext` static. `HotKeyManager.onTrigger` 콜백 즉시 `capture()` → `(cursor, screen frame, backingScaleFactor, displayID, timestamp)` snapshot. Analyze 시점 cursor 절대 X (Tauri Layer 10 회피).
+- `Sources/ScreenBridge/DisplayGeometry.swift` — 4-layer 좌표 변환 (physical px → sent px → logical pt → screen-local) 캡슐화. `logicalRectFromSentBox([Int])` LLM sent px → screen-local logical pt CGRect (top-left). `NSScreen.main` 절대 금지 — captured display 기준 (Tauri Layer 9 회피).
+- `Sources/ScreenBridge/ScreenCapture.swift` — `captureCursorScreen()` async. SCShareableContent + SCContentFilter + SCStreamConfiguration (physical pixel 명시) + SCScreenshotManager.captureImage. CGContext draw `.high` interpolation 1568 다운스케일. NSBitmapImageRep PNG encode. 결과 `(Data, DisplayGeometry)`.
+- `AppDelegate.swift` — hotkey 콜백에 `LastTriggerContext.capture()` 추가 + startup에서 Screen Recording 권한 trigger (sweep advice 0.5단계 빨리).
+- `dev.sh` — ad-hoc codesign 추가 (`codesign --force -s - <binary>`) — TCC가 binary identity 기억해 매 빌드 권한 재요청 X.
+- `Tests/.../DisplayGeometryTests.swift` 5 tests (Retina 다운스케일 / identity / Retina only / invalid box / zero division). 누적 29/29 통과 (`swift build` 2.60s, `swift test` 0.006s).
+
+**R9 결정 2건** (DECISIONS.md): 권한 startup trigger (eager), ScreenCaptureKit (vs deprecated CGDisplayCreateImage).
+
+**R8 디버그 1건** (docs/troubleshooting.md): Swift 6 strict concurrency가 `kAXTrustedCheckOptionPrompt` (extern var) 거부 → string literal `"AXTrustedCheckOptionPrompt"` 대체.
+
+**다음:** Phase 5.0 — `HUDOverlayWindow.swift` 빈 골격 (dispatcher 무관 검증). NSPanel borderless + nonactivating + clear + `ignoresMouseEvents=true` 영구 + `level=.screenSaver` + collectionBehavior 3개 셋 (`canJoinAllSpaces` + `fullScreenAuxiliary` + `stationary`) + multi-monitor frame pin + 빨간 박스 1개 hardcode. dispatcher 정확도 무관하게 NSWindow 본질 5개 검증.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

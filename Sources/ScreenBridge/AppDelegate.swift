@@ -18,9 +18,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         triggerPanel = TriggerPanel()
 
         hotKey.onTrigger = { [weak self] in
+            // hotkey 시점에 cursor + screen + displayID 즉시 capture — Tauri Layer 10 회피.
+            // analyze 시점엔 cursor가 panel monitor로 옮겨가 있음.
+            LastTriggerContext.capture()
             self?.toggleTriggerPanel()
         }
         hotKey.register()
+
+        // 권한 startup trigger (sweep advice: 0.5단계 빨리 — Phase 3.1 작성 도중 silent fail 회피).
+        // Accessibility는 Phase 6.2 (AXUIElement) 시점에 별도 요청.
+        Task { @MainActor in
+            if !Permissions.hasScreenRecording() {
+                Log.app.notice("Screen Recording 권한 없음 — 다이얼로그 trigger")
+                Permissions.requestScreenRecording()
+            } else {
+                Log.app.info("Screen Recording 권한 OK")
+            }
+        }
 
         Log.app.info("launched — menu-bar accessory + ⌥Space hotkey ready")
     }

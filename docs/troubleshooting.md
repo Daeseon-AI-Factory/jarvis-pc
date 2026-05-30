@@ -192,6 +192,21 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: Phase 0.2 sweep audit 발견 — `InstallEventHandler` / `RegisterEventHotKey` 반환 OSStatus 무시. 다른 앱(Alfred/Raycast/Klack/한영 전환기 등)이 ⌥+Space 점유하면 사용자 ⌥Space 눌러도 panel 안 뜸 + log 0.
 - **Cause**: Carbon API 반환값 discard.
 - **Fix**: `let registerStatus = RegisterEventHotKey(...)` capture + 성공 시 `Log.hotkey.info("registered ⌥+Space")`, 실패 시 `Log.hotkey.error("OSStatus=\(registerStatus, privacy: .public) — Alfred/Raycast/Klack 등 점유 가능")`. 사용자가 `log stream` 으로 즉시 진단.
-- **Commit**: (Phase 2.3 — 다음 commit에 hash 갱신)
+- **Commit**: `8a60c2f`
 - **Pattern**: C API (특히 Carbon) 반환값은 *반드시* capture + 에러 시 명시 log. Silent fail은 사용자 못 봄 → debug burden 폭증.
+
+---
+
+## Swift 6 strict concurrency가 extern var `kAXTrustedCheckOptionPrompt` 거부 (Phase 3.1)
+
+- **Symptom**: build 시:
+  ```
+  error: reference to var 'kAXTrustedCheckOptionPrompt' is not concurrency-safe
+         because it involves shared mutable state
+  note: var declared here (AXUIElement.h: extern CFStringRef kAXTrustedCheckOptionPrompt)
+  ```
+- **Cause**: Swift 6 strict concurrency가 C `extern var`를 mutable shared state로 간주. `kAXTrustedCheckOptionPrompt`는 Apple HIServices가 노출한 `CFStringRef` extern — Swift 측 marking 없어 거부.
+- **Fix**: string literal로 대체 — `"AXTrustedCheckOptionPrompt"` (Apple 공식 const string과 동일). `AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)`. 의미 동일, concurrency-safe.
+- **Commit**: (Phase 3.1 — 다음 commit에 hash 갱신)
+- **Pattern**: Swift 6 strict concurrency가 C `extern var` 또는 unannotated mutable state 막을 때 — Apple 표준 const string은 literal로 대체 가능 (Apple stability 보장). 또는 `nonisolated(unsafe) let wrapper = ...` 패턴.
 

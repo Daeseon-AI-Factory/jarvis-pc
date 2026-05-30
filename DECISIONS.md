@@ -690,4 +690,46 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — 권한 startup trigger (eager) vs Phase 3 capture 호출 시점 (lazy)
+
+**선택지:**
+- **A. AppDelegate `applicationDidFinishLaunching` startup에서 `CGRequestScreenCaptureAccess()` 호출**.
+- B. `ScreenCapture.captureCursorScreen()` 호출 시점에 lazy로 권한 체크 + 거부 시 throw.
+- C. Sheet/modal로 명시 onboarding flow.
+
+**Trade-off:** dev 흐름 (silent fail 회피) + UX timing (첫 launch 다이얼로그 vs 첫 trigger) + 코드 복잡도.
+
+**선택:** **A**.
+
+**근거:**
+- Sweep workflow advice: 권한 다이얼로그는 Phase 3.1 capture 작성 도중 *silent fail*로 디버그 시간 잃는 함정 회피. 명시적으로 startup에서 trigger.
+- 사용자 좌절 흐름 일관 (memory `user-pain-dev-tool-friction`): 첫 launch에 권한 한 번 → 이후 안 물음. lazy는 첫 ⌥Space 누른 시점에 다이얼로그 → 사용자 흐름 끊김.
+- macOS 권한 다이얼로그 거부 시 *재출현 안 됨* — `Permissions.openScreenRecordingSettings()` URL + relaunch 안내 필요. lazy는 거부 시점이 첫 trigger라 onboarding 어색.
+- Accessibility는 별도 — Phase 6.2 (AXUIElement) 시점에 lazy로. 이유: v0.1엔 안 쓰니까 사용자 burden 미루기.
+
+**되돌리기 비용:** AppDelegate의 `Task { @MainActor in ... Permissions.requestScreenRecording() ... }` 블록 제거 + ScreenCapture.captureCursorScreen 안에 lazy 체크 + onboarding sheet 추가. 30분.
+
+---
+
+## 2026-05-29 — Screen capture: ScreenCaptureKit vs CGDisplayCreateImage (legacy)
+
+**선택지:**
+- **A. ScreenCaptureKit** (`SCShareableContent` + `SCContentFilter` + `SCScreenshotManager.captureImage`) — macOS 12.3+. 권한 명시 (Screen Recording TCC).
+- B. `CGDisplayCreateImage(displayID)` — Quartz Display Services 1.0부터. macOS 14에서 *deprecated*.
+- C. `CGWindowListCreateImage` — window-based, display 전체 캡처 가능. macOS 15+ deprecated 예정.
+
+**Trade-off:** API 안정성 + Apple 권장 + 미래 vs legacy 익숙도.
+
+**선택:** **A**.
+
+**근거:**
+- B/C는 macOS 14+에서 *deprecated*. Apple은 ScreenCaptureKit 강제 방향.
+- ScreenCaptureKit은 `SCStreamConfiguration`으로 pixel format / scale / showsCursor / captureResolution 명시 제어. Phase 3.1의 4-layer 좌표 변환에 정확한 physical pixel 필요 → 정밀 제어 필수.
+- `SCScreenshotManager.captureImage` (macOS 14+) 단일 호출로 one-shot 가능 — SCStream 비디오 시작 없이.
+- Permissions TCC 흐름이 명시적 — 사용자 좌절 흐름과 일관 (다이얼로그 startup trigger 가능).
+
+**되돌리기 비용:** `ScreenCapture.swift`의 SCShareableContent/SCContentFilter/SCStreamConfiguration/SCScreenshotManager → `CGDisplayCreateImage(displayID)` 한 줄. 단 macOS 14+에서 deprecation warning. 20분.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

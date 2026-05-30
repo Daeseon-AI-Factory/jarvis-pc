@@ -1,0 +1,207 @@
+---
+title: "Phase 3.1 — ScreenCaptureKit + Permissions + cursor 시점 capture + 4-layer 좌표 변환"
+date: "2026-05-29"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "사용자 화면 PNG 캡처 단계. ScreenCaptureKit(SCShareableContent + SCScreenshotManager) + 권한 startup eager trigger + LastTriggerContext static (hotkey 시점 cursor 저장 = Layer 10 회피) + DisplayGeometry 4-layer 좌표 변환 캡슐화 (Layer 6/9 회피). dev.sh에 codesign 추가로 TCC 매 빌드 재요청 차단."
+tags: ["swift", "screencapturekit", "permissions", "coords", "multi-monitor", "screenbridge"]
+---
+
+## 다섯 자리에 본질 박음
+
+Phase 3.1는 사용자 화면 → PNG Data 변환 + 좌표 architecture. Tauri 시절 16 layer 중 4개 (6/9/10/11)가 이 자리. 박은 본질:
+
+1. **권한 startup eager** — silent fail 회피 (DECISIONS R9)
+2. **LastTriggerContext static** — hotkey 시점 cursor (Layer 10)
+3. **DisplayGeometry 4-layer** — physical/sent/logical/screen-local 한 곳 (Layer 6)
+4. **NSScreen.main 절대 금지** — captured display 기준 (Layer 9)
+5. **ScreenCaptureKit (vs deprecated)** — SCShareableContent + SCScreenshotManager (R9)
+
+## 1. 권한 startup eager
+
+Sweep workflow advice: 권한 다이얼로그를 *Phase 3.1보다 0.5단계 빨리* — AppDelegate `applicationDidFinishLaunching`에서.
+
+```swift
+Task { @MainActor in
+    if !Permissions.hasScreenRecording() {
+        Log.app.notice("Screen Recording 권한 없음 — 다이얼로그 trigger")
+        Permissions.requestScreenRecording()
+    } else {
+        Log.app.info("Screen Recording 권한 OK")
+    }
+}
+```
+
+Lazy (capture 시점 체크)면 첫 ⌥Space에서 다이얼로그 → 사용자 흐름 끊김 + 거부 시 *재출현 안 됨* → onboarding 어색. Eager는 첫 launch 다이얼로그 한 번 → 이후 안 물음.
+
+Accessibility는 Phase 6.2 (AXUIElement) 시점에 lazy — v0.1엔 안 쓰니 burden 미루기.
+
+### Swift 6 strict concurrency 함정
+
+```swift
+let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String  // 빌드 에러
+```
+
+```
+error: reference to var 'kAXTrustedCheckOptionPrompt' is not concurrency-safe
+       because it involves shared mutable state
+```
+
+`kAXTrustedCheckOptionPrompt`는 C `extern CFStringRef` — Swift 6는 unannotated mutable state로 간주. 해결 = string literal `"AXTrustedCheckOptionPrompt"` (Apple 공식 const값과 동일):
+
+```swift
+let opts: CFDictionary = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+return AXIsProcessTrustedWithOptions(opts)
+```
+
+R8 docs/troubleshooting entry.
+
+## 2. LastTriggerContext static — hotkey 시점 cursor (Layer 10)
+
+Tauri Layer 10: analyze 호출 시 cursor 위치를 query하면 — 그때 cursor는 *TriggerPanel monitor*로 옮겨가 있음. 사용자가 처음 ⌥Space 누른 *원래 monitor* 캡처 못 함.
+
+해결 = hotkey 콜백 즉시 cursor snapshot:
+
+```swift
+@MainActor
+enum LastTriggerContext {
+    private(set) static var current: TriggerContext?
+
+    static func capture() {
+        let cursor = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(cursor, $0.frame, false) }
+            ?? NSScreen.main ?? NSScreen.screens.first
+        // ... displayID + frame + scale snapshot
+    }
+}
+```
+
+AppDelegate hotkey 콜백:
+
+```swift
+hotKey.onTrigger = { [weak self] in
+    LastTriggerContext.capture()      // ← 즉시
+    self?.toggleTriggerPanel()
+}
+```
+
+ScreenCapture가 `current?.screen` 신뢰.
+
+## 3. DisplayGeometry 4-layer 캡슐화 (Layer 6)
+
+좌표가 4단계 변환을 거침:
+
+```
+Layer 1. physical px   — ScreenCaptureKit이 반환한 원본 (Retina 2x/3x)
+Layer 2. sent px       — LLM에 보낸 다운스케일 (≤ 1568)
+Layer 3. logical pt    — AppKit/NSScreen 좌표
+Layer 4. screen-local  — NSScreen origin 기준 (HUD frame.origin 보정)
+```
+
+Tauri 시절엔 이 변환이 코드 여러 곳에 흩어져 — DPR mismatch로 box가 2배 오프셋. 해결 = 한 struct에 캡슐화 + 단방향 method:
+
+```swift
+struct DisplayGeometry: Sendable {
+    let displayID: CGDirectDisplayID
+    let screenFrame: NSRect
+    let backingScaleFactor: CGFloat
+    let physicalSize: CGSize
+    let sentSize: CGSize
+
+    func logicalRectFromSentBox(_ box: [Int]) -> CGRect? {
+        guard box.count == 4 else { return nil }
+        let scaleX = physicalSize.width / sentSize.width
+        let scaleY = physicalSize.height / sentSize.height
+        let physX = CGFloat(box[0]) * scaleX
+        let physY = CGFloat(box[1]) * scaleY
+        let physW = CGFloat(box[2]) * scaleX
+        let physH = CGFloat(box[3]) * scaleY
+        let lx = physX / backingScaleFactor
+        let ly = physY / backingScaleFactor
+        let lw = physW / backingScaleFactor
+        let lh = physH / backingScaleFactor
+        return CGRect(x: lx, y: ly, width: lw, height: lh)
+    }
+}
+```
+
+5 unit tests로 lock:
+1. Retina 2.0 + 1568 다운스케일 — 4-layer 변환
+2. HiDPI 없음 (1.0) + 다운스케일 없음 — identity
+3. Retina + 다운스케일 없음 (physical == sent)
+4. box 길이 ≠ 4 → nil
+5. 0 division 방어
+
+## 4. NSScreen.main 절대 금지 (Layer 9)
+
+Multi-monitor에서 `NSScreen.main`은 *키 focus 가진 monitor* 반환 — 사용자 cursor 있는 monitor와 다를 수 있음. Tauri 시절 monitors[0] 가정으로 잘못된 monitor 캡처.
+
+해결 = LastTriggerContext의 displayID 신뢰 + SCDisplay 매칭:
+
+```swift
+let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
+guard let display = content.displays.first(where: { $0.displayID == info.displayID }) else {
+    throw CaptureError.displayNotFound
+}
+```
+
+DisplayGeometry의 `currentScreen` getter도 displayID 매칭 — `NSScreen.main` 절대 X.
+
+## 5. ScreenCaptureKit vs deprecated CGDisplayCreateImage (R9)
+
+`CGDisplayCreateImage(displayID)` — macOS 14에서 *deprecated*. Apple은 ScreenCaptureKit 강제. Phase 3.1에 ScreenCaptureKit 채택:
+
+```swift
+let config = SCStreamConfiguration()
+config.width = Int(info.frame.width * info.scale)   // physical pixel
+config.height = Int(info.frame.height * info.scale)
+config.pixelFormat = kCVPixelFormatType_32BGRA
+config.showsCursor = true
+config.captureResolution = .best
+
+let filter = SCContentFilter(display: display, excludingWindows: [])
+
+let cgImage = try await SCScreenshotManager.captureImage(
+    contentFilter: filter,
+    configuration: config
+)
+```
+
+`SCScreenshotManager.captureImage` (macOS 14+): SCStream 비디오 시작 없이 one-shot. Phase 3.1 atomic 정신.
+
+## dev.sh codesign — TCC 매 빌드 재요청 차단
+
+`swift run`은 매 build마다 *binary path*가 약간 달라질 수 있음. macOS TCC (Transparency, Consent, Control) database는 *binary identity*를 기억하는데 — unsigned binary는 path 기반 → 매 빌드 권한 재요청.
+
+해결 = ad-hoc codesign:
+
+```bash
+BIN_PATH="$(swift build --show-bin-path)/ScreenBridge"
+codesign --force -s - "$BIN_PATH" 2>/dev/null || true
+```
+
+`-s -` ad-hoc identity. signed binary는 TCC가 hash 기반 식별 → 권한 유지.
+
+처음 launch 시 한 번만 macOS Settings > Privacy > Screen Recording에 ScreenBridge 추가 + 토글 ON. 이후 매 build에 권한 유지.
+
+## 29 tests, build 2.60s, test 0.006s
+
+```
+6 AnalysisResult + 4 Prompts + 8 Env + 6 GeminiDispatcher + 5 DisplayGeometry = 29/29 pass
+```
+
+ScreenCapture의 실측 (실제 SC API)은 unit test에선 못 함 — 권한 + 실 display 필요. Phase 4.2 (analyze flow) + 사용자 ⌥Space 누른 후 log stream으로 검증.
+
+## 다음
+
+Phase 5.0 (sweep advice swap) — HUDOverlayWindow 빈 골격. *dispatcher 무관* 검증:
+
+- NSPanel borderless + nonactivating + clear + `ignoresMouseEvents=true` 영구
+- `level=.screenSaver` (메뉴바/Dock 위)
+- `collectionBehavior=[.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]` 셋 — Keynote 풀스크린 위에도 (Layer 7)
+- Multi-monitor frame pin (cursor screen)
+- 빨간 박스 1개 hardcode
+
+이걸 박아 NSWindow 본질 5개 (Layer 1/4/7/8/9)를 *dispatcher 정확도와 분리해* 검증. 후속 Phase에서 좌표 어긋날 때 "window 잘못 떴나 / dispatcher 잘못 줬나 / OCR 잘못 잡았나" 3-way 모호함 사전 차단.
