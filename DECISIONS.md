@@ -754,4 +754,34 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — HUD overlay architecture: single screen-wide window + SwiftUI 내 박스 vs N box-sized window
+
+**선택지:**
+- **A. Single `HUDOverlayWindow` per screen, screen 전체 frame + SwiftUI 안에 박스/bubble**.
+- B. Box-sized NSWindow per annotation (작은 frame만, 박스 크기) + multi-window 관리.
+- C. NSWindow 1개를 모든 monitor에 setFrame (union frame) — multi-monitor 단일 window.
+
+**Trade-off:**
+
+| 축 | A (screen-wide single) | B (box-sized N) | C (union all monitors) |
+| --- | --- | --- | --- |
+| multi-monitor | cursor screen 1 window | 박스마다 정확 좌표 | union frame 복잡 + 비효율 |
+| click-through | screen 전체 (사용자 desktop 클릭 OK) | 박스 위에만 | union 전체 |
+| 좌표 변환 | `window.setFrame(screen.frame)` raw OK + SwiftUI 좌표 그대로 | 박스마다 `globalAppKitRect` 강제 | union frame 산수 |
+| bubble overflow | SwiftUI clamping | window reposition | union 안에서 |
+| 자기 캡처 (Phase 4.2) | sharingType=.none 1개 | sharingType=.none N개 (관리) | 1개 |
+| 향후 다중 박스 + bubble + 화살표 | SwiftUI layout 자연 | N 새 window 생성 | SwiftUI layout |
+
+**선택:** **A**.
+
+**근거:**
+- v0.1은 *한 화면 = 한 동작* (Prompts SYSTEM_PROMPT 본질) — 박스 1개. 단 향후 multi-step에 박스 + bubble + 화살표 component 추가 시 A의 SwiftUI 안 layout이 자연스러움.
+- B는 외부 monitor 시 박스마다 `globalAppKitRect(fromLocalTopLeft:)` 강제 — verify fix lesson 적용 자리지만 일관성 cost > 단순성.
+- C는 union frame이 multi-monitor 다른 backingScaleFactor 시 복잡 + Tauri 시절 모든 monitor 덮기 시도 (multi-monitor 함정 가중) 회피 정신과 충돌.
+- A의 `screen.frame`은 global AppKit이라 raw `setFrame` 안전 — verify fix lesson "raw 금지"는 partial conversion (`logicalRectFromSentBox` 결과)에만 적용, `screen.frame`은 별개. `HUDController.present` 주석에 명시.
+
+**되돌리기 비용:** `HUDOverlayWindow`/`HUDController` 변경. B로 가면 박스마다 NSWindow + `globalAppKitRect` 호출. 1일.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

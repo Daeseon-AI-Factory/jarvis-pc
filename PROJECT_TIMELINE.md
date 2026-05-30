@@ -295,4 +295,35 @@ Swift Phase 0.2 (menu-bar shell + Carbon hotkey + NSPanel, `63c0568`) 후 사용
 
 ---
 
+## 2026-05-29 — Swift Phase 5.0: HUDOverlayWindow 빈 골격 — *첫 눈으로 보는 단계*
+
+**Phase 3.1 verify fix commit hash backfill:** `131da7b`.
+
+**Phase 5.0 완료 (이 commit) — 안경 메타포 시각화 첫 시도:**
+
+- `HUDOverlayWindow.swift` — NSPanel borderless + nonactivating + clear + hasShadow=false + `level=.screenSaver` + collectionBehavior 3개 (canJoinAllSpaces + fullScreenAuxiliary + stationary) + `ignoresMouseEvents=true` 영구 + `sharingType=.none` + canBecomeKey/canBecomeMain=false. NSWindow 본질 5개 (Layer 1/4/7/8/9 회피) lock.
+- `HUDOverlayView.swift` — `HUDAnnotation` (rect: CGRect, Sendable+Equatable) + SwiftUI View (ZStack + Color.clear + RoundedRectangle stroke .red lineWidth 3 corner 4).
+- `HUDController.swift` — `present(annotation, on screen)` + `dismiss()` + `presentPlaceholderCenter(on screen)` hardcode 300x50 빨간 박스 화면 중앙. `screen.frame` raw setFrame 안전 명시 (global AppKit, partial conversion 결과 아님).
+- `AppDelegate.swift` — `HUDController` 소유 + `handleHotkey` (HUD 떠있으면 dismiss, 아니면 panel toggle) + `handleAnalyze` (cursorScreen → `presentPlaceholderCenter`) + `cursorScreen` helper (LastTriggerContext.displayID 우선, fallback `NSScreen.screens.first` — verify fix lesson).
+- `TriggerPanel.swift` — `TriggerPanel(onAnalyze:)` closure init + TriggerPanelView `onAnalyze` callback. Analyze 후 panel 자기 close → HUD 뜸 (사용자가 본 화면 다시 보임).
+
+**Tests (10 new)**: HUDOverlayWindow 8 (transparent + click-through + level + collectionBehavior 3 bits + styleMask + canBecomeKey/Main + sharingType + isReleasedWhenClosed). HUDController 2 (초기 isShowing=false + dismiss no-op).
+
+**누적 43/43 통과** (`swift build` 2.15s, `swift test` 0.122s).
+
+**R9** (DECISIONS.md): HUD architecture (single screen-wide + SwiftUI 내 박스 vs N box-sized window vs union all monitors).
+
+**사용자 검증 흐름 (Phase 5.0 직후 — 첫 *눈으로 보는* 단계):**
+1. `./dev.sh` 새 binary
+2. ⌥+Space → trigger panel
+3. 텍스트 입력 + Analyze (또는 ⌘Return)
+4. **화면 중앙에 빨간 박스 1개 뜸** (300x50 hardcode)
+5. ⌥+Space → 빨간 박스 dismiss
+
+NSWindow 5개 본질 사용자 검증 — Keynote 풀스크린/Mission Control/Stage Manager에서도 박스 보이는지 + 클릭 desktop으로 통과하는지 + 다른 monitor에서도 cursor 있는 monitor에 뜨는지.
+
+**다음:** Phase 4.2 — `AnalyzeCoordinator` (actor, async let capture+dispatcher 병렬) + `AnalyzeRequest`/`AnalyzeStage` enum + TriggerPanel loading spinner + 한국어 에러 메시지 매핑. handleAnalyze가 hardcode 대신 *진짜 capture + dispatcher + DisplayGeometry* 호출. ~1-1.5시간.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

@@ -9,7 +9,7 @@ import SwiftUI
 /// 뜨면서 그 앱의 key focus를 덜 뺏는다. 단 textarea 입력 위해 becomesKey 허용.
 @MainActor
 final class TriggerPanel: NSPanel {
-    init() {
+    init(onAnalyze: @escaping @MainActor (String) -> Void) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 520, height: 280),
             styleMask: [.titled, .closable, .nonactivatingPanel, .fullSizeContentView],
@@ -24,9 +24,16 @@ final class TriggerPanel: NSPanel {
         self.hidesOnDeactivate = false
         self.isReleasedWhenClosed = false
 
-        let root = TriggerPanelView(onCancel: { [weak self] in
-            self?.orderOut(nil)
-        })
+        let root = TriggerPanelView(
+            onCancel: { [weak self] in
+                self?.orderOut(nil)
+            },
+            onAnalyze: { [weak self] instruction in
+                // Analyze 직후 panel close — 사용자가 본 화면 다시 보여야 HUD 위 가이드 의미 있음.
+                self?.orderOut(nil)
+                onAnalyze(instruction)
+            }
+        )
         self.contentView = NSHostingView(rootView: root)
     }
 
@@ -51,6 +58,7 @@ final class TriggerPanel: NSPanel {
 
 struct TriggerPanelView: View {
     var onCancel: () -> Void
+    var onAnalyze: (String) -> Void
     @State private var instruction: String = ""
 
     var body: some View {
@@ -72,8 +80,7 @@ struct TriggerPanelView: View {
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)  // ESC
                 Button("Analyze") {
-                    // Phase 4.2에서 AnalyzeCoordinator 호출 + 결과 HUD. 지금은 placeholder.
-                    Log.panel.info("analyze submit (placeholder): \(instruction.count, privacy: .public) chars")
+                    onAnalyze(instruction)
                 }
                 .keyboardShortcut(.defaultAction)  // ⌘Return
                 .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

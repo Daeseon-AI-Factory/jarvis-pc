@@ -1,0 +1,180 @@
+---
+title: "Phase 5.0 — HUDOverlayWindow 빈 골격: 안경 메타포 첫 시각화"
+date: "2026-05-29"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "사용자가 처음으로 *눈으로 보는* 단계. NSPanel borderless + transparent + click-through 영구 + level=.screenSaver + collectionBehavior 3개. 화면 중앙 빨간 박스 1개 hardcode — dispatcher 정확도와 분리해 NSWindow 본질 5개 검증. Phase 5.x/6.x에서 진짜 LLM 좌표 연결."
+tags: ["swift", "nspanel", "hud-overlay", "click-through", "multi-monitor", "screenbridge"]
+---
+
+ScreenBridge가 *번역기*다 — AI 추상 지시를 사용자 화면에 박는다. Phase 5.0이 그 *박는 자리*를 처음 시각화. 빨간 박스 1개 hardcode, 화면 중앙에. dispatcher 정확도와 분리해 *NSWindow 본질 5개*만 검증.
+
+## NSWindow 본질 5개 (Layer 1/4/7/8/9)
+
+Tauri 시절 16 layer 중 5개가 이 자리. Apple SDK는 한 줄씩 — 그 한 줄을 *제대로* 박았는지 test로 lock.
+
+```swift
+@MainActor
+final class HUDOverlayWindow: NSPanel {
+    init() {
+        super.init(
+            contentRect: .zero,
+            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        // Layer 1 — transparent + 그림자 X
+        self.isOpaque = false
+        self.backgroundColor = .clear
+        self.hasShadow = false
+
+        // Layer 3 — 메뉴바/Dock 위
+        self.level = .screenSaver
+
+        // Layer 7/8 — 풀스크린 + 모든 Space + 자기 Space 고정
+        self.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .stationary,
+        ]
+
+        // Layer 4 — 영구 click-through. PR review reject toggle 추가.
+        self.ignoresMouseEvents = true
+
+        // 자기 캡처 (Phase 4.2)에 자기 HUD 안 들어감 — 무한 루프 차단
+        self.sharingType = .none
+
+        self.hidesOnDeactivate = false
+        self.isReleasedWhenClosed = false
+    }
+
+    // focus 절대 안 뺏음 — 사용자가 본 앱 그대로 키보드 입력 가능.
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+}
+```
+
+8 unit tests로 lock:
+- transparent + hasShadow=false (회색 그림자 사각형 차단)
+- ignoresMouseEvents=true 영구 (PR review reject toggle)
+- level=.screenSaver
+- collectionBehavior 3개 bits
+- styleMask borderless + nonactivatingPanel + fullSizeContentView
+- canBecomeKey/canBecomeMain=false (focus 안 뺏음)
+- sharingType=.none (자기 캡처에 안 들어감)
+- isReleasedWhenClosed=false (dismiss 후 reuse)
+
+## HUDController — present / dismiss / hardcode placeholder
+
+`HUDController`가 window lifecycle. Phase 5.0 핵심 = `presentPlaceholderCenter`:
+
+```swift
+func presentPlaceholderCenter(on screen: NSScreen) {
+    let boxW: CGFloat = 300
+    let boxH: CGFloat = 50
+    let local = CGRect(
+        x: (screen.frame.width - boxW) / 2,
+        y: (screen.frame.height - boxH) / 2,
+        width: boxW,
+        height: boxH
+    )
+    present(annotation: HUDAnnotation(rect: local), on: screen)
+}
+```
+
+`present`는 screen 전체 frame setFrame + SwiftUI HUDOverlayView contentView:
+
+```swift
+win.setFrame(screen.frame, display: false)   // screen.frame은 global AppKit, raw OK
+win.contentView = NSHostingView(rootView: HUDOverlayView(annotation: annotation))
+win.orderFrontRegardless()   // makeKeyAndOrderFront 절대 금지 — focus 안 뺏음
+```
+
+⚠️ verify fix lesson 적용 자리: `logicalRectFromSentBox` 결과 (screen-local top-left)를 raw `setFrame`에 X. 단 `screen.frame`은 이미 global AppKit이라 raw OK. Phase 5.x/6.x에서 LLM 좌표 사용 시 `globalAppKitRect(fromLocalTopLeft:)` 강제.
+
+## R9 — single screen-wide window vs N box-sized
+
+세 가지 옵션 중 **A. single screen-wide window + SwiftUI 내 박스** 선택:
+
+- B (box-sized N windows): 외부 monitor마다 `globalAppKitRect` 강제 — verify lesson 적용 자리지만 일관성 cost > 단순성.
+- C (union all monitors): union frame multi-monitor mixed DPI 시 복잡 + Tauri 시절 모든 monitor 덮기 시도 회피 정신 충돌.
+- **A**: cursor screen만 cover (v0.1 sweep 정신). 향후 multi-step (박스 + bubble + 화살표) SwiftUI layout 자연. screen.frame은 global이라 raw setFrame 안전.
+
+DECISIONS.md R9 entry full.
+
+## ⌥+Space 토글 흐름
+
+```
+HUD 떠있음? → dismiss
+HUD 없음 + panel 떠있음? → panel close
+HUD 없음 + panel 없음? → panel show
+```
+
+AppDelegate:
+
+```swift
+private func handleHotkey() {
+    if hud.isShowing {
+        hud.dismiss()
+        return
+    }
+    toggleTriggerPanel()
+}
+```
+
+`handleAnalyze`는 panel close 후 HUD show:
+
+```swift
+private func handleAnalyze(instruction: String) {
+    guard let screen = cursorScreen() else {
+        Log.app.error("[analyze] no NSScreen for HUD — fallback to first")
+        return
+    }
+    hud.presentPlaceholderCenter(on: screen)
+}
+
+private func cursorScreen() -> NSScreen? {
+    if let ctx = LastTriggerContext.current {
+        if let s = NSScreen.screens.first(where: {
+            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == ctx.screen.displayID
+        }) {
+            return s
+        }
+    }
+    let cursor = NSEvent.mouseLocation
+    return NSScreen.screens.first { NSMouseInRect(cursor, $0.frame, false) }
+        ?? NSScreen.screens.first   // verify fix lesson — NSScreen.main 절대 금지
+}
+```
+
+## 사용자 검증 흐름 — *처음 눈으로 보는 단계*
+
+```
+1. ./dev.sh                                    ← 새 binary
+2. ⌥+Space                                      ← trigger panel
+3. 텍스트 입력 + Analyze (또는 ⌘Return)
+4. 화면 중앙에 빨간 박스 1개 뜸 (300x50 hardcode) ← 여기가 첫 *눈으로*
+5. ⌥+Space                                      ← 빨간 박스 dismiss
+```
+
+본질 검증할 시나리오:
+- Keynote 풀스크린 위에 빨간 박스 보임?
+- Mission Control에서 자기 Space에 고정?
+- 박스 *위 클릭*이 desktop으로 통과?
+- 외부 monitor에 cursor 있을 때 그 monitor에 뜸?
+- 다른 앱 focus 안 뺏음? (키보드 입력 그대로)
+
+## 43 tests, build 2.15s, test 0.122s
+
+```
+6 AnalysisResult + 4 Prompts + 8 Env + 6 GeminiDispatcher
++ 9 DisplayGeometry + 8 HUDOverlayWindow + 2 HUDController = 43/43 pass
+```
+
+## 다음
+
+Phase 4.2 — `AnalyzeCoordinator` actor + `AnalyzeRequest`/`AnalyzeStage` enum + TriggerPanel loading spinner + 한국어 에러 매핑. handleAnalyze가 *hardcode 대신 진짜 capture + dispatcher + DisplayGeometry* 호출. LLM 응답 `coordinates` (있으면) → `logicalRectFromSentBox` → HUDAnnotation.rect → present. *진짜 동작* 첫 시도.
+
+Phase 5.0 commit 후에도 adversarial verify workflow 권장 — NSWindow click-through 영구가 진짜 영구인지, sharingType=.none이 ScreenCaptureKit 실측 통과인지.

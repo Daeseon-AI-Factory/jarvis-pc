@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let hotKey = HotKeyManager()
     private var triggerPanel: TriggerPanel?
+    private let hud = HUDController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // dock 안 보임, menu bar only. SwiftPM엔 Info.plist LSUIElement를 못
@@ -15,13 +16,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         setUpStatusItem()
-        triggerPanel = TriggerPanel()
+        triggerPanel = TriggerPanel(onAnalyze: { [weak self] instruction in
+            self?.handleAnalyze(instruction: instruction)
+        })
 
         hotKey.onTrigger = { [weak self] in
             // hotkey 시점에 cursor + screen + displayID 즉시 capture — Tauri Layer 10 회피.
-            // analyze 시점엔 cursor가 panel monitor로 옮겨가 있음.
             LastTriggerContext.capture()
-            self?.toggleTriggerPanel()
+            self?.handleHotkey()
         }
         hotKey.register()
 
@@ -90,6 +92,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             panel.showCentered()
         }
+    }
+
+    /// ⌥+Space 흐름: HUD 떠있으면 dismiss, 아니면 panel toggle.
+    /// (Phase 5.0 — Analyze 누르면 HUD 뜨고 panel close → 다시 ⌥+Space로 HUD 닫음)
+    private func handleHotkey() {
+        if hud.isShowing {
+            hud.dismiss()
+            return
+        }
+        toggleTriggerPanel()
+    }
+
+    /// Analyze 콜백 — Phase 5.0은 *hardcode 빨간 박스 1개* 화면 중앙에.
+    /// Phase 4.2에서 capture + dispatcher + DisplayGeometry로 진짜 분석 연결.
+    private func handleAnalyze(instruction: String) {
+        Log.panel.info("analyze submit (Phase 5.0 placeholder): \(instruction.count, privacy: .public) chars — HUD hardcode center")
+        guard let screen = cursorScreen() else {
+            Log.app.error("[analyze] no NSScreen for HUD — fallback to first")
+            return
+        }
+        hud.presentPlaceholderCenter(on: screen)
+    }
+
+    /// LastTriggerContext의 displayID 우선, 없으면 cursor 위치, 최후 screens.first.
+    /// ⚠️ NSScreen.main 절대 금지 (Tauri Layer 9).
+    private func cursorScreen() -> NSScreen? {
+        if let ctx = LastTriggerContext.current {
+            if let s = NSScreen.screens.first(where: {
+                ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == ctx.screen.displayID
+            }) {
+                return s
+            }
+        }
+        let cursor = NSEvent.mouseLocation
+        return NSScreen.screens.first { NSMouseInRect(cursor, $0.frame, false) }
+            ?? NSScreen.screens.first
     }
 
     @objc private func triggerNow() {
