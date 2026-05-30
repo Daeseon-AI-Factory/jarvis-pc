@@ -472,6 +472,46 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-30 — 📖 Latency Optimization Playbook (612-line transferable engineering asset)
+
+**Trigger (사용자):**
+> "이런 속도 개선점은 순서대로 반드시 정리해야한다 이런 엔지니어링 인사이트 도출을 원함 내가 찾은게 아니어도 메커니즘은 배워서 앞으로도 써먹어야지"
+
+**Workflow** (`latency-optimization-playbook`, 7 agents / 284k tokens / 10분):
+- 6 dimensions sweep: Vision LLM / macOS SDK / 일반 LLM API / 체감 UX / async patterns / measurement
+- 1 synth: priority order (25 tricks) + apply-when guide + screenbridge matrix + transferable patterns + playbook_md
+
+**Output**: `docs/playbooks/latency-optimization.md` (612 lines):
+- 25 tricks priority order (rank + impact + effort)
+- Apply-when guide (situation → first 3 tricks)
+- ScreenBridge matrix (applied / pending / rejected / na)
+- Transferable patterns (다음 프로젝트 적용 가능)
+- Markdown playbook 본문
+
+**Top 5 quick wins (5min effort each):**
+1. Image downscale 1024-1280 (30-55% Gemini latency ↓, 40% token ↓)
+2. JPEG q80 vs PNG (5-15x request body ↓, ~1.5s upload save)
+3. Progressive UI (12s opaque → 3s perceived, dopamine each stage)
+4. async let / TaskGroup (sum → max, 보통 미사용)
+5. URLSession keep-alive + region pin (100-400ms warm call save)
+
+**Universal principles**:
+- "Measure-first, optimize-second" — critical path 외 최적화는 0 wall-clock 변화
+- "Vendor pays for what you send" — pre-resize client-side (width×height/750 = tokens)
+- "Perceived latency ≥ actual latency" — 4 짧은 시각 wait > 1 긴 opaque wait
+
+**Future playbook 후보 (memory `engineering-playbooks-index`):**
+- security-best-practices (v0.2 secret masking)
+- swift-6-strict-concurrency-traps
+- macos-permissions-flow
+- llm-prompt-engineering
+- vision-llm-accuracy-tuning
+- accessibility-tree-tricks
+
+**Pragmatic ship mode 일관**: playbook은 완벽 추구가 아니라 *transferable asset* 박음 — 다음 프로젝트도 적용 가능. ROI 큼.
+
+---
+
 ## 2026-05-30 — 🚀 Strategy Update: Pragmatic Ship Mode (target 확장 + 완벽 X + 빠른 monetization)
 
 **Trigger (사용자 verbatim):**
