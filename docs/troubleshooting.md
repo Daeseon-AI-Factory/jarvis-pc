@@ -207,6 +207,46 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
   ```
 - **Cause**: Swift 6 strict concurrency가 C `extern var`를 mutable shared state로 간주. `kAXTrustedCheckOptionPrompt`는 Apple HIServices가 노출한 `CFStringRef` extern — Swift 측 marking 없어 거부.
 - **Fix**: string literal로 대체 — `"AXTrustedCheckOptionPrompt"` (Apple 공식 const string과 동일). `AXIsProcessTrustedWithOptions(["AXTrustedCheckOptionPrompt": true] as CFDictionary)`. 의미 동일, concurrency-safe.
-- **Commit**: (Phase 3.1 — 다음 commit에 hash 갱신)
+- **Commit**: `7f4d4f4`
 - **Pattern**: Swift 6 strict concurrency가 C `extern var` 또는 unannotated mutable state 막을 때 — Apple 표준 const string은 literal로 대체 가능 (Apple stability 보장). 또는 `nonisolated(unsafe) let wrapper = ...` 패턴.
+
+---
+
+## SCContentFilter empty `excludingWindows: []` → SCStream buffer stall (Phase 3.1 verify fix)
+
+- **Symptom**: ScreenCaptureKit `SCContentFilter(display:excludingWindows:)`에 empty array 전달 — SCStream produces no buffers, capture silently fails. 사용자 ⌥Space → analyze 100% 깨짐 (verify workflow BLOCKER finding).
+- **Cause**: Documented bug (Federico Terzi: https://federicoterzi.com/blog/screencapturekit-failing-to-capture-the-entire-display/). Apple 공식 sample (`CapturingScreenContentInMacOS`)은 이 initializer 피함.
+- **Fix**: `SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])`. 동일 의미 (전체 display, 모든 app, 예외 없음) — but Apple-sanctioned shape이라 buffer stall X.
+- **Commit**: (Phase 3.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: ScreenCaptureKit init variant 선택 시 Apple 공식 sample 우선. community 검증 reference (Federico Terzi 등) 학습 자산에 박아두기. solo 작성으로는 vendor SDK bug catch 어려움 — adversarial multi-agent review 가치.
+
+---
+
+## "NSScreen.main 절대 금지" 정신을 자기 fallback에서 위배 (Phase 3.1 verify fix)
+
+- **Symptom**: `DisplayGeometry.swift:16` doc comment에 `⚠️ NSScreen.main 절대 금지 — Tauri Layer 9 회피` 명시. 그러나 `ScreenCapture.swift:39` + `TriggerContext.swift:32` fallback에 `?? NSScreen.main` 박혀있음 (자기 모순). cursor가 모든 screen 밖 rare path에서 hard rule 위반 → primary monitor 캡처 시도 → 잘못된 화면.
+- **Cause**: 명시적 rule 박은 후 코드 작성 도중 fallback path에 *다시 박음*. solo 작성에서 매우 잡기 어려운 패턴 — verify workflow의 adversarial review가 catch.
+- **Fix**: `?? NSScreen.screens.first` (macOS process는 최소 1개 screen 보장).
+- **Commit**: (Phase 3.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: 코드에 hard rule ("절대 금지") 명시 시 — fallback path를 의식적으로 review. 자기 모순 발견은 multi-agent adversarial workflow의 정확한 가치 영역.
+
+---
+
+## `logicalRectFromSentBox`가 screen-local만 반환 → 외부 monitor 함정 (Phase 3.1 verify fix)
+
+- **Symptom**: `DisplayGeometry.logicalRectFromSentBox` screen-local top-left CGRect 반환. Phase 5 HUD가 그 결과를 `NSWindow.setFrame(_:)` 직접 호출 시 — 외부 monitor (`screenFrame.origin.x = 1440` 등)에선 *primary monitor*에 HUD 뜸. Tauri Layer 9 재발 100% 보장.
+- **Cause**: `screenFrame.origin`이 helper에 입력으로 들어갔지만 반환값에 반영 X. 호출자가 "그대로 setFrame OK"라 가정.
+- **Fix**: `globalAppKitRect(fromLocalTopLeft:) -> NSRect` helper 추가. `screenFrame.origin.x` add + y flip (`screenFrame.height - (local.origin.y + local.height)`) 한 곳. 3 unit tests (primary / 외부 monitor x=1440 / vertical stack origin.y=900)로 lock.
+- **Commit**: (Phase 3.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: 좌표 변환 helper가 partial conversion 반환 시 — 명시적 doc comment + 다음 단계 helper도 같이 제공. Phase 5 HUD code 작성 단계에서 산수 burden 없게. PR review에서 raw 결과 `setFrame` 직접 호출 패턴 차단.
+
+---
+
+## `codesign --identifier` 누락 → 매 build TCC 권한 재요청 loop (Phase 3.1 verify fix)
+
+- **Symptom**: `swift build` + `codesign --force -s -` ad-hoc signed binary. 매 build cdhash 변경 → TCC가 binary 정체성을 *다른 binary*로 인식 → 매 `./dev.sh`마다 Screen Recording 권한 다이얼로그 재출현. 사용자 좌절 흐름 직역.
+- **Cause**: codesign에 `--identifier` 명시 없음 → TCC가 binary path + cdhash 조합으로만 식별 → 일관성 깨짐.
+- **Fix**: `codesign --force --sign - --identifier com.screenbridge.dev "$BIN_PATH"`. `--identifier` 명시로 TCC가 identifier + cdhash 조합 기억 → 한 번 권한 부여 후 매 build 유지.
+- **Commit**: (Phase 3.1 verify fix — 다음 commit에 hash 갱신)
+- **Pattern**: macOS TCC dev iteration에서 `swift run` + ad-hoc codesign 패턴 사용 시 — 반드시 `--identifier <stable-id>` 명시. 미명시 시 매 빌드 권한 dialog loop. 중기 swift-bundler/Xcode `.app` bundle로 이행 시 `Info.plist` `CFBundleIdentifier`가 같은 역할.
 

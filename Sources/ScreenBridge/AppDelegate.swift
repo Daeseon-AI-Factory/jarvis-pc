@@ -26,13 +26,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotKey.register()
 
         // 권한 startup trigger (sweep advice: 0.5단계 빨리 — Phase 3.1 작성 도중 silent fail 회피).
-        // Accessibility는 Phase 6.2 (AXUIElement) 시점에 별도 요청.
+        // macOS TCC는 'Don't Allow' 누르면 다이얼로그 *영구히 재출현 X* → 거부 시 Settings 안내.
+        // verify workflow HIGH finding.
         Task { @MainActor in
-            if !Permissions.hasScreenRecording() {
-                Log.app.notice("Screen Recording 권한 없음 — 다이얼로그 trigger")
-                Permissions.requestScreenRecording()
-            } else {
+            if Permissions.hasScreenRecording() {
                 Log.app.info("Screen Recording 권한 OK")
+                return
+            }
+            Log.app.notice("Screen Recording 권한 없음 — 다이얼로그 trigger")
+            Permissions.requestScreenRecording()
+            // 다이얼로그가 비동기라 hasScreenRecording은 잠시 후 다시 확인 필요.
+            // 1초 후 재확인 + 여전히 없으면 Settings 안내.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                if !Permissions.hasScreenRecording() {
+                    Log.app.error("Screen Recording 권한 거부 — Settings > Privacy & Security > Screen Recording에서 ScreenBridge 토글 후 재시작 필요")
+                    Permissions.openScreenRecordingSettings()
+                }
             }
         }
 

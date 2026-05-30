@@ -265,4 +265,34 @@ Swift Phase 0.2 (menu-bar shell + Carbon hotkey + NSPanel, `63c0568`) 후 사용
 
 ---
 
+## 2026-05-29 — Swift Phase 3.1 verify fix: adversarial workflow BLOCKER 3 + HIGH 3
+
+**Phase 3.1 commit hash backfill:** `7f4d4f4`.
+
+**Adversarial verify workflow** (`phase-3-1-verify`, 6 agents / 224k tokens / 4분):
+- 5 dimensions parallel — ScreenCaptureKit API correctness / 4-layer 좌표 수학 / Permissions 흐름 / multi-monitor edge / Swift 6 concurrency.
+- 1 synth — **verdict: FIX_FIRST, ready_for_phase_5: false**.
+
+**발견 (이 commit에서 fix):**
+1. **BLOCKER** ScreenCapture L65 `SCContentFilter(display:excludingWindows: [])` — Federico Terzi 검증 SCStream buffer stall documented bug. → `init(display:excludingApplications:exceptingWindows:)` Apple-sanctioned shape.
+2. **BLOCKER** ScreenCapture L39 + TriggerContext L32 `?? NSScreen.main` fallback — DisplayGeometry "절대 금지" 명시한 rule 자기 코드에서 위배 (Tauri Layer 9 재발 패턴). → `?? NSScreen.screens.first`.
+3. **BLOCKER** DisplayGeometry `logicalRectFromSentBox`가 screen-local만 반환, `screenFrame.origin` 미반영 — Phase 5 HUD가 raw `NSWindow.setFrame` 직접 호출 시 외부 monitor에서 primary로. → `globalAppKitRect(fromLocalTopLeft:) -> NSRect` helper 추가 (origin add + y flip 한 곳, R9 DECISIONS).
+4. **HIGH** AppDelegate `requestScreenRecording()` Bool 무시 + 거부 후 in-app recovery 없음 (macOS TCC 다이얼로그 영구 재출현 X). → 1.5s 후 `hasScreenRecording()` 재확인 + 거부 시 `openScreenRecordingSettings()`.
+5. **HIGH** ScreenCapture LastTriggerContext stale frame/scale — 해상도 변경/hotplug 시. → displayID만 신뢰 + frame/scale은 capture 시점 NSScreen fresh fetch.
+6. **HIGH** dev.sh `codesign --identifier` 누락 → cdhash 매 build 변경 → TCC 권한 재요청 loop. → `--identifier com.screenbridge.dev` 명시.
+
+**Tests 추가 (4)**: `globalAppKitRect` primary / 외부 monitor x=1440 / vertical stack origin.y=900 / 비균일 scaleX/scaleY (3024x1964 → 1568x1018).
+
+**누적 33/33 통과** (`swift build` 2.30s, `swift test` 0.008s).
+
+**R8 학습 자산 4건** (docs/troubleshooting.md): SCContentFilter empty array bug, NSScreen.main 자기 모순, screenFrame.origin 미반영, codesign --identifier loop.
+
+**R9** (DECISIONS.md): `globalAppKitRect` helper (raw CGRect setFrame 차단).
+
+**Sweep workflow vs adversarial verify의 가치 입증**: Phase 3.1 시작 전 sweep은 plan을 박았지만 — *코드 작성 후* 다 implement된 상태에서만 catch되는 함정 (벤더 SDK bug, 자기 모순 fallback, partial conversion helper)을 verify workflow가 잡음. *Sweep (plan) → Implement → Verify (adversarial review)* 3단계가 ultracode 정신 본질. Phase 4.2 / 5.x / 6.1 commit 후에도 verify workflow 권장.
+
+**다음:** Phase 5.0 — HUDOverlayWindow 빈 골격. **첫 atomic부터 `globalAppKitRect` 사용 강제** (raw `setFrame(rect)` X — Tauri Layer 9 차단). NSPanel borderless + nonactivating + clear + `ignoresMouseEvents=true` + `level=.screenSaver` + collectionBehavior 3개. 빨간 박스 1개 hardcode로 사용자 ⌥Space 직후 표시 — Layer 1/4/7/8/9 dispatcher 무관 검증.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

@@ -29,18 +29,29 @@ enum ScreenCapture {
             throw CaptureError.permissionDenied
         }
 
-        // 1. trigger context (hotkey 시점) — 없으면 지금 cursor fallback
+        // 1. trigger context (hotkey 시점 displayID + cursor). frame/scale은 *지금* fresh
+        // fetch — 해상도 변경 / hotplug 대응 (verify workflow MEDIUM finding).
+        // NSScreen.main 절대 금지 (Tauri Layer 9 — verify workflow BLOCKER finding).
         let triggerInfo: (displayID: CGDirectDisplayID, frame: NSRect, scale: CGFloat)? = await MainActor.run {
-            if let t = LastTriggerContext.current {
-                return (t.screen.displayID, t.screen.frame, t.screen.backingScaleFactor)
+            let savedDisplayID = LastTriggerContext.current?.screen.displayID
+            let cursor = LastTriggerContext.current?.cursor ?? NSEvent.mouseLocation
+
+            // displayID 우선 → cursor 위치 → screens.first (NSScreen.main 절대 X).
+            let screen: NSScreen? = savedDisplayID.flatMap { id in
+                NSScreen.screens.first {
+                    ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
+                }
             }
-            let cursor = NSEvent.mouseLocation
-            guard let s = NSScreen.screens.first(where: { NSMouseInRect(cursor, $0.frame, false) })
-                ?? NSScreen.main else { return nil }
-            let id = (s.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? CGMainDisplayID()
-            return (id, s.frame, s.backingScaleFactor)
+                ?? NSScreen.screens.first { NSMouseInRect(cursor, $0.frame, false) }
+                ?? NSScreen.screens.first
+
+            guard let screen else { return nil }
+            let id = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+                ?? CGMainDisplayID()
+            return (id, screen.frame, screen.backingScaleFactor)
         }
         guard let info = triggerInfo else {
+            Log.dispatcher.error("[capture] no NSScreen available (cursor outside all screens + screens.first nil)")
             throw CaptureError.noScreen
         }
 
@@ -61,8 +72,15 @@ enum ScreenCapture {
         config.showsCursor = true
         config.captureResolution = .best
 
-        // 4. ContentFilter — display 전체, 가린 window 제외 안 함
-        let filter = SCContentFilter(display: display, excludingWindows: [])
+        // 4. ContentFilter — display 전체, 모든 app, 예외 window 없음.
+        // ⚠️ `init(display:excludingWindows:[])` empty array는 Federico Terzi 검증
+        // 문서화 bug (SCStream buffer stall). Apple 공식 sample은 아래 initializer 사용.
+        // verify workflow BLOCKER finding.
+        let filter = SCContentFilter(
+            display: display,
+            excludingApplications: [],
+            exceptingWindows: []
+        )
 
         // 5. one-shot capture
         let cgImage: CGImage

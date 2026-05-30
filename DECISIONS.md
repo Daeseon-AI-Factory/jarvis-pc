@@ -732,4 +732,26 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — DisplayGeometry: globalAppKitRect helper 강제 (raw CGRect setFrame 차단)
+
+**배경:** Phase 3.1 commit 후 adversarial verify workflow가 `logicalRectFromSentBox`가 screen-local top-left만 반환하고 `screenFrame.origin`을 미반영하는 BLOCKER 발견. Phase 5 HUD code가 raw CGRect 받아 `NSWindow.setFrame` 직접 호출하면 외부 monitor에서 primary로 떨어짐 (Tauri Layer 9 재발 100% 보장).
+
+**선택지:**
+- **A. `globalAppKitRect(fromLocalTopLeft:) -> NSRect` 명시 helper** — caller에 doc comment + helper 강제. screen.origin add + y flip 한 곳.
+- B. typed wrapper `struct ScreenLocalTopLeftRect { let rect: CGRect }` — compile-time 차단.
+- C. 그대로 — Phase 5 HUD code가 직접 산수.
+
+**Trade-off:** type safety 강도 vs boilerplate vs Phase 5 산수 burden.
+
+**선택:** **A**.
+
+**근거:**
+- C는 verify workflow가 BLOCKER로 잡음 — reject.
+- B는 가장 안전하지만 typed wrapper 추가 ~25줄 + 모든 caller에 `.rect` unwrap. v0.1엔 boilerplate cost > 안전성. Phase 5 HUD가 *유일한 호출자*라 wrapper의 marginal value 낮음.
+- A는 doc comment + helper 강제 + 3 unit tests (primary / 외부 monitor x=1440 / vertical stack origin.y=900)로 lock. PR review 단계 `setFrame(geom.logicalRectFromSentBox(box)!)` 패턴 차단 가능.
+
+**되돌리기 비용:** `globalAppKitRect(fromLocalTopLeft:)` 제거 + Phase 5 HUD가 직접 origin add + y flip. 단 verify lesson 잊으면 Tauri Layer 9 재발 — 위험 비용 크다. 1 파일 변경.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

@@ -15,11 +15,12 @@ cd "$(dirname "$0")"
 echo "→ swift build"
 swift build
 
-# ad-hoc codesign — TCC가 path 대신 binary identity 기억해 권한 매 빌드 재요청 안 함.
-# 처음 실행 시 macOS Settings > Privacy > Screen Recording에 'ScreenBridge' 항목 추가 + 토글 ON.
+# ad-hoc codesign + --identifier 명시 — TCC가 cdhash + identifier로 정체성 기억.
+# --identifier 없으면 매 build cdhash 변경 → TCC 권한 재요청 loop (verify workflow HIGH finding).
+# 처음 실행 시 macOS Settings > Privacy > Screen Recording에 'ScreenBridge' 추가 + 토글 ON.
 BIN_PATH="$(swift build --show-bin-path)/ScreenBridge"
 if [ -f "$BIN_PATH" ]; then
-  codesign --force -s - "$BIN_PATH" 2>/dev/null || true
+  codesign --force --sign - --identifier com.screenbridge.dev "$BIN_PATH" 2>/dev/null || true
 fi
 
 echo ""

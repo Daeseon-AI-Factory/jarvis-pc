@@ -28,8 +28,9 @@ enum LastTriggerContext {
 
     static func capture() {
         let cursor = NSEvent.mouseLocation
+        // NSScreen.main 절대 금지 — Tauri Layer 9 회피 (verify workflow BLOCKER finding,
+        // DisplayGeometry.swift 정신과 일관).
         let screen = NSScreen.screens.first { NSMouseInRect(cursor, $0.frame, false) }
-            ?? NSScreen.main
             ?? NSScreen.screens.first
 
         guard let screen else {
