@@ -472,6 +472,41 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-30 — Swift Phase 6.2: AXUIElement matcher → icon-only UI 풀이 (Dock 아이콘)
+
+**Phase 6.1 spatial fusion commit hash backfill:** `fcc95b0`.
+
+**번역기 본질 마지막 큰 gap**: OCR이 *visible text만* 잡음. Dock의 Slack 아이콘 / iOS-style 버튼 / 이미지 메뉴 — text 0개 → OCR fail. 사용자 통찰 ("OCR이 텍스트만 인식하면.. 그림 인식도 추가해야하려나").
+
+**Phase 6.2 (이 commit):**
+
+- `Sources/ScreenBridge/AXElement.swift` — `(text, rectInLogicalPt, role, appName)` Sendable struct. AX는 이미 logical pt 반환 — DisplayGeometry 변환 불필요.
+- `Sources/ScreenBridge/AXService.swift` — protocol + `LiveAXService`. `NSWorkspace.runningApplications` + Dock 순회 → AXUIElementCreateApplication(pid) → 재귀 tree walk (depth 8 제한). 화이트리스트 roles 14개 (AXButton/AXLink/AXMenuItem/**AXDockItem**/AXImage/etc.). text 합본 (title + description + value).
+- `ElementMatcher` 확장 — `MatchCandidate` unified type 도입 (OCR + AX 합집합 candidate). 기존 `match([OCRBox])` backward compatible (internal에서 MatchCandidate로 변환).
+- `AnalyzeCoordinator` — `async let dispatcher + OCR + AX` 3개 병렬. OCR/AX 실패 fatal X (graceful — 권한 거부해도 OCR만으로 동작).
+- `AppDelegate` — Accessibility 권한 startup trigger (Phase 3.1 패턴 — Screen Recording과 같이).
+
+**Swift 6 strict concurrency 함정 (R8 × 2)**:
+- `kAXRoleAttribute` 등 extern var 거부 → string literal 대체 (Phase 3.1 `kAXTrustedCheckOptionPrompt` lesson 동일).
+- `AXValue` downcasting + `AXValueGetType` 사전 check (polymorphic CFTypeRef 안전성).
+
+**R9 결정** (DECISIONS): `MatchCandidate` unified type + OCR/AX 합집합 (vs 2-step fallback). substring tiebreaker에 AX 우선 박음 (deterministic 좌표 우선).
+
+**Tests (2 new)**: AX matcher 성공 (Slack icon-only case) + AX 권한 거부 graceful (OCR만으로 동작). 80/80 통과 (`swift build` 3.79s, `swift test` 0.210s).
+
+**번역기 본질 도달**: OCR (text-rich UI) + AX (icon-only UI) hybrid → *모든 clickable UI*에 deterministic 좌표.
+
+**한계**:
+- AX query latency — Electron 큰 앱 (Cursor 등) tree 크면 1-2s 가능. 실측 후 timeout 검토.
+- Electron 앱 (Slack desktop, Discord, VS Code) 자체의 AX tree *비어있을 수 있음* — 그 앱 내부 element 못 잡음. Phase 6.3+에서 vendor-specific fallback.
+- `clickableRoles` 화이트리스트 dogfooding 후 갱신.
+
+**다음:**
+- Phase 5.x — HUDOverlayView bubble (한글 `next_action` 박스 옆 + 화면 가장자리 clamping) + sourceTag 표시 (`OCR` / `AX:AXDockItem` 등).
+- 어머님 첫 dogfooding (1-2주 안) — 진짜 product fit 검증.
+
+---
+
 ## 2026-05-30 — Swift Phase 6.1 spatial fusion: LLM coords hint + OCR proximity → wrong-box 차단
 
 **Phase 6.1 verify fix commit hash backfill:** `f08a603`.

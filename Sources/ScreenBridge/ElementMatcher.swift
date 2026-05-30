@@ -13,6 +13,20 @@
 import CoreGraphics
 import Foundation
 
+/// 통합 candidate type — OCR box와 AX element를 같은 매칭 파이프라인으로 처리.
+/// `rectInLogicalPt`는 screen-global logical pt — HUDAnnotation에 *바로* 사용 가능.
+struct MatchCandidate: Sendable {
+    let text: String
+    let rectInLogicalPt: CGRect
+    let confidence: Float
+    let source: Source
+
+    enum Source: Sendable, Equatable {
+        case ocr
+        case ax(role: String)
+    }
+}
+
 enum ElementMatcher {
 
     /// 기본 threshold — Phase 6.1 commit 시 fixed. dogfooding 후 DECISIONS R9 entry로 튜닝.
@@ -135,6 +149,94 @@ enum ElementMatcher {
             Int(rect.width.rounded()),
             Int(rect.height.rounded()),
         ]
+    }
+
+    // MARK: - Unified MatchCandidate match (Phase 6.2 OCR + AX hybrid)
+
+    /// OCR boxes + AX elements 합집합에서 매칭. proximity / substring / fuzzy 동일 알고리즘.
+    /// 결과 = screen-global logical pt CGRect (HUDAnnotation에 그대로 사용 가능).
+    ///
+    /// `proximityRadius`는 logical pt 단위 (~100pt = sent 200px와 유사 — Retina 2x 가정).
+    static func match(
+        targetText: String,
+        candidates: [MatchCandidate],
+        llmHintRect: CGRect? = nil,
+        proximityRadius: CGFloat = 100,
+        threshold: Double = defaultThreshold
+    ) -> CGRect? {
+        let normalizedTarget = normalize(targetText)
+        guard !normalizedTarget.isEmpty, !candidates.isEmpty else { return nil }
+
+        // Spatial fusion — LLM hint 있으면 proximity filter.
+        let effective: [MatchCandidate]
+        if let hint = llmHintRect {
+            let hc = CGPoint(x: hint.midX, y: hint.midY)
+            let nearby = candidates.filter { c in
+                let bc = CGPoint(x: c.rectInLogicalPt.midX, y: c.rectInLogicalPt.midY)
+                return hypot(bc.x - hc.x, bc.y - hc.y) <= proximityRadius
+            }
+            if nearby.isEmpty {
+                Log.dispatcher.notice(
+                    "[match] proximity filter: 0/\(candidates.count, privacy: .public) near LLM hint — full fallback"
+                )
+                effective = candidates
+            } else {
+                Log.dispatcher.info(
+                    "[match] proximity filter: \(nearby.count, privacy: .public)/\(candidates.count, privacy: .public) near LLM hint (radius=\(Int(proximityRadius), privacy: .public)pt)"
+                )
+                effective = nearby
+            }
+        } else {
+            effective = candidates
+        }
+
+        // 1. substring 매칭 — confidence + AX 우선 (icon-only는 OCR이 못 잡으니 AX가 정답).
+        let substringMatches = effective.filter { normalize($0.text).contains(normalizedTarget) }
+        if let best = substringMatches.sorted(by: { lhs, rhs in
+            let lhsLen = normalize(lhs.text).count
+            let rhsLen = normalize(rhs.text).count
+            if lhsLen != rhsLen { return lhsLen < rhsLen }
+            // 동일 길이 — AX 우선 (deterministic 좌표), confidence tiebreaker
+            let lhsAX = isAX(lhs.source)
+            let rhsAX = isAX(rhs.source)
+            if lhsAX != rhsAX { return lhsAX }
+            return lhs.confidence > rhs.confidence
+        }).first {
+            Log.dispatcher.info(
+                "[match] substring hit — target=\"\(targetText, privacy: .public)\" element=\"\(best.text, privacy: .public)\" source=\(sourceTag(best.source), privacy: .public)"
+            )
+            return best.rectInLogicalPt
+        }
+
+        // 2. fuzzy — Levenshtein normalized similarity, length-aware threshold.
+        let effectiveThreshold: Double = (threshold == Self.defaultThreshold && normalizedTarget.count <= 6)
+            ? shortTextThreshold
+            : threshold
+        let scored: [(MatchCandidate, Double)] = effective.compactMap { c in
+            let sim = similarity(normalize(c.text), normalizedTarget)
+            return sim >= effectiveThreshold ? (c, sim) : nil
+        }
+        guard let best = scored.max(by: { $0.1 < $1.1 }) else {
+            Log.dispatcher.notice(
+                "[match] fail — target=\"\(targetText, privacy: .public)\" no candidate ≥ threshold \(effectiveThreshold, privacy: .public)"
+            )
+            return nil
+        }
+        Log.dispatcher.info(
+            "[match] fuzzy hit — target=\"\(targetText, privacy: .public)\" element=\"\(best.0.text, privacy: .public)\" source=\(sourceTag(best.0.source), privacy: .public) sim=\(String(format: "%.2f", best.1), privacy: .public)"
+        )
+        return best.0.rectInLogicalPt
+    }
+
+    private static func isAX(_ source: MatchCandidate.Source) -> Bool {
+        if case .ax = source { return true } else { return false }
+    }
+
+    private static func sourceTag(_ source: MatchCandidate.Source) -> String {
+        switch source {
+        case .ocr: return "ocr"
+        case .ax(let role): return "ax:\(role)"
+        }
     }
 
     /// Normalized Levenshtein similarity. 1.0 = identical, 0.0 = max different.

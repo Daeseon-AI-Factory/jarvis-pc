@@ -14,16 +14,19 @@ actor AnalyzeCoordinator {
     private let capture: ScreenCaptureService
     private let dispatcher: LLMDispatcher
     private let ocr: OCRService
+    private let ax: AXService
     private var isRunning: Bool = false
 
     init(
         capture: ScreenCaptureService = LiveScreenCapture(),
         dispatcher: LLMDispatcher,
-        ocr: OCRService = VisionOCRService()
+        ocr: OCRService = VisionOCRService(),
+        ax: AXService = LiveAXService()
     ) {
         self.capture = capture
         self.dispatcher = dispatcher
         self.ocr = ocr
+        self.ax = ax
     }
 
     /// Analyze 1회 실행. 진행 중이면 즉시 `.failed(.invalidResponse)` 반환.
@@ -65,7 +68,7 @@ actor AnalyzeCoordinator {
             "[analyze] captured \(imageData.count, privacy: .public) bytes in \(String(format: "%.1f", captureElapsed), privacy: .public)s"
         )
 
-        // 2. dispatcher + OCR 병렬 — 둘 다 captured imageData에 의존, 서로 독립.
+        // 2. dispatcher + OCR + AX 3개 병렬 (Phase 6.2 — AX matcher 추가).
         async let dispatcherFuture: AnalysisResult = dispatcher.analyze(
             imageData: imageData,
             imageSize: geometry.sentSize,
@@ -75,6 +78,7 @@ actor AnalyzeCoordinator {
             pngData: imageData,
             sentSize: geometry.sentSize
         )
+        async let axFuture: [AXElement] = ax.queryAllElements()
 
         let result: AnalysisResult
         do {
@@ -87,7 +91,7 @@ actor AnalyzeCoordinator {
             return .failed(.invalidResponse(error.localizedDescription))
         }
 
-        // OCR 실패는 fatal X — LLM coordinates fallback 가능 (v0.1 dogfooding 자료).
+        // OCR 실패는 fatal X — AX 또는 LLM coords fallback.
         let ocrBoxes: [OCRBox]
         do {
             ocrBoxes = try await ocrFuture
@@ -96,24 +100,58 @@ actor AnalyzeCoordinator {
             ocrBoxes = []
         }
 
-        // 3. target_text 매칭 — deterministic 좌표 (99% 핵심).
-        // Spatial fusion (Phase 6.1 wrong-box 차단): LLM이 coordinates 줬으면 그 영역 근처
-        // OCR 박스만 candidate. 화면 여러 영역에 같은 텍스트 있을 때 사용자 intent 영역 고름.
-        let llmHintRect: CGRect? = result.coordinates.flatMap { coords in
+        // AX 실패도 fatal X — 권한 거부 또는 일부 앱 (Electron 등) tree 비어있음.
+        let axElements: [AXElement]
+        do {
+            axElements = try await axFuture
+        } catch {
+            Log.dispatcher.notice("[analyze] AX failed (not fatal): \(error.localizedDescription, privacy: .public)")
+            axElements = []
+        }
+
+        // 3. target_text 매칭 — OCR + AX 합집합 candidate (Phase 6.2).
+        // OCRBox → MatchCandidate (sent→logical pt 변환)
+        let ocrCandidates: [MatchCandidate] = ocrBoxes.compactMap { box in
+            let boxInt = [
+                Int(box.rectInSentImage.origin.x.rounded()),
+                Int(box.rectInSentImage.origin.y.rounded()),
+                Int(box.rectInSentImage.width.rounded()),
+                Int(box.rectInSentImage.height.rounded()),
+            ]
+            guard let logical = geometry.logicalRectFromSentBox(boxInt) else { return nil }
+            return MatchCandidate(
+                text: box.text,
+                rectInLogicalPt: logical,
+                confidence: box.confidence,
+                source: .ocr
+            )
+        }
+        // AXElement → MatchCandidate (이미 logical pt, confidence 1.0)
+        let axCandidates: [MatchCandidate] = axElements.map { el in
+            MatchCandidate(
+                text: el.text,
+                rectInLogicalPt: el.rectInLogicalPt,
+                confidence: 1.0,
+                source: .ax(role: el.role)
+            )
+        }
+        let allCandidates = ocrCandidates + axCandidates
+
+        // Spatial fusion: LLM coords → logical pt hint.
+        let llmHintLogical: CGRect? = result.coordinates.flatMap { coords in
             guard coords.count == 4 else { return nil }
-            return CGRect(x: coords[0], y: coords[1], width: coords[2], height: coords[3])
+            return geometry.logicalRectFromSentBox(coords)
         }
         let matched = ElementMatcher.match(
             targetText: result.targetText,
-            candidates: ocrBoxes,
-            geometry: geometry,
-            llmHintRect: llmHintRect
+            candidates: allCandidates,
+            llmHintRect: llmHintLogical
         )
 
         let totalElapsed = Date().timeIntervalSince(started)
-        let matchTag = matched != nil ? "OCR-matched" : "LLM-fallback"
+        let matchTag = matched != nil ? "matched" : "LLM-fallback"
         Log.dispatcher.info(
-            "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public)"
+            "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public) (ocr=\(ocrBoxes.count, privacy: .public) ax=\(axElements.count, privacy: .public))"
         )
         return .done(result: result, geometry: geometry, matchedRect: matched)
     }

@@ -64,6 +64,25 @@ struct AnalyzeCoordinatorTests {
         }
     }
 
+    struct MockAX: AXService {
+        let elements: [AXElement]
+        func queryAllElements() async throws -> [AXElement] {
+            elements
+        }
+    }
+
+    struct EmptyAX: AXService {
+        func queryAllElements() async throws -> [AXElement] {
+            []
+        }
+    }
+
+    struct ThrowingAX: AXService {
+        func queryAllElements() async throws -> [AXElement] {
+            throw AXError.permissionDenied
+        }
+    }
+
     // MARK: - Fixtures
 
     private func mockGeometry() -> DisplayGeometry {
@@ -98,7 +117,8 @@ struct AnalyzeCoordinatorTests {
         let coord = AnalyzeCoordinator(
             capture: MockCapture(data: Data([1, 2, 3]), geometry: mockGeometry()),
             dispatcher: MockDispatcher(result: mockResult()),    // target_text="Save"
-            ocr: MockOCR(boxes: ocrBoxes)
+            ocr: MockOCR(boxes: ocrBoxes),
+            ax: EmptyAX()
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
         guard case .done(let result, _, let matched) = stage else {
@@ -112,12 +132,67 @@ struct AnalyzeCoordinatorTests {
         #expect(matched?.minY == 60)
     }
 
-    @Test("run — OCR 매칭 실패 시 matchedRect nil (caller가 LLM fallback)")
+    @Test("run — AX 매칭 성공 시 matchedRect (icon-only UI, OCR이 못 잡는 case, Phase 6.2)")
+    func runAXMatched() async {
+        // OCR은 결과 없음 (icon-only UI). AX가 Dock의 'Slack' 잡음.
+        let axElements = [
+            AXElement(
+                text: "Slack",
+                rectInLogicalPt: CGRect(x: 1200, y: 1000, width: 60, height: 60),
+                role: "AXDockItem",
+                appName: "Dock"
+            ),
+        ]
+        let slackResult = AnalysisResult(
+            screenState: "Dock에 Slack 아이콘",
+            nextAction: "여기 Slack 아이콘 누르세요",
+            targetText: "Slack",
+            coordinates: nil,
+            reasoning: "Slack 열기",
+            raw: ""
+        )
+        let coord = AnalyzeCoordinator(
+            capture: MockCapture(data: Data(), geometry: mockGeometry()),
+            dispatcher: MockDispatcher(result: slackResult),
+            ocr: EmptyOCR(),
+            ax: MockAX(elements: axElements)
+        )
+        let stage = await coord.run(AnalyzeRequest(instruction: "Slack 어디?", triggeredAt: Date()))
+        guard case .done(_, _, let matched) = stage else {
+            Issue.record("expected .done")
+            return
+        }
+        #expect(matched != nil)
+        #expect(matched?.minX == 1200)
+        #expect(matched?.minY == 1000)
+    }
+
+    @Test("run — AX 권한 거부 시 OCR만으로 graceful (Phase 6.2)")
+    func runAXPermissionDenied() async {
+        let ocrBoxes = [
+            OCRBox(text: "Save", rectInSentImage: CGRect(x: 50, y: 60, width: 80, height: 25), confidence: 0.95),
+        ]
+        let coord = AnalyzeCoordinator(
+            capture: MockCapture(data: Data(), geometry: mockGeometry()),
+            dispatcher: MockDispatcher(result: mockResult()),
+            ocr: MockOCR(boxes: ocrBoxes),
+            ax: ThrowingAX()
+        )
+        let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
+        guard case .done(_, _, let matched) = stage else {
+            Issue.record("expected .done despite AX failure")
+            return
+        }
+        #expect(matched != nil)
+    }
+
+    @Test("run — OCR + AX 매칭 실패 시 matchedRect nil (caller가 LLM fallback)")
     func runOCRNoMatch() async {
         let coord = AnalyzeCoordinator(
             capture: MockCapture(data: Data(), geometry: mockGeometry()),
             dispatcher: MockDispatcher(result: mockResult()),    // target_text="Save"
-            ocr: MockOCR(boxes: [])    // OCR 결과 없음
+            ocr: MockOCR(boxes: []),    // OCR 결과 없음
+            ax: EmptyAX()                // AX 결과 없음
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
         guard case .done(_, _, let matched) = stage else {
@@ -132,7 +207,8 @@ struct AnalyzeCoordinatorTests {
         let coord = AnalyzeCoordinator(
             capture: MockCapture(data: Data(), geometry: mockGeometry()),
             dispatcher: ThrowingDispatcher(error: .maxTokens),
-            ocr: EmptyOCR()
+            ocr: EmptyOCR(),
+            ax: EmptyAX()
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
         guard case .failed(let err) = stage else {
@@ -149,7 +225,8 @@ struct AnalyzeCoordinatorTests {
         let coord = AnalyzeCoordinator(
             capture: ThrowingCapture(error: .permissionDenied),
             dispatcher: MockDispatcher(result: mockResult()),
-            ocr: EmptyOCR()
+            ocr: EmptyOCR(),
+            ax: EmptyAX()
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
         guard case .failed = stage else {
@@ -172,7 +249,8 @@ struct AnalyzeCoordinatorTests {
         let coord = AnalyzeCoordinator(
             capture: MockCapture(data: Data(), geometry: mockGeometry()),
             dispatcher: SlowDispatcher(result: mockResult()),
-            ocr: EmptyOCR()
+            ocr: EmptyOCR(),
+            ax: EmptyAX()
         )
 
         // 동시 두 호출

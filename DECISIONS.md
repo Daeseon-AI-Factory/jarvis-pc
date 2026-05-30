@@ -920,4 +920,40 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 ---
 
+## 2026-05-30 — Phase 6.2 AX matcher architecture: MatchCandidate unified type + OCR/AX 합집합
+
+**배경**: Phase 6.1 spatial fusion이 wrong-box를 차단했지만 — **icon-only UI (Dock 아이콘, iOS-style 버튼)에 OCR이 텍스트 자체 못 잡음**. 사용자 "Slack 어디?" → Dock의 Slack 아이콘 = OCR 결과 0. AXUIElement는 모든 clickable element의 AXTitle/AXDescription/AXPosition/AXSize 메타데이터 — *icon-only도 deterministic*. 사용자가 직접 이 gap 통찰.
+
+**선택지:**
+- **A. MatchCandidate unified type + OCR/AX 합집합** ← 선택
+- B. ElementMatcher에 `matchAX` 별도 method — OCR 매칭 fail 후 AX 시도 (2-step fallback)
+- C. AX만 사용 (OCR 폐기) — text-rich UI 손해
+- D. OCR-AX bridge로 AX 결과를 OCR 좌표계로 변환 — 복잡
+
+**Trade-off:** 코드 일관성 vs OCR/AX 우선순위 명확성 vs 매칭 알고리즘 단순성.
+
+**선택:** **A**.
+
+**근거:**
+- A는 *한 알고리즘*에서 OCR + AX 같이 비교 — best match 직접 선택. text-rich UI에서 OCR이 specific match, icon-only에서 AX가 유일 candidate — 둘 다 같은 통합 candidate pool에 넣어 single best 선택.
+- substring tiebreaker에 *AX 우선* 박음 — 동일 길이 매칭 시 AX (deterministic 좌표) 선택. icon-only는 OCR이 못 잡으니 AX가 유일 후보 자연.
+- B는 2-step — wrong-box 가능성 더 큼 (OCR이 잘못 잡으면 AX 안 봄).
+- C는 OCR의 visible text 정확도 손해. Phase 6.1 OCR architecture 폐기.
+- D는 좌표 변환 복잡 — *합집합*보다 burden 큼.
+
+**구현:**
+- `MatchCandidate` struct: `text` + `rectInLogicalPt` (이미 변환된 좌표) + `confidence` + `source: .ocr | .ax(role)`.
+- `ElementMatcher.match([MatchCandidate])` overload — proximity / substring / fuzzy 동일 알고리즘.
+- 기존 `match([OCRBox], geometry)` backward compatible — 내부에서 `MatchCandidate`로 변환.
+- AnalyzeCoordinator: `async let dispatcher + OCR + AX` 3개 병렬. OCR/AX 실패 fatal X — graceful fallback (LLM coords).
+
+**되돌리기 비용:** `MatchCandidate` 제거 + ElementMatcher overload 제거 + AnalyzeCoordinator OCR-only로 revert. 단 icon-only UI gap 재발 (Slack 못 풀음). 1시간.
+
+**미해결:**
+- AX query latency 실측 — `runningApplications` × tree walk (depth 8). 큰 앱 (Cursor 등 Electron) tree 크면 1-2s 가능. timeout 추가 검토.
+- Electron 앱 (Slack 자체, Discord, VS Code 등)의 AX tree가 *비어있을 수 있음* — 그 앱 안 element 못 잡음. Phase 6.3+에서 vendor-specific fallback (예: Electron의 chrome accessibility flag) 검토.
+- `clickableRoles` 화이트리스트 — Dock 외 잘 안 잡는 element (예: SwiftUI native button) 있을 수 있음. dogfooding 후 갱신.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

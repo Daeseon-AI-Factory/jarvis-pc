@@ -327,6 +327,36 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: `AnalyzeCoordinator`의 `async let dispatcherFuture + ocrFuture` 병렬에서 dispatcher 빨리 실패 시 — function return 전 `async let scope 종료` = `ocrFuture` implicit await. Vision sync는 끝까지 실행. 결과: `isRunning` defer는 풀리지만 *사용자 응답 지연*.
 - **Cause**: `VNRequest`에 `.cancel()` API 없음 (Apple SDK 한계). `Task.checkCancellation()`은 `perform()` *시작 전*에만 체크 가능, perform 중간 cancel 무시. `Task.detached` → `Task` 변경으로 isolation 일관성 + cancellation signal 전달은 하지만, Vision sync는 그 signal을 무시.
 - **Fix (부분)**: `Task.detached` → `Task` 변경 (parent isolation 상속, perform 전 `Task.checkCancellation` 체크). 미래 fix: `withTimeout(5s)` wrapper. 실측 mitigation: OCR latency (~1-2s) < dispatcher latency (3-4s) — 일반적으로 OCR이 먼저 끝남.
-- **Commit**: (Phase 6.1 verify fix — 다음 commit에 hash 갱신)
+- **Commit**: `f08a603`
 - **Pattern**: Apple SDK의 sync API는 cancel 불가능. async let scope 종료 시 implicit wait는 *Vendor SDK 한계 인정*. 완벽 fix는 timeout + best-effort cleanup. Phase 7+ 시점에 `withTimeout` 도입 검토.
+
+---
+
+## AXUIElement extern var들 Swift 6 strict concurrency 거부 (Phase 6.2)
+
+- **Symptom**: `kAXRoleAttribute`, `kAXTitleAttribute`, `kAXPositionAttribute` 등 사용 시 — Phase 3.1의 `kAXTrustedCheckOptionPrompt`와 동일 에러:
+  ```
+  error: reference to var 'kAXRoleAttribute' is not concurrency-safe
+  ```
+- **Cause**: HIServices/AXUIElement.h의 모든 `extern CFStringRef` attribute 상수가 Swift 측 marking 없음 — Swift 6가 mutable shared state로 간주.
+- **Fix**: Phase 3.1 lesson 적용 — string literal로 대체. Apple HIToolbox header의 const string과 동일:
+  - `kAXRoleAttribute` → `"AXRole"`
+  - `kAXTitleAttribute` → `"AXTitle"`
+  - `kAXDescriptionAttribute` → `"AXDescription"`
+  - `kAXValueAttribute` → `"AXValue"`
+  - `kAXPositionAttribute` → `"AXPosition"`
+  - `kAXSizeAttribute` → `"AXSize"`
+  - `kAXChildrenAttribute` → `"AXChildren"`
+- **Commit**: (Phase 6.2 — 다음 commit에 hash 갱신)
+- **Pattern**: Apple HIServices/AXUIElement header의 모든 `kAX*Attribute` extern은 Swift 6에서 거부. struct에 `private static let` 로 string literal 모음 정의 후 caller가 사용 — 일관성 + maintainability. Apple stability 보장 (HIServices는 macOS 10.3+ stable).
+
+---
+
+## AXValue downcasting + AXValueGetType 사전 체크 (Phase 6.2)
+
+- **Symptom**: AXUIElement에서 AXPosition/AXSize 추출 시 `CFTypeRef` → `AXValue` force cast가 위험. 잘못된 type이면 crash.
+- **Cause**: AXUIElementCopyAttributeValue는 다양한 type 반환 (`String`, `Array`, `AXValue` 등). caller가 type 보장 필요.
+- **Fix**: `as! AXValue` 후 `AXValueGetType(axValue) == .cgPoint` (또는 `.cgSize`) 사전 체크. type mismatch면 nil 반환.
+- **Commit**: (Phase 6.2 — 다음 commit에 hash 갱신)
+- **Pattern**: CFTypeRef downcasting은 항상 type check 동반. AXValue 같은 polymorphic container는 GetType 호출 후 안전한 GetValue.
 

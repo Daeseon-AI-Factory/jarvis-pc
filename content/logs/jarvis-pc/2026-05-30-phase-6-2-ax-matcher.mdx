@@ -1,0 +1,155 @@
+---
+title: "Phase 6.2 — AXUIElement matcher: icon-only UI 풀이 (Dock 아이콘, Slack 케이스)"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "OCR이 visible text만 잡는 한계 — Dock 아이콘 같은 icon-only UI 못 풀음. macOS Accessibility tree로 AXTitle/AXDescription/AXPosition 메타데이터 추출 → ElementMatcher가 OCR + AX 합집합 candidate. Slack 케이스 풀음. 번역기 본질 도달 — 모든 clickable UI deterministic."
+tags: ["swift", "accessibility", "ax-element", "icon-ui", "match-candidate", "screenbridge"]
+---
+
+사용자 통찰이 결정적이었다:
+
+> "ocr이 텍스트만 인식하면.. 음 그림 인식도 추가해야하려나 나중에"
+
+OCR (`VNRecognizeTextRequest`)는 *visible text만* 잡음. Dock의 Slack 아이콘 / iOS-style 버튼 / 이미지 메뉴 — text 0개 → OCR fail. v0.1의 마지막 큰 gap.
+
+해법: **AXUIElement** (macOS Accessibility framework). 모든 clickable element의 메타데이터:
+- `AXRole` — `AXButton`, `AXDockItem`, `AXLink` 등
+- `AXTitle` — 사용자 보이는 라벨 (icon-only도 보통 있음: "Slack")
+- `AXDescription` — 스크린리더용 더 자세
+- `AXPosition` + `AXSize` — *deterministic logical pt 좌표*
+
+icon-only도 *deterministic* 좌표. 사용자 인지 정확.
+
+## Architecture: MatchCandidate unified type (DECISIONS R9)
+
+세 옵션 중 *합집합* 선택:
+
+```swift
+struct MatchCandidate: Sendable {
+    let text: String
+    let rectInLogicalPt: CGRect      // 이미 변환된 logical pt
+    let confidence: Float             // OCR confidence 또는 AX = 1.0
+    let source: Source
+
+    enum Source: Sendable, Equatable {
+        case ocr
+        case ax(role: String)
+    }
+}
+```
+
+OCR + AX 같은 candidate pool — best match 직접 선택. substring tiebreaker에 *AX 우선* (deterministic 좌표):
+
+```swift
+if lhsLen != rhsLen { return lhsLen < rhsLen }
+// 동일 길이 — AX 우선
+let lhsAX = isAX(lhs.source)
+let rhsAX = isAX(rhs.source)
+if lhsAX != rhsAX { return lhsAX }
+return lhs.confidence > rhs.confidence
+```
+
+기존 `match([OCRBox], geometry)` backward compatible — internal에서 변환.
+
+## AXService — tree walk + 화이트리스트
+
+```swift
+private static let clickableRoles: Set<String> = [
+    "AXButton", "AXLink", "AXMenuItem", "AXMenuButton", "AXMenuBarItem",
+    "AXDockItem",            // ★ Dock 아이콘 — icon-only 핵심
+    "AXImage", "AXStaticText", "AXTextField", "AXTextArea",
+    "AXCheckBox", "AXRadioButton", "AXPopUpButton", "AXTab",
+    "AXCell", "AXOutlineCell",  // VS Code sidebar 항목
+    "AXRow",
+]
+```
+
+`NSWorkspace.runningApplications` → `activationPolicy == .regular` + Dock → `AXUIElementCreateApplication(pid)` → 재귀 tree walk (depth 8 제한). text = title + description + value 합본.
+
+## Swift 6 strict concurrency 함정 (R8 × 2)
+
+Phase 3.1의 `kAXTrustedCheckOptionPrompt` lesson 그대로 반복:
+
+```
+error: reference to var 'kAXRoleAttribute' is not concurrency-safe
+```
+
+→ string literal 대체 (Apple HIToolbox const string과 동일):
+
+```swift
+private static let roleAttr = "AXRole"
+private static let titleAttr = "AXTitle"
+private static let positionAttr = "AXPosition"
+private static let sizeAttr = "AXSize"
+// ...
+```
+
+또 `AXValue` downcasting — `as! AXValue` 후 `AXValueGetType(...) == .cgPoint` 사전 check (polymorphic CFTypeRef 안전).
+
+## AnalyzeCoordinator — 3개 병렬
+
+```swift
+async let dispatcherFuture = dispatcher.analyze(...)
+async let ocrFuture = ocr.recognize(...)
+async let axFuture = ax.queryAllElements()
+
+let result = try await dispatcherFuture
+let ocrBoxes = (try? await ocrFuture) ?? []
+let axElements = (try? await axFuture) ?? []   // AX 실패 graceful
+```
+
+OCR/AX 실패 fatal X — *AX 권한 거부해도 OCR만으로 동작*. v0.1 first launch에서 Accessibility 거부해도 critical 안 됨.
+
+```swift
+let ocrCandidates = ocrBoxes.compactMap { ... → MatchCandidate(.ocr) }
+let axCandidates = axElements.map { MatchCandidate(.ax(role: $0.role)) }
+let allCandidates = ocrCandidates + axCandidates
+
+let matched = ElementMatcher.match(
+    targetText: result.targetText,
+    candidates: allCandidates,
+    llmHintRect: hintLogical   // Phase 6.1 spatial fusion 유지
+)
+```
+
+## Permission startup trigger 갱신
+
+Phase 3.1에서 Screen Recording만 trigger했음. Phase 6.2 — Accessibility도 추가:
+
+```swift
+if Permissions.hasAccessibility() {
+    Log.app.info("Accessibility 권한 OK — AX matcher 활성 (Dock 아이콘 deterministic)")
+} else {
+    Log.app.notice("Accessibility 권한 없음 — 다이얼로그 trigger (AX matcher 비활성, OCR만)")
+    Permissions.requestAccessibility()
+}
+```
+
+첫 launch에 다이얼로그 두 번 뜸 (Screen Recording + Accessibility). 사용자 burden 약간 — 단 한 번만. Allow → 매 launch 유지.
+
+## Tests (2 new): 80/80 pass
+
+```
+✔ run — AX 매칭 성공 시 matchedRect (icon-only UI, Slack/Dock case)
+✔ run — AX 권한 거부 시 OCR만으로 graceful
+```
+
+MockAXService 주입 — `[AXElement]` fixture로 Dock의 Slack 아이콘 매칭 검증.
+
+build 3.79s, test 0.210s.
+
+## 한계 & 다음
+
+**Electron 앱 한계**: Slack desktop / Discord / VS Code 자체의 AX tree는 *비어있을 수 있음*. Chromium의 AX flag (`--force-renderer-accessibility`) 별도. Phase 6.3+에서 vendor-specific fallback 또는 사용자 안내.
+
+**Latency 실측**: AX tree walk가 큰 앱 (Cursor 등 많은 element)에서 1-2s 가능. dogfooding 후 timeout 검토.
+
+**다음**:
+- Phase 5.x — bubble (한글 `next_action` 박스 옆) + sourceTag 표시 (`[AX:AXDockItem]` / `[OCR]`) — 디버그 + 사용자 친화
+- **어머님 첫 dogfooding** (1-2주 안) — Dock의 카카오톡 / Finder / Safari 같은 케이스 진짜 검증
+- v0.2 첫 작업: secret regex masking (보안 layer A) + senior UX layer
+
+번역기 본질 도달 — 모든 clickable UI에 deterministic 좌표.
