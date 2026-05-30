@@ -16,6 +16,13 @@ protocol LLMDispatcher: Sendable {
         imageSize: CGSize,
         instruction: String
     ) async throws -> AnalysisResult
+
+    /// 앱 launch 시 TLS handshake + DNS resolve 미리. default noop — Gemini만 override.
+    func prewarm() async
+}
+
+extension LLMDispatcher {
+    func prewarm() async { /* noop */ }
 }
 
 /// Dispatcher 단계 에러. Phase 4.2에서 한국어 사용자 facing 메시지로 매핑.

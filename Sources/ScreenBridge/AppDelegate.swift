@@ -11,8 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let hud = HUDController()
 
     /// GEMINI_API_KEY 있으면 dispatcher 생성. 없으면 handleAnalyze에서 HUD 에러.
+    private let dispatcher: GeminiDispatcher? = GeminiDispatcher.fromEnvironment()
     private lazy var coordinator: AnalyzeCoordinator? = {
-        guard let dispatcher = GeminiDispatcher.fromEnvironment() else {
+        guard let dispatcher else {
             Log.dispatcher.error("GEMINI_API_KEY 없음 — AnalyzeCoordinator 생성 실패. .env 또는 process env 확인.")
             return nil
         }
@@ -36,6 +37,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleHotkey()
         }
         hotKey.register()
+
+        // Gemini TLS/DNS pre-warm — 첫 analyze 호출 ~1-2s 단축.
+        if let dispatcher {
+            Task.detached {
+                await dispatcher.prewarm()
+            }
+        }
 
         // 권한 startup trigger — Screen Recording + Accessibility (Phase 6.2 AX matcher용).
         Task { @MainActor in

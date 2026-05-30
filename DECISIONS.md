@@ -1009,6 +1009,8 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[2026-05-30 갱신, LLM target_role hint]**: keyword inference ("켜기" → AXDockItem)는 모호 instruction ("Slack 새 메시지") 못 잡음. responseSchema에 `target_role` optional 추가 → LLM이 화면 context + instruction 보고 *직접 명시* (`AXDockItem`/`AXMenuItem`/`AXButton` 등). matcher 우선순위: **LLM target_role > keyword inference > 없음**. SYSTEM_PROMPT에 macOS Accessibility role 10종 + 예시. *되돌리기 비용*: schema 1줄 + matcher 4줄 — 30분 revert.
 
+**[2026-05-30 갱신, dispatcher pre-warm]**: 첫 analyze 호출이 cold TLS handshake + DNS resolve로 ~1-2s 추가. LLMDispatcher protocol에 `func prewarm() async` (default noop) — GeminiDispatcher만 override (model list GET, cost 0). 앱 launch 시 Task.detached 호출 → 사용자가 ⌥+Space 누를 때 connection pool warm. *되돌리기 비용*: protocol 4줄 + AppDelegate 5줄 — 5분 revert. 추적 — Latency playbook Trick C 실측.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

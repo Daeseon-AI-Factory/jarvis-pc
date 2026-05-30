@@ -30,6 +30,24 @@ actor GeminiDispatcher: LLMDispatcher {
         return GeminiDispatcher(apiKey: key)
     }
 
+    /// 앱 launch 시 TLS handshake + DNS resolve 미리 — 첫 analyze 호출 ~1-2s 단축.
+    /// 가벼운 model list endpoint (cost 0, 응답 ~1KB). 실패 silent — best-effort.
+    func prewarm() async {
+        let endpoint = "https://generativelanguage.googleapis.com/v1beta/models?key=\(apiKey)"
+        guard let url = URL(string: endpoint) else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+        let started = Date()
+        do {
+            _ = try await session.data(for: request)
+            let elapsed = Date().timeIntervalSince(started)
+            Log.dispatcher.info("[gemini] prewarm ok \(String(format: "%.2f", elapsed), privacy: .public)s")
+        } catch {
+            Log.dispatcher.notice("[gemini] prewarm failed (non-fatal): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     func analyze(
         imageData: Data,
         imageSize: CGSize,
