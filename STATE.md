@@ -22,9 +22,10 @@
 - [x] Swift Phase 4.2 — AnalyzeCoordinator + UserMessage + HUDContent (`1862076`): 진짜 동작 시작. ScreenCaptureService protocol + AnalyzeCoordinator actor + UserMessage 한국어 매핑 + HUDContent 3 case. 12 new tests.
 - [x] Swift Phase 4.2 fix — `coordinates` 반드시 강제 (`e674aea`, v0.1 임시 swap): SYSTEM_PROMPT + schema required에 추가. Gemini latency 실측 2.4s, target_text 정확.
 - [x] Swift Phase 6.1 — Vision OCR + ElementMatcher → 99% + R9 swap back (`95d4c57`): OCRBox + OCRService + ElementMatcher + AnalyzeCoordinator async let 병렬 + AppDelegate 3-tier fallback. 13 new tests.
-- [x] Swift Phase 6.1 verify fix (이 commit, **adversarial verify**) — 3 HIGH + 2 MEDIUM fix. NFC Unicode normalization 한국어 silent fail 차단 (R8). 짧은 텍스트 length-aware threshold 0.85 auto-tighten — "Save" vs "Same" false positive 차단 (R8/R9). Task.detached → Task (Vision sync SDK cancel 한계 인정, R8). Confidence tiebreaker. supportedRecognitionLanguages instance method. Punctuation strip + DisplayGeometry 음수 guard + AppDelegate 「」 corner-quote + 30자 truncate. 5 new tests + 3 갱신. 74/74 통과 (`swift build` 2.57s, `swift test` 0.211s).
+- [x] Swift Phase 6.1 verify fix (`f08a603`): adversarial verify 3 HIGH + 2 MEDIUM. NFC normalize + short text 0.85 + Task + tiebreaker + punctuation strip.
+- [x] Swift Phase 6.1 spatial fusion (이 commit, **wrong-box 차단**): 사용자 dogfooding "Save"/"Slack" wrong-box 발견 (log show 직접 query) → LLM coords hint + OCR proximity filter (radius 200pt). hint 근처 박스 없으면 full fallback 안전망. SYSTEM_PROMPT 갱신 (hint 권장, 강제 X — 본질 일관). 4 new tests. 78 tests 통과 (`swift build` 2.90s, `swift test` 0.209s). **R9 결정** (DECISIONS): A spatial fusion 즉시 + 향후 C Phase 6.2 hybrid.
 
-**Last commit:** Phase 6.1 verify fix (hash 다음 commit에 갱신)
+**Last commit:** Phase 6.1 spatial fusion (hash 다음 commit에 갱신)
 **검증 안 됨:** `swift run` 실제 smoke (menu bar 아이콘 + ⌥Space → panel). 사용자 manual 필요 — GUI라 agent가 직접 못 띄움.
 
 ## Next step (다음 세션 시작점)
@@ -40,8 +41,11 @@
 6. ✅ Phase 4.2 — AnalyzeCoordinator + UserMessage + HUDContent (`1862076`). *진짜 동작*.
 6b. ✅ Phase 4.2 fix — `coordinates` 반드시 강제 v0.1 임시 swap (`e674aea`).
 7. ✅ Phase 6.1 — Vision OCR + ElementMatcher → 99% + R9 swap back (`95d4c57`).
-7b. ✅ Phase 6.1 verify fix (이 commit) — NFC normalize + short text 0.85 + Task instead of detached + tiebreaker + punctuation strip.
-8. **Phase 5.x (다음)** — HUDOverlayView bubble (한글 `next_action` 박스 옆 + 화면 가장자리 clamping). target_text + next_action 둘 다 사용자 facing visible. + bubble overflow clamping (화면 가장자리 시).
+7b. ✅ Phase 6.1 verify fix (`f08a603`) — NFC + short text + Task + tiebreaker + punctuation strip.
+7c. ✅ Phase 6.1 spatial fusion (이 commit) — LLM coords hint + OCR proximity → wrong-box 차단.
+8. **Phase 6.2 (다음, 우선순위 ↑)** — AXUIElement matcher. macOS Accessibility tree에서 `AXTitle`/`AXDescription`/`AXRole`/`AXPosition`. icon-only UI (Dock 아이콘, iOS-style 버튼) deterministic 좌표 — Slack 같은 케이스 풀음. ElementMatcher 확장 (OCR boxes ∪ AXElement boxes 합집합 candidate). Accessibility 권한 lazy trigger (Phase 3.1 명시).
+9. Phase 5.x — HUDOverlayView bubble (한글 `next_action` 박스 옆, 화면 가장자리 clamping).
+10. ★ 어머님 첫 dogfooding (1-2주 안) — *진짜 product fit 검증*. honest feedback이 v0.2 senior UX 방향 결정.
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).
 5. Phase 5.0 (sweep swap) — `HUDOverlayWindow.swift` 빈 골격, dispatcher 무관 검증 (`level=.screenSaver` / `ignoresMouseEvents=true` 영구 / collectionBehavior 셋 / multi-monitor frame pin).
 6. Phase 4.2 — AnalyzeCoordinator (actor + async let 병렬, OCR forward declare stub) + TriggerPanel onSubmit 배선 + 한국어 에러 메시지 매핑 (network/timeout/permission/json → 비-AI-native 친화).

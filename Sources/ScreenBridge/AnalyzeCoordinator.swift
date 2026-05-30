@@ -97,10 +97,17 @@ actor AnalyzeCoordinator {
         }
 
         // 3. target_text 매칭 — deterministic 좌표 (99% 핵심).
+        // Spatial fusion (Phase 6.1 wrong-box 차단): LLM이 coordinates 줬으면 그 영역 근처
+        // OCR 박스만 candidate. 화면 여러 영역에 같은 텍스트 있을 때 사용자 intent 영역 고름.
+        let llmHintRect: CGRect? = result.coordinates.flatMap { coords in
+            guard coords.count == 4 else { return nil }
+            return CGRect(x: coords[0], y: coords[1], width: coords[2], height: coords[3])
+        }
         let matched = ElementMatcher.match(
             targetText: result.targetText,
             candidates: ocrBoxes,
-            geometry: geometry
+            geometry: geometry,
+            llmHintRect: llmHintRect
         )
 
         let totalElapsed = Date().timeIntervalSince(started)

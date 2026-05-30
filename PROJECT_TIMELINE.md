@@ -472,6 +472,33 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-30 — Swift Phase 6.1 spatial fusion: LLM coords hint + OCR proximity → wrong-box 차단
+
+**Phase 6.1 verify fix commit hash backfill:** `f08a603`.
+
+**사용자 dogfooding 발견 (Phase 6.1 verify fix 후, log show 직접 query):**
+- "Save" 시도 → OCR `box="save"` (어딘가 인용 텍스트) — wrong-box
+- "Slack 어디?" 시도 → OCR `box="slack 못"` (어시스턴트 응답 텍스트) — wrong-box, **Dock의 Slack 아이콘 아님**
+- 진단: substring 매칭이 화면 *어디든* 매칭. 사용자 intent (Dock 영역 / dialog) 무시.
+
+**Spatial fusion (이 commit):**
+
+- `Prompts.swift` coordinates 룰: "fallback only" → "fallback OR **위치 hint 권장**". 강제 X, 권장만. 본질 ("OCR이 source") 일관.
+- `ElementMatcher.match` signature 확장: `llmHintRect: CGRect? = nil`, `proximityRadius: CGFloat = 200pt`.
+  - hint 있으면 중심 ±200pt 안 OCR 박스만 candidate.
+  - hint 근처 박스 0개 → full candidates fallback (LLM hint 부정확 안전망).
+- `AnalyzeCoordinator`가 `result.coordinates` → CGRect (sent image px) → ElementMatcher hint 전달.
+
+**Tests (4 new)**: proximity 근처 박스 선택 / hint 근처 없으면 full fallback / hint 없으면 기존 동작 / proximityRadius 커스터마이즈. 누적 78/78 통과 (`swift build` 2.90s, `swift test` 0.209s).
+
+**R9** (DECISIONS.md): spatial fusion architecture (A 즉시 + 향후 C Phase 6.2 hybrid).
+
+**한계:** LLM이 coords 안 주면 proximity 안 작동. 단 v0.1엔 *어머님 시도 시* LLM이 줄 가능성 큼 — 사용자 intent 명확한 경우 LLM도 영역 인지.
+
+**다음:** Phase 6.2 — AXUIElement (Dock 아이콘, icon-only UI deterministic 좌표) → Slack 같은 케이스 풀음. → Phase 5.x bubble (한글 next_action) → 어머님 dogfooding.
+
+---
+
 ## 2026-05-29 — 🌍 Vision Update: global + multi-platform + 5-layer security
 
 **Trigger (사용자 verbatim):**

@@ -70,8 +70,11 @@ enum Prompts {
 
     ## coordinates 룰
 
-    *fallback only* — 화면에 visible text가 정말 없는 아이콘/이미지 메뉴를 가리킬 때만 `[x, y, w, h]` 정수 4개 배열. 좌표는 사용자가 본 이미지의 픽셀 기준 (좌상단 `(0, 0)`).
+    `[x, y, w, h]` 정수 4개 배열. 좌표는 사용자가 본 이미지의 픽셀 기준 (좌상단 `(0, 0)`). **다음 두 경우에 줘**:
 
-    **평소엔 `coordinates` 키 자체를 생략하라.** backend의 OCR(Vision framework)가 `target_text`로 화면 내 위치를 *deterministic하게* 찾아 99% 정확한 픽셀을 결정한다 — 너의 추정보다 정확하다.
+    1. **아이콘/이미지 메뉴** — 화면에 visible text가 정말 없는 경우 (필수).
+    2. **위치 hint** — 화면 *여러 영역*에 같은 텍스트가 있을 수 있다 (예: "Save"가 dialog와 toolbar 둘 다). 사용자 intent (cursor 위치 / 작업 흐름)에 맞는 박스를 backend OCR matcher가 고르도록 *대략적 영역*만 표시 — 정확하지 않아도 좋다.
+
+    `coordinates` 줄 수 없으면 키 자체를 생략. backend OCR가 `target_text`로 화면 내 위치를 deterministic하게 찾는다 — 너의 픽셀 추정보다 정확하지만, *여러 박스 중 어느 거*인지 hint가 도움된다.
     """
 }

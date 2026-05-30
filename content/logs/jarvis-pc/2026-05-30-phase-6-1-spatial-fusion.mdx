@@ -1,0 +1,118 @@
+---
+title: "Phase 6.1 spatial fusion — LLM coords hint + OCR proximity로 wrong-box 차단"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "사용자 dogfooding이 wrong-box 발견 — 'Slack 어디?' 시도 시 OCR matcher가 Dock 아이콘 아닌 어시스턴트 응답 텍스트의 'slack 못 찾았어'에 박스. 화면 여러 영역에 같은 텍스트가 있을 때 substring 매칭이 사용자 intent 무시. 해법: LLM coords를 *대략적 영역 hint*로 활용 + OCR proximity filter. SYSTEM_PROMPT 권장 (강제 X — 본질 일관)."
+tags: ["swift", "spatial-fusion", "wrong-box", "ocr-matcher", "llm-hint", "screenbridge"]
+---
+
+Phase 6.1 verify fix 후 사용자 dogfooding이 결정적 issue 드러냄.
+
+## Log show 직접 query (1인 개발자 정신)
+
+사용자 비판: *"로그 그냥 니가 못보냐 기록을? 왜 복붙 시키지"* — `log show --last 30m --predicate 'subsystem == "com.screenbridge.app"' --info`로 macOS unified log 직접 query 가능. memory에 박음, 다음 세션도.
+
+```
+[trigger] cursor=(1091,445) screen=1728x1117@2.0x display=1
+[panel] analyze submit: 9 chars                           ← "Slack 어디?"
+[gemini] ok 3.8s — target_text="Slack"
+[ocr] 402 text boxes recognized
+[match] substring hit — target="Slack" box="slack 못"     ← ⚠️ wrong-box
+[analyze] complete 7.8s — target_text="Slack" OCR-matched
+[hud] present content type=annotated
+```
+
+진단: OCR이 화면의 모든 "slack" 잡음. *사용자 intent* (Dock 아이콘) 아니라 *어시스턴트 응답 텍스트* (`"slack 못 찾았어"`)에 박스. 번역기 본질 신뢰 직격.
+
+## 해법 — 5가지 옵션 + 추천
+
+| 옵션 | 시간 | 본질 |
+| --- | --- | --- |
+| **A. LLM coords hint + OCR proximity** ← 선택 | 30분 | LLM ~70% 정확하지만 *영역*은 맞음 |
+| B. Cursor 위치 hint | 30분 | cursor가 panel 영역 — 부적합 |
+| C. Phase 6.2 AXUIElement | 1-2시간 | Dock vs window content 구분 가능 |
+| D. SYSTEM_PROMPT에 cursor 우선 명시 | 10분 | LLM 부담 ↑ |
+| E. OCR confidence 정렬 | 5분 | confidence 비슷 |
+
+A 즉시 + 향후 C hybrid (DECISIONS R9).
+
+## SYSTEM_PROMPT 갱신 — 권장 (강제 X)
+
+본질 ("OCR이 source") 일관 유지. 단 *위치 hint*도 권장:
+
+```
+`coordinates`는 [x, y, w, h] 정수 4개 배열... 다음 두 경우에 줘:
+
+1. 아이콘/이미지 메뉴 — visible text 없는 경우 (필수).
+2. 위치 hint — 화면 여러 영역에 같은 텍스트가 있을 수 있다 (예: "Save"가
+   dialog와 toolbar 둘 다). 사용자 intent에 맞는 박스를 backend OCR matcher가
+   고르도록 대략적 영역만 표시 — 정확하지 않아도 좋다.
+```
+
+## ElementMatcher 확장
+
+```swift
+static func match(
+    targetText: String,
+    candidates: [OCRBox],
+    geometry: DisplayGeometry,
+    llmHintRect: CGRect? = nil,                  // ← 새
+    proximityRadius: CGFloat = 200,              // ← 새, sent image px
+    threshold: Double = defaultThreshold
+) -> CGRect? {
+    let effectiveCandidates: [OCRBox]
+    if let hint = llmHintRect {
+        let hc = CGPoint(x: hint.midX, y: hint.midY)
+        let nearby = candidates.filter { box in
+            let bc = CGPoint(x: box.rectInSentImage.midX, y: box.rectInSentImage.midY)
+            return hypot(bc.x - hc.x, bc.y - hc.y) <= proximityRadius
+        }
+        // hint 근처 없으면 full candidates fallback — LLM hint 부정확 안전망.
+        effectiveCandidates = nearby.isEmpty ? candidates : nearby
+    } else {
+        effectiveCandidates = candidates
+    }
+    // 기존 substring + fuzzy on effectiveCandidates
+    ...
+}
+```
+
+`AnalyzeCoordinator`:
+
+```swift
+let llmHintRect: CGRect? = result.coordinates.flatMap { coords in
+    guard coords.count == 4 else { return nil }
+    return CGRect(x: coords[0], y: coords[1], width: coords[2], height: coords[3])
+}
+let matched = ElementMatcher.match(
+    targetText: result.targetText,
+    candidates: ocrBoxes,
+    geometry: geometry,
+    llmHintRect: llmHintRect
+)
+```
+
+## proximityRadius 200pt 근거
+
+1568px sent image에서 ~12.7% 너비. Dock 영역 / dialog / toolbar 정도 cover. dogfooding 후 튜닝 (DECISIONS R9 미해결).
+
+## 78 tests, build 2.90s, test 0.209s
+
+```
+... + 11 ElementMatcher (기존) + 4 ElementMatcher (spatial fusion) = 78/78 pass
+```
+
+새 tests:
+- LLM hint 근처 박스 선택 (좌상단 conversation 'Save' vs 우하단 toolbar 'Save' — toolbar 선택)
+- hint 근처 박스 0개 → full candidates fallback
+- hint 없으면 기존 동작
+- proximityRadius 커스터마이즈 (200 vs 500)
+
+## 다음
+
+Phase 6.2 — AXUIElement matcher. *Slack 같은 icon-only* 케이스 — Dock에 `AXRole="AXDockItem"`, `AXTitle="Slack"`, `AXPosition` 메타데이터. `ElementMatcher` 확장 (OCR ∪ AX boxes 합집합 candidate).
+
+그 후 Phase 5.x bubble (한글 next_action) → **어머님 첫 dogfooding** — honest feedback이 진짜 product fit 검증.

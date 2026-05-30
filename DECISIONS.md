@@ -885,4 +885,39 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 ---
 
+## 2026-05-30 — Spatial fusion: LLM coords hint + OCR proximity filter (wrong-box 차단)
+
+**배경**: Phase 6.1 dogfooding이 wrong-box false positive 큰 issue 드러냄. 사용자가 "Save"/"Slack" 시도 시 — 화면 *여러 영역*에 같은 텍스트 있어 OCR substring 매칭이 *틀린 영역* 박스 잡음 (예: 어시스턴트 응답의 "slack 못 찾았어"에 박스 뜸, 사용자는 Dock의 Slack 아이콘 기대). 번역기 본질 신뢰 직격.
+
+**선택지:**
+- **A. LLM coordinates를 *영역 hint*로 활용 + OCR proximity filter** — LLM ~70% 정확하지만 *대략적 영역*은 맞음 (Dock vs window content 구분 가능). 30분 fix.
+- B. 사용자 `LastTriggerContext.cursor`를 hint로 — proximity radius로 cursor 근처 박스만. 단 cursor가 panel 영역 → 부정확.
+- C. Phase 6.2 AXUIElement로 Window/Dock/AXRole 구분 (~1-2시간).
+- D. SYSTEM_PROMPT에 "사용자 cursor 근처 우선" 명시 (LLM이 추가 처리).
+- E. OCR confidence 기준 정렬 — 단 모든 박스 confidence 비슷 (Vision .accurate).
+
+**Trade-off:** 즉시 가능 vs 정확도 vs 사용자 intent 표현.
+
+**선택:** **A** 즉시 + 향후 C (Phase 6.2) hybrid.
+
+**근거:**
+- A는 *기존 LLM coordinates* 활용 — Phase 4.2 fix에서 강제 → Phase 6.1에서 fallback only 되돌림. 단 LLM이 줄 *수* 있음. SYSTEM_PROMPT 갱신으로 hint 권장 명시 — 강제 X (본질 일관: OCR이 source).
+- C는 정확하지만 시간. A는 30분. 둘 *결합*도 자연 (AX 후보 + LLM hint).
+- B는 cursor가 ⌥+Space 시점 위치 — 사용자가 *이미 안 곳*을 기억하는 게 아니라 *AI가 시킨 곳* 찾는 거라 hint로 부적합. (사용자 intent: "Slack 어디?"는 Dock 영역 — cursor와 무관.)
+- D는 SYSTEM_PROMPT 부담 ↑. A의 hint가 더 단순.
+
+**구현:**
+- `Prompts.swift` coordinates 룰: "fallback only" → "fallback OR 위치 hint 권장" 추가. 강제 X.
+- `ElementMatcher.match`에 `llmHintRect: CGRect? = nil`, `proximityRadius: CGFloat = 200pt` 파라미터.
+- hint 있으면 중심 ±200pt 안 박스만 candidate. 0개면 full fallback (LLM hint 부정확 안전망).
+- `AnalyzeCoordinator`가 `result.coordinates` → CGRect → ElementMatcher hint 전달.
+
+**되돌리기 비용:** `ElementMatcher.match` signature backward compatible (llmHintRect=nil 기존 동작). AnalyzeCoordinator에서 hint nil 전달. 5분.
+
+**미해결:**
+- LLM이 coords 안 주면 proximity 안 작동. → 향후 cursor 기반 또는 (LLM 응답에 "영역 키워드" 추가 — `header`/`dock`/`sidebar` 같은).
+- `proximityRadius` 200pt 튜닝 자료 dogfooding 후 갱신 (1568px sent image에서 ~12.7% 너비).
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

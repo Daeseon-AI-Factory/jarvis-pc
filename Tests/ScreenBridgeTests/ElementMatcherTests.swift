@@ -219,4 +219,88 @@ struct ElementMatcherTests {
         // 같은 길이 'save' 둘 — confidence 0.95 박스 선택 (x=500).
         #expect(rect?.minX == 500)
     }
+
+    // MARK: - Spatial fusion (Phase 6.1 wrong-box 차단)
+
+    @Test("Spatial fusion — LLM hint 근처 박스 선택 (화면 두 곳에 같은 텍스트일 때)")
+    func proximityFilterPicksNearbyBox() {
+        // 'Save' 박스 두 곳:
+        //  - 좌상단 (100, 200) — 사용자의 대화창 conversation 텍스트
+        //  - 우하단 (700, 600) — toolbar의 Save 버튼 (사용자 intent)
+        let candidates = [
+            box("Save", 100, 200, 80, 25),
+            box("Save", 700, 600, 80, 25),
+        ]
+        // LLM이 우하단 영역 hint (toolbar 근처)
+        let llmHint = CGRect(x: 720, y: 610, width: 50, height: 30)
+        let rect = ElementMatcher.match(
+            targetText: "Save",
+            candidates: candidates,
+            geometry: mockGeometry(),
+            llmHintRect: llmHint,
+            proximityRadius: 200
+        )
+        // hint 근처 (700, 600) box 선택 — wrong-box (100, 200) 차단
+        #expect(rect?.minX == 700)
+        #expect(rect?.minY == 600)
+    }
+
+    @Test("Spatial fusion — LLM hint 근처에 박스 없으면 full candidates fallback (안전망)")
+    func proximityFallbackWhenNoNearby() {
+        let candidates = [box("Save", 100, 200, 80, 25)]
+        // LLM이 hint 완전 다른 영역 (LLM 추정 부정확)
+        let llmHint = CGRect(x: 900, y: 700, width: 50, height: 30)  // distance > 200
+        let rect = ElementMatcher.match(
+            targetText: "Save",
+            candidates: candidates,
+            geometry: mockGeometry(),
+            llmHintRect: llmHint,
+            proximityRadius: 200
+        )
+        // proximity filter empty → full candidates fallback → 유일한 박스 선택
+        #expect(rect != nil)
+        #expect(rect?.minX == 100)
+    }
+
+    @Test("Spatial fusion — LLM hint 없으면 기존 동작 (모든 candidates)")
+    func noLLMHintBehavesAsBeforev() {
+        let candidates = [
+            box("Save", 100, 200, 80, 25),
+            box("Save", 700, 600, 80, 25),
+        ]
+        // llmHintRect = nil → 기존 동작 (tiebreaker — confidence 같음, 첫 번째 박스 또는 stable order)
+        let rect = ElementMatcher.match(
+            targetText: "Save",
+            candidates: candidates,
+            geometry: mockGeometry()
+        )
+        #expect(rect != nil)  // 둘 다 매칭, 어느 하나 반환
+    }
+
+    @Test("Spatial fusion — proximityRadius 커스터마이즈 가능")
+    func customProximityRadius() {
+        let candidates = [box("Save", 500, 500, 80, 25)]
+        // LLM hint 300pt 떨어진 곳
+        let llmHint = CGRect(x: 200, y: 200, width: 50, height: 30)
+        // distance from (540, 512) to (225, 215) = ~431
+        // default radius 200 → no match in proximity → full fallback → 매칭
+        let rectDefault = ElementMatcher.match(
+            targetText: "Save",
+            candidates: candidates,
+            geometry: mockGeometry(),
+            llmHintRect: llmHint
+        )
+        #expect(rectDefault != nil)  // full fallback
+
+        // radius 500 → proximity 통과 → 직접 매칭
+        let rectWide = ElementMatcher.match(
+            targetText: "Save",
+            candidates: candidates,
+            geometry: mockGeometry(),
+            llmHintRect: llmHint,
+            proximityRadius: 500
+        )
+        #expect(rectWide != nil)
+        #expect(rectWide?.minX == 500)
+    }
 }
