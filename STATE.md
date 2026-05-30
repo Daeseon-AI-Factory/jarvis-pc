@@ -18,9 +18,10 @@
 - [x] Swift Phase 2.3 — GeminiDispatcher + os.Logger swap (`8a60c2f`): URLSession async + `responseMimeType`+`responseSchema` 강제 + image FIRST + retry 429/5xx exp backoff + timeout 30/60s. `JSONSchema` indirect enum (R8). NSLog → `os.Logger` 전체 swap (R9, 사용자 좌절 해결, `log stream` 한 명령). HotKeyManager OSStatus 명시 (R8). 24 tests.
 - [x] Swift Phase 3.1 — ScreenCaptureKit + Permissions + LastTriggerContext + DisplayGeometry (`7f4d4f4`): SCShareableContent + SCScreenshotManager + 1568 다운스케일 + 4-layer 좌표 캡슐화 + 권한 startup eager + `dev.sh` codesign. 29 tests.
 - [x] Swift Phase 3.1 verify fix (`131da7b`): adversarial verify workflow 4 BLOCKER + 3 HIGH. SCContentFilter Apple shape, NSScreen.main 자기 모순 fix, `globalAppKitRect` helper, Permission denial 1.5s 재확인, LastTriggerContext fresh fetch, codesign `--identifier`. 33 tests.
-- [x] Swift Phase 5.0 — HUDOverlayWindow 빈 골격 (이 commit, **첫 *눈으로 보는* 단계**): NSPanel borderless + clear + hasShadow=false + `level=.screenSaver` + collectionBehavior 3개 (canJoinAllSpaces + fullScreenAuxiliary + stationary) + `ignoresMouseEvents=true` 영구 + `sharingType=.none`. NSWindow 본질 5개 (Layer 1/4/7/8/9) lock. HUDController present/dismiss + `presentPlaceholderCenter` (화면 중앙 300x50 빨간 박스 hardcode). AppDelegate `handleHotkey` (HUD 토글) + `handleAnalyze`. TriggerPanel `onAnalyze` closure. 10 new tests (HUDOverlayWindow 8 + HUDController 2). 43 tests 통과 (`swift build` 2.15s, `swift test` 0.122s). R9: HUD architecture (single screen-wide + SwiftUI 내 박스 채택).
+- [x] Swift Phase 5.0 — HUDOverlayWindow 빈 골격 (`a51dc09`): NSPanel 5 본질 (Layer 1/4/7/8/9) + presentPlaceholderCenter. **첫 *눈으로 보는* 단계** — 사용자 직접 검증: 빨간 박스 떠봄 + ⌥Space dismiss OK.
+- [x] Swift Phase 4.2 — AnalyzeCoordinator + UserMessage + HUDContent (이 commit, ***진짜 동작* 시작**): AnalyzeRequest/AnalyzeStage + `ScreenCaptureService` protocol (R9 test) + AnalyzeCoordinator actor (capture → Gemini sequential, 중복 reject) + UserMessage 한국어 매핑 + HUDContent enum (loading/annotated/error) + HUDOverlayView 3 case (LoadingPill/Red Box/ErrorPill) + HUDController `present(content:on:)`. AppDelegate handleAnalyze: `presentLoading` → `coordinator.run` → coordinates 있으면 `logicalRectFromSentBox` → `presentAnnotation`, 없으면/error → `presentError` 한국어. Swift 6 implicit self in Logger interpolation 함정 (R8). 12 new tests (AnalyzeCoordinator 4 + UserMessage 8). 55 tests 통과 (`swift build` 2.19s, `swift test` 0.213s). **한계 인정**: LLM coordinates ~70% — Phase 6.1 OCR matcher로 99%.
 
-**Last commit:** Phase 5.0 (hash 다음 commit에 갱신)
+**Last commit:** Phase 4.2 (hash 다음 commit에 갱신)
 **검증 안 됨:** `swift run` 실제 smoke (menu bar 아이콘 + ⌥Space → panel). 사용자 manual 필요 — GUI라 agent가 직접 못 띄움.
 
 ## Next step (다음 세션 시작점)
@@ -32,8 +33,9 @@
 3. ✅ Phase 2.3 — GeminiDispatcher + os.Logger swap (`8a60c2f`). URLSession + responseSchema + retry, JSONSchema indirect enum.
 4. ✅ Phase 3.1 — ScreenCapture + Permissions + LastTriggerContext + DisplayGeometry (`7f4d4f4`).
 4b. ✅ Phase 3.1 verify fix (`131da7b`) — BLOCKER 3 + HIGH 3 from adversarial workflow.
-5. ✅ Phase 5.0 — HUDOverlayWindow 빈 골격 (이 commit). NSPanel 5 본질 (Layer 1/4/7/8/9) + 빨간 박스 hardcode + ⌥+Space 토글 + TriggerPanel onAnalyze. 첫 *눈으로 보는* 단계.
-6. **Phase 4.2 (다음)** — `AnalyzeCoordinator` actor + `AnalyzeRequest`/`AnalyzeStage` enum + TriggerPanel loading spinner + 한국어 에러 메시지 매핑 (network/timeout/permission/json → 비-AI-native 친화). handleAnalyze가 hardcode 대신 *진짜 capture + dispatcher + DisplayGeometry* 호출. AnalysisResult.coordinates fallback (OCR Phase 6.1 전 단계 — LLM 추정 좌표 사용 후 6.1에서 OCR 매칭으로 교체).
+5. ✅ Phase 5.0 — HUDOverlayWindow 빈 골격 (`a51dc09`). 사용자 검증 통과.
+6. ✅ Phase 4.2 — AnalyzeCoordinator + UserMessage + HUDContent (이 commit). *진짜 동작* — LLM 호출 + 한국어 에러.
+7. **Phase 5.x + 6.1 (다음)** — Phase 5.x: HUDOverlayView에 bubble 추가 (한글 `next_action` 박스 옆, 화면 가장자리 clamping). Phase 6.1: Vision OCR (`VNRecognizeTextRequest` .accurate ko-KR+en-US revision 3 + Y-flip) + `OCRBox` struct + `ElementMatcher` (fuzzy substring → Levenshtein escalate, threshold 0.7, fail 시 bubble만). AnalyzeCoordinator에 OCR fork 추가 + `target_text` 매칭 → deterministic 99% 좌표.
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).
 5. Phase 5.0 (sweep swap) — `HUDOverlayWindow.swift` 빈 골격, dispatcher 무관 검증 (`level=.screenSaver` / `ignoresMouseEvents=true` 영구 / collectionBehavior 셋 / multi-monitor frame pin).
 6. Phase 4.2 — AnalyzeCoordinator (actor + async let 병렬, OCR forward declare stub) + TriggerPanel onSubmit 배선 + 한국어 에러 메시지 매핑 (network/timeout/permission/json → 비-AI-native 친화).

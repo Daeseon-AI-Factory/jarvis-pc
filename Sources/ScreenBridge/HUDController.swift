@@ -1,16 +1,9 @@
 //
 //  HUDController.swift
-//  ScreenBridge — Phase 5.0
+//  ScreenBridge — Phase 4.2 (rewrite from 5.0)
 //
-//  HUD overlay window lifecycle. present(annotation, on screen) / dismiss().
-//  Phase 5.0: hardcode 빨간 박스 1개 (화면 중앙). Phase 5.x: AnalysisResult 좌표.
-//
-//  좌표 패턴:
-//  - HUDOverlayWindow.setFrame(screen.frame) — screen.frame은 global AppKit, raw setFrame OK.
-//  - annotation.rect는 SwiftUI View 내부의 screen-local top-left. View frame이 screen 전체라
-//    그대로 좌표 사용.
-//  - ⚠️ Phase 5.x/6.x에서 LLM sent px 좌표 → `DisplayGeometry.logicalRectFromSentBox` → annotation.rect.
-//    raw `setFrame(localRect)` 절대 금지 (verify fix lesson, Tauri Layer 9).
+//  HUD overlay lifecycle. present(content, on screen) 단일 method + 3 helpers.
+//  Phase 5.0의 presentPlaceholderCenter 유지 (호환).
 //
 
 import AppKit
@@ -21,21 +14,22 @@ final class HUDController {
     private var window: HUDOverlayWindow?
     private(set) var isShowing: Bool = false
 
-    func present(annotation: HUDAnnotation, on screen: NSScreen) {
+    /// 단일 entry — `HUDContent` (loading / annotated / error).
+    /// `screen.frame`은 global AppKit이라 raw `setFrame` 안전 (verify fix lesson 적용 범위 밖).
+    func present(content: HUDContent, on screen: NSScreen) {
         if window == nil {
             window = HUDOverlayWindow()
         }
         guard let win = window else { return }
 
         win.orderOut(nil)
-        // screen.frame은 global AppKit (외부 monitor x=1440 등) — raw setFrame 안전.
         win.setFrame(screen.frame, display: false)
-        win.contentView = NSHostingView(rootView: HUDOverlayView(annotation: annotation))
-        win.orderFrontRegardless()   // ⚠️ makeKeyAndOrderFront 절대 금지 — focus 안 뺏음.
+        win.contentView = NSHostingView(rootView: HUDOverlayView(content: content))
+        win.orderFrontRegardless()   // makeKeyAndOrderFront 절대 금지
 
         isShowing = true
         Log.app.info(
-            "[hud] present on screen=\(Int(screen.frame.width), privacy: .public)x\(Int(screen.frame.height), privacy: .public)@(\(Int(screen.frame.origin.x), privacy: .public),\(Int(screen.frame.origin.y), privacy: .public)) — rect=(\(Int(annotation.rect.origin.x), privacy: .public),\(Int(annotation.rect.origin.y), privacy: .public),\(Int(annotation.rect.width), privacy: .public),\(Int(annotation.rect.height), privacy: .public))"
+            "[hud] present content type=\(self.contentKind(content), privacy: .public) on screen \(Int(screen.frame.width), privacy: .public)x\(Int(screen.frame.height), privacy: .public)@(\(Int(screen.frame.origin.x), privacy: .public),\(Int(screen.frame.origin.y), privacy: .public))"
         )
     }
 
@@ -46,8 +40,19 @@ final class HUDController {
         Log.app.info("[hud] dismiss")
     }
 
-    /// Phase 5.0 hardcode placeholder — 사용자 Analyze 직후 *화면 중앙*에 빨간 박스 1개.
-    /// dispatcher 무관 NSWindow 본질 5개 (Layer 1/4/7/8/9) 검증 = 안경 메타포 *첫 시각화*.
+    func presentLoading(message: String, on screen: NSScreen) {
+        present(content: .loading(message: message), on: screen)
+    }
+
+    func presentAnnotation(_ annotation: HUDAnnotation, on screen: NSScreen) {
+        present(content: .annotated(annotation), on: screen)
+    }
+
+    func presentError(message: String, on screen: NSScreen) {
+        present(content: .error(message: message), on: screen)
+    }
+
+    /// Phase 5.0 호환 — 화면 중앙 빨간 박스 hardcode.
     func presentPlaceholderCenter(on screen: NSScreen) {
         let boxW: CGFloat = 300
         let boxH: CGFloat = 50
@@ -57,6 +62,14 @@ final class HUDController {
             width: boxW,
             height: boxH
         )
-        present(annotation: HUDAnnotation(rect: local), on: screen)
+        presentAnnotation(HUDAnnotation(rect: local), on: screen)
+    }
+
+    private func contentKind(_ content: HUDContent) -> String {
+        switch content {
+        case .loading: return "loading"
+        case .annotated: return "annotated"
+        case .error: return "error"
+        }
     }
 }

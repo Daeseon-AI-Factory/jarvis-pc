@@ -10,6 +10,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var triggerPanel: TriggerPanel?
     private let hud = HUDController()
 
+    /// GEMINI_API_KEY 있으면 dispatcher 생성. 없으면 handleAnalyze에서 HUD 에러.
+    private lazy var coordinator: AnalyzeCoordinator? = {
+        guard let dispatcher = GeminiDispatcher.fromEnvironment() else {
+            Log.dispatcher.error("GEMINI_API_KEY 없음 — AnalyzeCoordinator 생성 실패. .env 또는 process env 확인.")
+            return nil
+        }
+        Log.dispatcher.info("AnalyzeCoordinator ready — Gemini dispatcher loaded")
+        return AnalyzeCoordinator(dispatcher: dispatcher)
+    }()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // dock 안 보임, menu bar only. SwiftPM엔 Info.plist LSUIElement를 못
         // 박으니 런타임에 설정 — 더 안정적이기도 하다.
@@ -104,15 +114,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         toggleTriggerPanel()
     }
 
-    /// Analyze 콜백 — Phase 5.0은 *hardcode 빨간 박스 1개* 화면 중앙에.
-    /// Phase 4.2에서 capture + dispatcher + DisplayGeometry로 진짜 분석 연결.
+    /// Analyze 콜백 — Phase 4.2: 진짜 capture + dispatcher + HUD.
+    /// 1. loading HUD 즉시
+    /// 2. AnalyzeCoordinator.run async (capture + Gemini 8-15s)
+    /// 3. .done: coordinates → DisplayGeometry → 빨간 박스 / .failed: 한국어 에러 pill
+    /// 4. ⌥+Space로 dismiss
     private func handleAnalyze(instruction: String) {
-        Log.panel.info("analyze submit (Phase 5.0 placeholder): \(instruction.count, privacy: .public) chars — HUD hardcode center")
+        Log.panel.info("analyze submit: \(instruction.count, privacy: .public) chars")
         guard let screen = cursorScreen() else {
-            Log.app.error("[analyze] no NSScreen for HUD — fallback to first")
+            Log.app.error("[analyze] no NSScreen for HUD")
             return
         }
-        hud.presentPlaceholderCenter(on: screen)
+
+        // dispatcher 없으면 에러 즉시
+        guard let coordinator else {
+            hud.presentError(
+                message: "AI 키가 없어요.\n.env 파일에 GEMINI_API_KEY를 추가해주세요.",
+                on: screen
+            )
+            return
+        }
+
+        // 1. loading HUD
+        hud.presentLoading(message: "분석 중...", on: screen)
+        let req = AnalyzeRequest(instruction: instruction, triggeredAt: Date())
+
+        Task { @MainActor in
+            let stage = await coordinator.run(req)
+            switch stage {
+            case .done(let result, let geometry):
+                if let coords = result.coordinates,
+                   let local = geometry.logicalRectFromSentBox(coords) {
+                    Log.app.info("[analyze] HUD annotated — target_text=\"\(result.targetText, privacy: .public)\"")
+                    self.hud.presentAnnotation(HUDAnnotation(rect: local), on: screen)
+                } else {
+                    // LLM이 coordinates 안 줬음 — Phase 6.1 OCR matcher 도입 후 fallback.
+                    Log.app.notice("[analyze] no coordinates from LLM — OCR matcher (Phase 6.1) 필요")
+                    self.hud.presentError(
+                        message: "이 화면에선 정확한 위치를 못 찾았어요.\n다음 버전에서 개선될 예정이에요.",
+                        on: screen
+                    )
+                }
+            case .failed(let err):
+                let msg = UserMessage.from(err)
+                Log.app.error("[analyze] failed → \(msg, privacy: .public)")
+                self.hud.presentError(message: msg, on: screen)
+            case .capturing, .analyzing:
+                break   // Phase 4.2 stream 모드 아님
+            }
+        }
     }
 
     /// LastTriggerContext의 displayID 우선, 없으면 cursor 위치, 최후 screens.first.

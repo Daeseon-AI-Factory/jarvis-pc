@@ -326,4 +326,39 @@ NSWindow 5개 본질 사용자 검증 — Keynote 풀스크린/Mission Control/S
 
 ---
 
+## 2026-05-29 — Swift Phase 4.2: AnalyzeCoordinator + 진짜 동작 시작
+
+**Phase 5.0 commit hash backfill:** `a51dc09`.
+
+**Phase 4.2 완료 (이 commit) — *진짜 동작* 첫 시도 (LLM coordinates 의존, OCR Phase 6.1 전):**
+
+- `AnalyzeRequest` struct + `AnalyzeStage` enum (capturing / analyzing / done(result, geometry) / failed(DispatcherError))
+- `ScreenCaptureService` protocol + `LiveScreenCapture` struct wrapper (R9 — test mock 가능)
+- `AnalyzeCoordinator` actor — capture → dispatcher sequential, 중복 trigger reject (isRunning flag)
+- `UserMessage` enum — `DispatcherError` → 비-AI-native 친화 한국어 매핑 (jargon 금지)
+- `HUDOverlayView` rewrite — `HUDContent` enum (loading/annotated/error) + LoadingPill (ProgressView + 한글) + RoundedRectangle 빨강 + ErrorPill
+- `HUDController` rewrite — `present(content:on:)` 단일 entry + 4 helpers (loading/annotation/error/placeholder)
+- `AppDelegate.handleAnalyze` rewrite — coordinator lazy init + presentLoading → run → presentAnnotation/Error
+
+**진짜 동작 흐름 (사용자 검증 단계):**
+1. ⌥+Space → trigger panel
+2. 텍스트 입력 + Analyze
+3. panel 자기 close → HUD `분석 중...` 즉시
+4. 8-15초 Gemini 2.5 Flash 호출 (실측)
+5. **응답 coordinates 있음** → `DisplayGeometry.logicalRectFromSentBox` → **빨간 박스 진짜 위치에**
+   **응답 coordinates 없음** → `이 화면에선 정확한 위치를 못 찾았어요\n다음 버전에서 개선될 예정이에요`
+   **error** → `UserMessage.from` 한국어 (예: `인터넷 연결을 확인해주세요`)
+6. ⌥+Space → dismiss
+
+**Tests (12 new)**: AnalyzeCoordinator 4 (happy path / dispatcher 에러 / capture permissionDenied / 중복 reject) + UserMessage 8 (missingAPIKey/401/429/network/maxTokens/retriesExhausted/decoding/jargon-free literal 검증). 누적 55/55 통과 (`swift build` 2.19s, `swift test` 0.213s).
+
+**R8** (docs/troubleshooting.md): Swift 6 `os.Logger` string interpolation 안 implicit self 거부 → `self.` 명시.
+**R9** (DECISIONS.md): `ScreenCaptureService` protocol (테스트 가능성).
+
+**한계 인정**: LLM이 `coordinates` 안 줄 경우 — 에러 메시지 안내. Phase 6.1 OCR matcher 도입 시 `target_text` 기반 deterministic 매칭으로 99% 정확도. v0.1 초기엔 LLM 추정 좌표 ~70% — 박스가 어긋날 수 있음 (이건 dogfooding 검증으로 OCR 가치 측정 자료).
+
+**다음:** Phase 5.x — HUDOverlayView bubble (한글 `next_action` 박스 옆 + 화면 가장자리 clamping) + Phase 6.1 — Vision OCR (`VNRecognizeTextRequest` .accurate ko-KR+en-US revision 3 + Y-flip) + `OCRBox` struct + `ElementMatcher` (fuzzy substring → Levenshtein escalate, threshold 0.7). AnalyzeCoordinator에 OCR fork 추가 + `target_text` 매칭 → deterministic 좌표.
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

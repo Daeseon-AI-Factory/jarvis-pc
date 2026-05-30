@@ -1,0 +1,187 @@
+---
+title: "Phase 4.2 — AnalyzeCoordinator: 진짜 LLM 호출 + 한국어 에러 + HUD 3 case"
+date: "2026-05-29"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Phase 5.0의 빨간 박스 hardcode를 *진짜 동작*으로 교체. AnalyzeCoordinator actor (capture → Gemini → DisplayGeometry → HUD), UserMessage 한국어 매핑 (jargon 금지), HUDContent enum (loading/annotated/error). LLM coordinates ~70% — Phase 6.1 OCR matcher로 99% 도달 계획."
+tags: ["swift", "actor", "analyze-flow", "korean-error", "hud-loading", "screenbridge"]
+---
+
+Phase 5.0가 *첫 눈으로 보는* 단계였다 — 빨간 박스 hardcode 1개가 화면 중앙에. Phase 4.2가 그 hardcode를 **진짜 동작**으로 교체. AnalyzeCoordinator가 capture + Gemini 2.5 Flash + DisplayGeometry까지 연결.
+
+## 단일 흐름
+
+```
+⌥+Space → trigger panel
+"Vercel에서 env 추가 어디?" 입력 + Analyze
+  ↓
+panel 자기 close (사용자 화면 다시 보임)
+  ↓
+HUD "분석 중..." 즉시 (LoadingPill)
+  ↓
+8-15s — AnalyzeCoordinator.run(req) [capture → Gemini]
+  ↓
+coordinates 있음 → DisplayGeometry.logicalRectFromSentBox → 빨간 박스 진짜 위치
+coordinates 없음 → ErrorPill "이 화면에선 정확한 위치를 못 찾았어요..."
+error → ErrorPill 한국어 (예: "인터넷 연결을 확인해주세요")
+  ↓
+⌥+Space → dismiss
+```
+
+## ScreenCaptureService protocol (R9 — test 가능성)
+
+`AnalyzeCoordinator`가 `ScreenCapture.captureCursorScreen()` enum static func 직접 호출하면 — unit test에서 SC API mock 불가. SC는 실 권한 + 실 display 필요라 CI에서 skip.
+
+해법:
+
+```swift
+protocol ScreenCaptureService: Sendable {
+    func captureCursorScreen() async throws -> (Data, DisplayGeometry)
+}
+
+struct LiveScreenCapture: ScreenCaptureService {
+    func captureCursorScreen() async throws -> (Data, DisplayGeometry) {
+        try await ScreenCapture.captureCursorScreen()
+    }
+}
+
+actor AnalyzeCoordinator {
+    private let capture: ScreenCaptureService
+    private let dispatcher: LLMDispatcher
+
+    init(capture: ScreenCaptureService = LiveScreenCapture(), dispatcher: LLMDispatcher) {
+        ...
+    }
+}
+```
+
+`LLMDispatcher` protocol 이미 있어 같은 패턴 일관. 4 unit tests로 lock — happy path / dispatcher 에러 / capture permission denied / 중복 reject. DECISIONS.md R9 entry full.
+
+## 중복 trigger reject
+
+사용자가 분석 중 ⌥+Space 토글하지 않고 *다시 Analyze* 시도 시 (현재 UI에선 panel close돼서 불가능, 미래 가능):
+
+```swift
+actor AnalyzeCoordinator {
+    private var isRunning: Bool = false
+
+    func run(_ req: AnalyzeRequest) async -> AnalyzeStage {
+        if isRunning {
+            Log.dispatcher.notice("[analyze] reject — 이미 진행 중")
+            return .failed(.invalidResponse("이미 분석 중"))
+        }
+        isRunning = true
+        defer { isRunning = false }
+        ...
+    }
+}
+```
+
+actor isolation이 reentrance 자동 막음 — 단 `await` 후 isRunning 체크는 isolated read.
+
+## UserMessage — 비-AI-native 친화 한국어
+
+DispatcherError 7 case → 한국어 매핑. *jargon 금지* (`VNRequest`, `OSStatus`, `Error` 등).
+
+```swift
+enum UserMessage {
+    static func from(_ error: DispatcherError) -> String {
+        switch error {
+        case .missingAPIKey:
+            return "AI 키가 없어요. 설정에서 등록해주세요."
+        case .network:
+            return "인터넷 연결을 확인해주세요."
+        case .httpStatus(let code, _) where code == 401 || code == 403:
+            return "AI 키가 잘못된 것 같아요. 다시 확인해주세요."
+        case .httpStatus(let code, _) where code == 429:
+            return "오늘 무료 사용량을 다 썼어요. 잠시 후 다시 시도하거나 키를 바꿔주세요."
+        case .httpStatus:
+            return "AI가 잠시 응답하지 않아요. 잠시 후 다시 시도해주세요."
+        case .decoding, .invalidResponse:
+            return "AI 응답을 알아볼 수 없어요. 다시 시도해주세요."
+        case .maxTokens:
+            return "응답이 너무 길어요. 화면이 복잡하면 좀 더 단순한 부분으로 다시 시도해주세요."
+        case .retriesExhausted:
+            return "여러 번 시도했지만 실패했어요. 잠시 후 다시 시도해주세요."
+        }
+    }
+}
+```
+
+8 unit tests로 lock — *jargon-free literal 검증* test 한 개가 핵심:
+
+```swift
+@Test("모든 메시지 jargon-free (VN/OSStatus/FAIL/Error 0)")
+func allMessagesKoreanOnly() {
+    for err in allErrors {
+        let msg = UserMessage.from(err)
+        #expect(!msg.contains("VN"))
+        #expect(!msg.contains("OSStatus"))
+        #expect(!msg.contains("FAIL"))
+        #expect(!msg.contains("Error"))
+    }
+}
+```
+
+누가 미래에 무심코 영어 jargon 박으면 test가 잡음.
+
+## HUDContent — 3 case
+
+```swift
+enum HUDContent: Sendable, Equatable {
+    case loading(message: String)
+    case annotated(HUDAnnotation)
+    case error(message: String)
+}
+```
+
+HUDOverlayView가 switch:
+- `loading` → `LoadingPill` (ProgressView + 한글 텍스트, 화면 중앙)
+- `annotated` → `RoundedRectangle(cornerRadius: 4).stroke(.red, lineWidth: 3)` (annotation.rect 위치)
+- `error` → `ErrorPill` (빨강 배경 + 한글 메시지, 화면 중앙, 최대 460pt)
+
+HUDController는 single `present(content:on:)` + 4 helpers (loading/annotation/error/placeholder).
+
+## Swift 6 implicit self in os.Logger (R8)
+
+Build error 한 번:
+
+```
+error: implicit use of 'self' in closure;
+       use 'self.' to make capture semantics explicit
+```
+
+위치:
+```swift
+Log.app.info("[hud] type=\(contentKind(content), privacy: .public) ...")
+```
+
+원인: `os.Logger` interpolation은 escaping autoclosure (log level filtering 시 호출 안 함 — 지연 evaluation). Swift 6 strict이 escaping closure 안 instance method 호출 시 `self.` 강제.
+
+Fix: `self.contentKind(content)`. docs/troubleshooting.md R8 entry.
+
+## 한계 인정 — LLM coordinates ~70%
+
+Gemini 2.5 Flash가 vision으로 좌표 추정 — 정확도 ~70%. 박스가 *위치는 맞지만 좀 어긋남* 가능. 사용자 직접 검증으로 OCR matcher (Phase 6.1) 가치 측정 자료.
+
+Phase 6.1 도입 시:
+- `target_text` (LLM이 명시한 visible text) → Vision `VNRecognizeTextRequest` OCR → ElementMatcher fuzzy substring → deterministic 좌표 → 99%
+- LLM coordinates는 fallback (OCR 매칭 실패 시)
+
+이게 *번역기* 본질의 정확도 가까이.
+
+## 55 tests, build 2.19s, test 0.213s
+
+```
+6 AnalysisResult + 4 Prompts + 8 Env + 6 GeminiDispatcher
++ 9 DisplayGeometry + 8 HUDOverlayWindow + 2 HUDController
++ 4 AnalyzeCoordinator + 8 UserMessage = 55/55 pass
+```
+
+## 다음
+
+사용자 검증 — `./dev.sh` → 실제 화면 캡처 + Gemini 호출. 박스가 *얼마나 정확*한지 dogfooding 자료. 그 다음 Phase 5.x bubble + Phase 6.1 OCR.
+
+Phase 4.2 commit 후에도 adversarial verify workflow 권장 — actor reentrance / sequential capture+dispatcher latency / 한국어 메시지 자연도 / Logger interpolation 추가 함정.

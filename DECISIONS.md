@@ -784,4 +784,25 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — ScreenCaptureService protocol 도입 (테스트 가능성 vs static enum 직접)
+
+**선택지:**
+- A. AnalyzeCoordinator가 `ScreenCapture.captureCursorScreen()` enum static func 직접 호출. test에서 mock 불가.
+- **B. `ScreenCaptureService` protocol + `LiveScreenCapture` struct wrapper** — test에서 `MockCapture` 주입.
+- C. Closure injection (`capture: @Sendable () async throws -> (Data, DisplayGeometry)`) — protocol 없이.
+
+**Trade-off:** test 가능성 vs boilerplate vs 일관성.
+
+**선택:** **B**.
+
+**근거:**
+- AnalyzeCoordinator의 핵심 흐름 (capture → dispatcher → AnalyzeStage 반환)을 unit test로 lock해야 — Phase 5.x/6.x에서 stream 모드 등 확장 시 회귀 차단.
+- `LLMDispatcher` protocol 이미 있음 — capture도 같은 패턴 (protocol + Live impl)이 일관.
+- C는 closure type 길음 + 일관성 깨짐. dependency 2개 (capture + dispatcher) 다른 패턴이면 코드 읽기 어려움.
+- B의 boilerplate (~15줄)는 4 unit tests (happy path / dispatcher 에러 / capture permission denied / 중복 reject)로 가치 충분.
+
+**되돌리기 비용:** AnalyzeCoordinator init에서 `capture` 파라미터 제거 + `ScreenCapture.captureCursorScreen` 직접 호출. test에서 capture mock 부분 삭제. 30분.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

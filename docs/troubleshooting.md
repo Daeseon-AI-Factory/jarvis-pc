@@ -247,6 +247,16 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: `swift build` + `codesign --force -s -` ad-hoc signed binary. 매 build cdhash 변경 → TCC가 binary 정체성을 *다른 binary*로 인식 → 매 `./dev.sh`마다 Screen Recording 권한 다이얼로그 재출현. 사용자 좌절 흐름 직역.
 - **Cause**: codesign에 `--identifier` 명시 없음 → TCC가 binary path + cdhash 조합으로만 식별 → 일관성 깨짐.
 - **Fix**: `codesign --force --sign - --identifier com.screenbridge.dev "$BIN_PATH"`. `--identifier` 명시로 TCC가 identifier + cdhash 조합 기억 → 한 번 권한 부여 후 매 build 유지.
-- **Commit**: (Phase 3.1 verify fix — 다음 commit에 hash 갱신)
+- **Commit**: `131da7b`
 - **Pattern**: macOS TCC dev iteration에서 `swift run` + ad-hoc codesign 패턴 사용 시 — 반드시 `--identifier <stable-id>` 명시. 미명시 시 매 빌드 권한 dialog loop. 중기 swift-bundler/Xcode `.app` bundle로 이행 시 `Info.plist` `CFBundleIdentifier`가 같은 역할.
+
+---
+
+## Swift 6 implicit self in `os.Logger` string interpolation (Phase 4.2)
+
+- **Symptom**: `error: implicit use of 'self' in closure; use 'self.' to make capture semantics explicit` — `Log.app.info("... \(contentKind(content), privacy: .public) ...")` 같은 패턴.
+- **Cause**: `os.Logger` string interpolation의 `\(...)` arguments는 *escaping autoclosure*로 평가됨 (지연 evaluation — log level filtering 시 호출 안 함). Swift 6 strict concurrency는 escaping closure 안 instance method/property 접근 시 `self.` 명시 강제.
+- **Fix**: `self.contentKind(content)` — 명시. 변수/literal은 영향 없음, *instance method/property*만.
+- **Commit**: (Phase 4.2 — 다음 commit에 hash 갱신)
+- **Pattern**: `os.Logger` interpolation 안에서 method 호출 또는 instance property 사용 시 — Swift 6에서 `self.` 명시 강제. (`Log.X.info("\(self.method(), privacy: .public)")`). plain literal/변수는 무관.
 
