@@ -472,6 +472,61 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-30 — 🚀 Strategy Update: Pragmatic Ship Mode (target 확장 + 완벽 X + 빠른 monetization)
+
+**Trigger (사용자 verbatim):**
+> "길1을 하면서... 실제 개발자 타겟도... 그냥 너무 깊이말고 진짜 전부다,.. 어차피 나중에 대체되도 당장 출시하고 조금이라도 버는게 낫지"
+
+**큰 결정 lock-in:**
+
+1. **길 1 진행** — ship + niche + 수익. 빅테크 agent (Claude Computer Use, OpenAI Operator, Apple Intelligence)가 1-2년 내 부분/완전 대체 가능 — *그 전*에 user base + 수익 확보.
+
+2. **Target 확장** — 시니어 단일 → *전부 동시*:
+   - 시니어 + 비-AI-native (어머님)
+   - 개발자 (AWS/Vercel/GitHub 가이드)
+   - 일반 사용자 (정부24/카톡/은행)
+   - "AI가 시킨 거 못 알아듣는 *모든 사람*"
+
+3. **완벽 추구 X — MVP 마인드**:
+   - 80% 정확도로 ship → dogfooding fix
+   - R8/R9 큰 결정만 박음, 작은 edge는 skip
+   - verify workflow Phase 종료 시만
+   - happy path test 위주, edge는 dogfooding 후
+
+4. **Timeline 압축** (4-8주 → 2-4주):
+   - v0.2 minimum viable: secret masking 5-10 regex + clipboard auto + 작은 UI
+   - **senior 전용 UX 미루기** — 일반 user도 쓸 형태로 ship 먼저. 시니어 친화 v0.3.
+   - Mac App Store 신청 *지금* — 심사 1-2주.
+
+5. **Monetization 빠르게**:
+   - v0.2 ship과 함께 $5/월 freemium 또는 $30 one-time
+   - 사용자 100명 = $500/월 — 1인 sustain 가능
+   - "몇 천원이라도" 매출 = 동기 + niche signal
+
+**미루기 (수익 확보 후):**
+- Multi-platform (Android/Windows/iOS) — v0.5+
+- Multi-target architecture (intent disambiguation) — Phase 7+
+- Local-first LLM (Apple Foundation) — v0.5+
+- 보안 layer C/D/E (sensitive region / local-first / audit log) — v0.5+
+
+**유지 (v0.2 결정적):**
+- 보안 layer A: secret regex masking 5-10개 (AIzaSy / sk- / ghp_ / JWT / AWS / SSH)
+- 보안 layer B: 금융 앱 exclusion list
+- clipboard auto-fetch (자녀가 ChatGPT 답 복사 → 자동 분석)
+
+**현재 우선순위 (v0.1 마무리 → v0.2 빠른 ship):**
+1. ★ 어머님 첫 dogfooding (1주 안) — *진짜 검증*
+2. *동시*: 개발자 친구 1-2명 dogfooding (AWS/Vercel 케이스)
+3. v0.1 latency speedup (image 1568→1024 + maxOutputTokens 줄임 + progressive UI) — 30-40% 가속, 35분
+4. v0.2 핵심: secret regex masking + Mac App Store 준비
+5. ship — 가격 $5/월 또는 $30 one-time
+
+memory: `pragmatic-ship-mode.md` 박음 — 다음 세션도 이 모드.
+
+**Reality check**: *지금 ship 안 하면 영영 못 함* (1인 개발자의 영원한 함정). 5-10년 빅테크 부분 대체 시나리오에서도 niche 확보가 생존.
+
+---
+
 ## 2026-05-30 — Swift Phase 5.x bubble: 한글 next_action + sourceTag (OCR/AX) + 화면 가장자리 clamping
 
 **Phase 6.2 fix commit hash backfill:** `cdd092b`.

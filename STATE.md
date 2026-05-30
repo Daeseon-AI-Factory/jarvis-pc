@@ -49,8 +49,12 @@
 7d. ✅ Phase 6.2 AXUIElement matcher (`d68746e`) — icon-only UI 풀이 (Slack/Dock).
 7e. ✅ Phase 6.2 fix (`cdd092b`) — SYSTEM_PROMPT intent-aware. 사용자 검증 OK.
 8. ✅ Phase 5.x bubble (이 commit) — 한글 next_action + sourceTag + clamping. **번역기 본질 완성.**
-9. ★ **어머님 첫 dogfooding** (1-2주 안) — *진짜 product fit 검증*. honest feedback이 v0.2 방향 결정.
-10. v0.2 첫 작업: secret regex masking (보안 layer A) + senior UX layer (큰 글씨 / 음성 / 항상 떠있는 도우미).
+9. ★ **어머님 첫 dogfooding** (1주 안) + **개발자 친구 1-2명** (AWS/Vercel) *동시* — 진짜 검증.
+10. **v0.1 latency speedup** (35분, A+B+F: image 1568→1024 + maxOutputTokens 줄임 + progressive UI). ~40% 가속.
+11. **v0.2 minimum viable** (2-4주, *pragmatic ship mode*): secret regex masking 5-10개 + clipboard auto + Mac App Store 준비. **senior UX 미루기** — 일반 user 형태로 ship 먼저.
+12. **Ship + monetization** — $5/월 freemium 또는 $30 one-time.
+
+⚡ memory `pragmatic-ship-mode` 박음 — 완벽 X, ship 우선, target *전부*.
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).
 5. Phase 5.0 (sweep swap) — `HUDOverlayWindow.swift` 빈 골격, dispatcher 무관 검증 (`level=.screenSaver` / `ignoresMouseEvents=true` 영구 / collectionBehavior 셋 / multi-monitor frame pin).
 6. Phase 4.2 — AnalyzeCoordinator (actor + async let 병렬, OCR forward declare stub) + TriggerPanel onSubmit 배선 + 한국어 에러 메시지 매핑 (network/timeout/permission/json → 비-AI-native 친화).
