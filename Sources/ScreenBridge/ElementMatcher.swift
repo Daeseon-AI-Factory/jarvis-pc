@@ -164,11 +164,14 @@ enum ElementMatcher {
     /// 결과 = screen-global logical pt CGRect (HUDAnnotation에 그대로 사용 가능).
     ///
     /// `proximityRadius`는 logical pt 단위 (~100pt = sent 200px와 유사 — Retina 2x 가정).
+    /// `preferredRole`: 사용자 instruction에서 추론한 AX role (예: "켜기/열기" → "AXDockItem").
+    /// 동일 텍스트가 여러 element에 있을 때 (Chrome이 Dock + MenuBar 둘 다) intent 명확화.
     static func match(
         targetText: String,
         candidates: [MatchCandidate],
         llmHintRect: CGRect? = nil,
         proximityRadius: CGFloat = 100,
+        preferredRole: String? = nil,
         threshold: Double = defaultThreshold
     ) -> MatchResult? {
         let normalizedTarget = normalize(targetText)
@@ -203,7 +206,13 @@ enum ElementMatcher {
             let lhsLen = normalize(lhs.text).count
             let rhsLen = normalize(rhs.text).count
             if lhsLen != rhsLen { return lhsLen < rhsLen }
-            // 동일 길이 — AX 우선 (deterministic 좌표), confidence tiebreaker
+            // 동일 길이 — preferredRole 매칭이 최우선 (instruction intent)
+            if let role = preferredRole {
+                let lhsMatch = roleMatches(lhs.source, preferred: role)
+                let rhsMatch = roleMatches(rhs.source, preferred: role)
+                if lhsMatch != rhsMatch { return lhsMatch }
+            }
+            // AX 우선 (deterministic 좌표), confidence tiebreaker
             let lhsAX = isAX(lhs.source)
             let rhsAX = isAX(rhs.source)
             if lhsAX != rhsAX { return lhsAX }
@@ -245,6 +254,34 @@ enum ElementMatcher {
 
     private static func isAX(_ source: MatchCandidate.Source) -> Bool {
         if case .ax = source { return true } else { return false }
+    }
+
+    private static func roleMatches(_ source: MatchCandidate.Source, preferred: String) -> Bool {
+        if case .ax(let role) = source { return role == preferred }
+        return false
+    }
+
+    /// 사용자 instruction에서 *동작 의도*를 추론 → 선호 AX role.
+    /// "Chrome 켜기" → AXDockItem (앱 launcher), "Chrome 설정" → AXMenuItem (메뉴).
+    /// nil이면 매칭에서 무시 (기존 동작).
+    static func inferPreferredRole(from instruction: String) -> String? {
+        let lower = instruction.lowercased()
+        // 앱 켜기 / 열기 / 실행 → Dock 아이콘
+        let launchKeywords = ["켜", "열어", "열기", "실행", "시작", "launch", "open app"]
+        for kw in launchKeywords where lower.contains(kw) {
+            return "AXDockItem"
+        }
+        // 메뉴 / 설정 → menu item
+        let menuKeywords = ["설정", "환경설정", "메뉴", "settings", "preferences", "menu"]
+        for kw in menuKeywords where lower.contains(kw) {
+            return "AXMenuItem"
+        }
+        // 닫기 / 종료 → menu (Quit 항목)
+        let quitKeywords = ["닫기", "종료", "quit", "close"]
+        for kw in quitKeywords where lower.contains(kw) {
+            return "AXMenuItem"
+        }
+        return nil
     }
 
     private static func sourceTag(_ source: MatchCandidate.Source) -> String {

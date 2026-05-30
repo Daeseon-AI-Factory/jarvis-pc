@@ -978,4 +978,31 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 ---
 
+## 2026-05-30 — Preferred AX role from instruction (Chrome Dock vs MenuBar 모호함 차단)
+
+**배경**: 사용자 "chrome 켜서 네이버 들어가래" → LLM target_text="Chrome" (정상). 단 Chrome이 *이미 켜져있어* AX에 두 곳: `AXDockItem` (Dock) + `AXMenuBarItem` (메뉴바의 Chrome 메뉴). 동일 길이 substring 매칭 → tiebreaker 비결정적 → 잘못 menubar.
+
+**선택지:**
+- **A. instruction에서 role 추론 (backend-only)** — "켜기/열기" → AXDockItem, "설정/메뉴" → AXMenuItem. SYSTEM_PROMPT 변경 X.
+- B. AnalysisResult.targetRole: String? 추가 → LLM이 role 명시 + schema 확장. 큰 변경.
+- C. SYSTEM_PROMPT에 role examples 추가 (LLM이 학습) — 강도 약함.
+
+**선택:** **A**. Pragmatic ship mode — 작은 backend fix.
+
+**근거:**
+- B는 schema 변경 (큰 work, ship mode 위반).
+- C는 LLM에 의존 — 안 따를 수도.
+- A는 keyword inference, deterministic, instant.
+
+**구현:**
+- `ElementMatcher.inferPreferredRole(from instruction)` — "켜기/열기/실행/launch" → "AXDockItem", "설정/메뉴/quit" → "AXMenuItem".
+- `match` signature에 `preferredRole: String?` 추가. 동일 길이 substring tiebreaker에 *최우선*.
+- `AnalyzeCoordinator`가 inference → match 전달.
+
+**되돌리기 비용:** 3 lines remove. 1분.
+
+**미해결:** keyword list dogfooding 후 확장 (한국어 + 영어 + 일본어). Phase 7+에 LLM이 직접 target_role 줄 수도.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

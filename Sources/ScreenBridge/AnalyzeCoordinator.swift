@@ -142,10 +142,16 @@ actor AnalyzeCoordinator {
             guard coords.count == 4 else { return nil }
             return geometry.logicalRectFromSentBox(coords)
         }
+        // Intent inference: instruction의 "켜기/열기" → AXDockItem 우선 (Chrome Dock vs MenuBar 모호함 차단)
+        let preferredRole = ElementMatcher.inferPreferredRole(from: req.instruction)
+        if let role = preferredRole {
+            Log.dispatcher.info("[match] preferred role from instruction: \(role, privacy: .public)")
+        }
         let matched = ElementMatcher.match(
             targetText: result.targetText,
             candidates: allCandidates,
-            llmHintRect: llmHintLogical
+            llmHintRect: llmHintLogical,
+            preferredRole: preferredRole
         )
 
         let totalElapsed = Date().timeIntervalSince(started)
