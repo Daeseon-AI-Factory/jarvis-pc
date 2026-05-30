@@ -1,5 +1,6 @@
 import Carbon.HIToolbox
 import AppKit
+import OSLog
 
 /// Carbon RegisterEventHotKey wrapper. Carbon은 deprecated이지만 global hotkey엔
 /// 여전히 표준 + 의존성 0 (MASShortcut 등 안 끌어옴). ⌥+Space 고정 (v0.2에 설정 UI).
@@ -20,7 +21,7 @@ final class HotKeyManager {
         )
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
 
-        InstallEventHandler(
+        let installStatus = InstallEventHandler(
             GetApplicationEventTarget(),
             { _, _, userData -> OSStatus in
                 guard let userData else { return noErr }
@@ -35,9 +36,12 @@ final class HotKeyManager {
             selfPtr,
             &eventHandler
         )
+        if installStatus != noErr {
+            Log.hotkey.error("InstallEventHandler failed: OSStatus=\(installStatus, privacy: .public)")
+        }
 
         let hotKeyID = EventHotKeyID(signature: fourCharCode("SCRB"), id: 1)
-        RegisterEventHotKey(
+        let registerStatus = RegisterEventHotKey(
             UInt32(kVK_Space),
             UInt32(optionKey),
             hotKeyID,
@@ -45,6 +49,11 @@ final class HotKeyManager {
             0,
             &hotKeyRef
         )
+        if registerStatus == noErr {
+            Log.hotkey.info("registered ⌥+Space")
+        } else {
+            Log.hotkey.error("RegisterEventHotKey failed: OSStatus=\(registerStatus, privacy: .public) — 다른 앱(Alfred/Raycast/Klack/한영 전환 등)이 ⌥+Space 점유 가능")
+        }
     }
 
     /// 명시적 정리. HotKeyManager는 앱 lifetime 내내 살아있어 보통 안 불림 —

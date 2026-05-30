@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 import SwiftUI
 
 /// Trigger Panel 윈도우. ⌥+Space로 토글. 일반 윈도우 (transparent X) — HUD
@@ -71,8 +72,8 @@ struct TriggerPanelView: View {
                 Button("Cancel", action: onCancel)
                     .keyboardShortcut(.cancelAction)  // ESC
                 Button("Analyze") {
-                    // Phase 4.2에서 analyze IPC. 지금은 placeholder.
-                    NSLog("[ScreenBridge] analyze submit: \(instruction.count) chars")
+                    // Phase 4.2에서 AnalyzeCoordinator 호출 + 결과 HUD. 지금은 placeholder.
+                    Log.panel.info("analyze submit (placeholder): \(instruction.count, privacy: .public) chars")
                 }
                 .keyboardShortcut(.defaultAction)  // ⌘Return
                 .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

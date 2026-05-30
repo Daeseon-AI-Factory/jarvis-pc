@@ -167,6 +167,31 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Symptom**: LLM이 `target_text`에 임의로 번역/축약한 라벨 ("auth button", "로그인 버튼")을 넣어 OCR matcher가 화면 텍스트와 substring 매칭 못 함 (Tauri Layer 16 재발 위험).
 - **Cause**: SYSTEM_PROMPT 텍스트 룰만으론 LLM이 "한 글자도 바꾸지 마라"를 안 지킴. 추상↔구체의 *경계*를 예시로 보여줘야 학습.
 - **Fix**: SYSTEM_PROMPT에 ✗/✓ 페어 4 × 2 직역. 예: `"auth button"` ✗ vs `"Sign in"` ✓, `"the create button"` (군더더기 `the`) ✗ vs `"Create API Key"` ✓, `"settings icon"` (아이콘 = 텍스트 없음) ✗ → `coordinates` 사용. PromptsTests에 ✗/✓ literal 포함 검증 — silent drift 차단.
-- **Commit**: (Phase 2.2 — 다음 commit에 hash 갱신)
+- **Commit**: `f7b799b`
 - **Pattern**: vision LLM의 "visible text 정확" 룰 = 텍스트 룰 + ✗/✓ 예시 페어 둘 다. 예시 없으면 LLM이 자기 판단으로 라벨 정규화 → backend OCR matcher 실패.
+
+---
+
+## Swift 6 struct 자기참조 → "infinite size" build 에러 (Phase 2.3)
+
+- **Symptom**:
+  ```
+  error: value type 'JSONSchema' cannot have a stored property that recursively contains it
+  error: value type 'GeminiGenerationConfig' has infinite size
+  note: cycle beginning here: JSONSchema -> (items: JSONSchema?) -> (some(_:): JSONSchema)
+  ```
+- **Cause**: `struct JSONSchema { let items: JSONSchema? }` — Swift는 value type 자기참조 stored property 금지 (Optional 이라도 size 무한). Swift 6 strict mode 동일.
+- **Fix**: `indirect enum JSONSchema { case string, integer, array(items: JSONSchema), object(properties: [String: JSONSchema], required: [String]) }`. `indirect` keyword가 reference indirection 추가 → finite size. case 구분으로 *어느 type엔 어떤 field*가 더 명확.
+- **Commit**: (Phase 2.3 — 다음 commit에 hash 갱신)
+- **Pattern**: Swift value type이 자기참조 하려면 `indirect` 또는 `final class` wrapper. recursive data structure (JSON schema, tree node 등)는 enum + indirect가 깔끔.
+
+---
+
+## HotKeyManager OSStatus discard → silent fail (Phase 2.3)
+
+- **Symptom**: Phase 0.2 sweep audit 발견 — `InstallEventHandler` / `RegisterEventHotKey` 반환 OSStatus 무시. 다른 앱(Alfred/Raycast/Klack/한영 전환기 등)이 ⌥+Space 점유하면 사용자 ⌥Space 눌러도 panel 안 뜸 + log 0.
+- **Cause**: Carbon API 반환값 discard.
+- **Fix**: `let registerStatus = RegisterEventHotKey(...)` capture + 성공 시 `Log.hotkey.info("registered ⌥+Space")`, 실패 시 `Log.hotkey.error("OSStatus=\(registerStatus, privacy: .public) — Alfred/Raycast/Klack 등 점유 가능")`. 사용자가 `log stream` 으로 즉시 진단.
+- **Commit**: (Phase 2.3 — 다음 commit에 hash 갱신)
+- **Pattern**: C API (특히 Carbon) 반환값은 *반드시* capture + 에러 시 명시 log. Silent fail은 사용자 못 봄 → debug burden 폭증.
 

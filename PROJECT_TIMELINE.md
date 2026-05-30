@@ -221,4 +221,27 @@ Swift Phase 0.2 (menu-bar shell + Carbon hotkey + NSPanel, `63c0568`) 후 사용
 
 ---
 
+## 2026-05-29 — Swift Phase 2.3: GeminiDispatcher + os.Logger 전체 swap
+
+**Phase 2.2 commit hash backfill:** `f7b799b`.
+
+**Phase 2.3 완료 (이 commit):**
+- `Sources/ScreenBridge/Logging.swift` — `Log` enum (subsystem=`com.screenbridge.app`, categories app/hotkey/panel/dispatcher).
+- `Sources/ScreenBridge/LLMDispatcher.swift` — protocol + `DispatcherError` (7 cases, Phase 4.2에서 한국어 매핑).
+- `Sources/ScreenBridge/GeminiDispatcher.swift` — actor, URLSession async/await, `responseMimeType='application/json'` + `responseSchema` 강제, image part FIRST + text AFTER, timeout 30/60s, retry 429/500/502/503/504 exp backoff 1/2/4s + jitter max 3.
+- `JSONSchema` `indirect enum` (Swift struct 자기참조 X → infinite size, build 에러 → enum case 구분으로 더 명확).
+- `NSLog → os.Logger` 전체 swap (AppDelegate / TriggerPanel / HotKeyManager) — `log stream --predicate 'subsystem == "com.screenbridge.app"'` 한 명령으로 별도 terminal에서 줄줄 + Console.app.
+- HotKeyManager OSStatus discard → `Log.hotkey.error("OSStatus=… 다른 앱이 ⌥+Space 점유 가능")` — silent fail 차단.
+- `Tests/.../GeminiDispatcherTests.swift` 6 tests (schema shape + JSON encode + image FIRST quirk + envelope decode + fromEnvironment). 누적 24/24 통과 (`swift build` 3.18s, `swift test` 0.007s).
+
+**R9 결정 2건** (DECISIONS.md): NSLog → os.Logger swap (사용자 좌절 → stream 가능), Gemini API URLSession 직접 (dep 0).
+
+**R8 디버그 2건** (docs/troubleshooting.md): Swift 6 struct 자기참조 infinite size → indirect enum, HotKeyManager OSStatus discard → 명시 log.
+
+**사용자 좌절 흐름 해결** (memory `user-pain-dev-tool-friction`): 사용자 본인 terminal에서 `./dev.sh` → log 그 terminal 직접 + 별도 terminal `log stream` → Console.app 식 stream.
+
+**다음:** Phase 3.1 — `Permissions.swift` + `TriggerContext.swift` (cursor 즉시 저장, Layer 10 회피) + `DisplayGeometry.swift` (4-layer 변환 캡슐화) + `ScreenCapture.swift` (`SCShareableContent` + `SCScreenshotManager` + 1568 다운스케일).
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)

@@ -1,0 +1,160 @@
+---
+title: "Phase 2.3 — GeminiDispatcher + os.Logger swap: 사용자가 로그 볼 수 있게"
+date: "2026-05-29"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Gemini 2.5 Flash dispatcher (URLSession async + responseSchema 강제 + exp backoff retry + image FIRST/text AFTER). 동시에 NSLog → os.Logger 전체 swap — 사용자가 'log stream' 한 명령으로 별도 terminal에 줄줄. JSONSchema는 indirect enum (Swift 6 struct 자기참조 함정)."
+tags: ["swift", "gemini", "url-session", "os-logger", "indirect-enum", "screenbridge"]
+---
+
+세 가지를 한 commit에 박았다:
+
+1. **GeminiDispatcher** — 실제 vision API 호출 (URLSession async + responseSchema 강제 + retry).
+2. **os.Logger 전체 swap** — 사용자가 *본인 terminal에 줄줄* 보이게.
+3. **HotKeyManager silent fail 막음** — Carbon OSStatus discard 가시화.
+
+전부 하나의 흐름: *사용자가 "동작했나" 매번 묻지 않게* 만드는 것. 좌절 memory (`user-pain-dev-tool-friction`) 직역.
+
+## 1. GeminiDispatcher — 결정적인 5개
+
+### responseSchema 강제 (텍스트 룰 의존 X)
+
+Tauri 시절 Layer 12: SYSTEM_PROMPT 텍스트만으론 LLM이 JSON 외 텍스트 섞음, parse 2/3 실패. 해결 = vendor 측 강제. Gemini의 `responseMimeType='application/json'` + `responseSchema={...}` 둘 다.
+
+`AnalysisResult` Codable shape(`raw` 제외)을 schema로 mirror:
+
+```swift
+nonisolated static let responseSchema: JSONSchema = .object(
+    properties: [
+        "screen_state": .string,
+        "next_action": .string,
+        "target_text": .string,
+        "coordinates": .array(items: .integer),
+        "reasoning": .string,
+    ],
+    required: ["screen_state", "next_action", "target_text", "reasoning"]
+)
+```
+
+`raw`는 Codable 분리 (Phase 2.1 DECISIONS) → schema도 분리. 일관.
+
+### JSONSchema는 indirect enum (struct 자기참조 함정)
+
+처음 struct로 짰다가 build 에러:
+
+```
+error: value type 'JSONSchema' cannot have a stored property that recursively contains it
+error: value type 'GeminiGenerationConfig' has infinite size
+note: cycle beginning here: JSONSchema -> (items: JSONSchema?) -> (some(_:): JSONSchema)
+```
+
+Swift는 value type (struct/enum) 자기참조 stored property 금지 — Optional이라도 size 무한. 해결 = `indirect enum`:
+
+```swift
+indirect enum JSONSchema: Encodable, Sendable, Equatable {
+    case string
+    case integer
+    case array(items: JSONSchema)
+    case object(properties: [String: JSONSchema], required: [String])
+}
+```
+
+`indirect`가 reference indirection 추가. case 구분으로 *어느 type엔 어떤 field*가 더 명확하기도. R8 docs/troubleshooting entry.
+
+### Image FIRST + text AFTER (Gemini quirk)
+
+Sweep cross_cutting agent 발견: Gemini는 multimodal 요청에서 image part가 *먼저* 와야 vision 우선 처리. 코드:
+
+```swift
+let userContent = GeminiContent(role: "user", parts: [
+    .inlineData(GeminiInlineData(mimeType: "image/png", data: base64)),
+    .text("AI가 시킨 지시:\n\(instruction)\n\n위 화면 (..px) 기준으로 응답해주세요."),
+])
+```
+
+Test로 영구 lock — `requestBody — image part가 FIRST, text가 AFTER` test.
+
+### Exp backoff retry 429/5xx, 400은 fail fast
+
+```
+maxAttempts = 3
+retryable = {429, 500, 502, 503, 504}
+backoff = 2^(attempt-1) + random(0...0.3)s   // 1/2/4s + jitter
+```
+
+400/401/403은 재시도 무의미 (auth/request 문제) → fail fast + log body 300자.
+
+`URLSessionConfiguration.timeoutIntervalForRequest=30` + `timeoutIntervalForResource=60` + `URLRequest.timeoutInterval=30` — Layer 11 (Tauri 3분 hang) 재발 방지.
+
+### Base64 raw (prefix 없음)
+
+```swift
+let base64 = imageData.base64EncodedString()
+// "data:image/png;base64," prefix 절대 X — Gemini 400.
+```
+
+Test가 잡음: `!d.data.contains("data:")`.
+
+## 2. NSLog → os.Logger 전체 swap
+
+사용자 좌절: *"로그 볼줄도 모르는게 어렵네"*. NSLog은 Console.app에서 mute, sysdiag 어려움.
+
+`os.Logger`:
+
+```swift
+enum Log {
+    private static let subsystem = "com.screenbridge.app"
+    static let app = Logger(subsystem: subsystem, category: "app")
+    static let hotkey = Logger(subsystem: subsystem, category: "hotkey")
+    static let panel = Logger(subsystem: subsystem, category: "panel")
+    static let dispatcher = Logger(subsystem: subsystem, category: "dispatcher")
+}
+```
+
+사용자가 별도 terminal에서:
+
+```
+log stream --predicate 'subsystem == "com.screenbridge.app"' --info
+```
+
+→ 모든 category log이 그 terminal에 줄줄. Console.app에서도 같은 predicate.
+
+privacy 명시 (`.public`/`.private`/`.sensitive`) — `\(apiKey, privacy: .private)`로 sensitive 데이터 mask. dispatcher의 instruction count, image bytes, status code 등은 `.public` (디버그 가치).
+
+## 3. HotKeyManager silent fail 막음
+
+Phase 0.2 sweep audit 발견: `InstallEventHandler` / `RegisterEventHotKey` OSStatus 반환 무시. Alfred/Raycast 등 ⌥+Space 점유 시 — 사용자 누른 게 *어디로 갔는지* log 0.
+
+```swift
+let registerStatus = RegisterEventHotKey(...)
+if registerStatus == noErr {
+    Log.hotkey.info("registered ⌥+Space")
+} else {
+    Log.hotkey.error("RegisterEventHotKey failed: OSStatus=\(registerStatus, privacy: .public) — 다른 앱(Alfred/Raycast/Klack/한영 전환 등) 점유 가능")
+}
+```
+
+이제 panel 안 뜨면 사용자가 `log stream`으로 즉시 진단.
+
+## 24 tests, build 3.18s, test 0.007s
+
+```
+6 AnalysisResult + 4 Prompts + 8 Env + 6 GeminiDispatcher = 24/24 pass
+```
+
+GeminiDispatcher tests:
+
+1. responseSchema가 AnalysisResult shape 1:1
+2. responseSchema encode → Gemini-accepted JSON
+3. requestBody image FIRST + text AFTER (Gemini quirk)
+4. requestBody encode → generationConfig.responseSchema 포함
+5. fromEnvironment (GEMINI_API_KEY 유무에 따라)
+6. GeminiResponse decode (실제 envelope 형식)
+
+*Live API 호출 test 안 함* — fixture image 없이 의미 무. Phase 4.2 (analyze flow) 후 사용자 GEMINI_API_KEY로 실측.
+
+## 다음
+
+Phase 3.1 — ScreenCaptureKit + Permissions + LastTriggerContext + DisplayGeometry. 사용자 화면 PNG 캡처 + 권한 startup trigger + cursor 시점 capture (Layer 10 회피). Phase 4.2에서 dispatcher와 연결.

@@ -649,4 +649,45 @@ Overlay box: 99% 정확
 
 ---
 
+## 2026-05-29 — NSLog → os.Logger 전체 swap
+
+**선택지:**
+- A. `NSLog` 유지 — Foundation, 의존 0. 단 Console.app에서 mute, 사용자 stream 어려움.
+- **B. `os.Logger` (`OSLog`)** — Apple unified logging. Console.app + `log stream` + Xcode console + privacy 명시 + os_signpost 자동.
+- C. `print` — stdout 직접. Console.app/system log 안 들어감, signpost 없음.
+
+**Trade-off:** dev/사용자 가시성 + log level + privacy 명시 vs 추가 import 한 줄.
+
+**선택:** **B**.
+
+**근거:**
+- 사용자 좌절 신호 (memory `user-pain-dev-tool-friction`, 2026-05-29 verbatim): "로그 볼줄도 모르는게 어렵네". 해결 = log이 *Console.app + 별도 terminal `log stream`* 모두에서 동시 가시.
+- `log stream --predicate 'subsystem == "com.screenbridge.app"' --info` 한 명령으로 별도 terminal에서 ScreenBridge log만 stream. dev 일관 흐름.
+- privacy 명시 (`.public`/`.private`/`.sensitive`) — 향후 API 키 등 누설 위험 차단. NSLog은 무차별.
+- `os_signpost` 자동 — Phase 4.2에서 dispatcher latency 측정에 활용 가능.
+
+**되돌리기 비용:** 각 file의 `Log.X.info(...)` → `NSLog(...)` 치환 + `import OSLog` 제거 + `Logging.swift` 삭제. 4 files, 10분.
+
+---
+
+## 2026-05-29 — Gemini API: URLSession 직접 vs Google SDK
+
+**선택지:**
+- **A. URLSession async/await 직접** — Foundation only, dep 0.
+- B. Google Gemini SDK (공식 `google-genai-swift` 또는 community wrapper) — Codable Request/Response 자동, retry 자동.
+- C. `swift-openapi-generator` from API spec — vendor-neutral.
+
+**Trade-off:** dep 0 (cold start, audit, supply-chain lock-in) + 100% control vs 풍부한 wrapper.
+
+**선택:** **A**.
+
+**근거:**
+- CLAUDE.md 절대규칙 6 ("외부 LLM 라이브러리 v0.1 추가 금지") + Phase 2.2 `.env` parser와 같은 정신.
+- URLSession + Codable + JSONEncoder/Decoder 만으로 ~250줄에 완성 (request + response + retry + schema enum). vendor SDK 추가 시 audit 표면 + transitive deps.
+- Vendor swap 시 `LLMDispatcher` protocol 통해 — wrapper 라이브러리에 lock-in 안 걸림. Anthropic, Claude CLI subprocess 등 추가는 protocol 새 implementation만.
+
+**되돌리기 비용:** `Package.swift`에 dep + import — 그러나 `LLMDispatcher` protocol 통해 swap. 30분.
+
+---
+
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

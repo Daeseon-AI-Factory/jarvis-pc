@@ -1,4 +1,5 @@
 import AppKit
+import OSLog
 
 /// 앱 lifecycle 주도. menu-bar only (.accessory) + NSStatusItem + global hotkey +
 /// trigger panel 소유.
@@ -21,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotKey.register()
 
-        NSLog("[ScreenBridge] launched: menu-bar accessory, ⌥Space registered")
+        Log.app.info("launched — menu-bar accessory + ⌥Space hotkey ready")
     }
 
     private func setUpStatusItem() {
