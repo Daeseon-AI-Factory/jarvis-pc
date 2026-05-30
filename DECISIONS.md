@@ -1005,6 +1005,8 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[2026-05-30 갱신, prefer-only mode]**: 처음 fix는 *sort tiebreaker*만 — 약해서 wrong-box (Chrome menubar) 그대로. Strengthen: **preferred role 매칭 *있으면* 그것만 candidates** (다른 role 무시). 매칭 0개면 fallback to all (log notice). + AXService에 *Dock items 명시 log* — 디버그 시 "Chrome 진짜 Dock에 있나" 즉시 확인.
 
+**[2026-05-30 갱신, multi-target overlay]**: Vision LLM 정확도 ~80-90% 본질 한계 인정 → *95% effective accuracy* 도달은 **사용자가 1초만에 1번/2번 선택**. `matchTop(maxResults: 2)` distinct candidates (rect 거리 > 50pt). HUD에 primary 빨강 + alternative 회색 dashed + 번호 라벨. *User-in-the-loop 차별* — 빅테크 agent (자동 클릭 위험) 대비 안전.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

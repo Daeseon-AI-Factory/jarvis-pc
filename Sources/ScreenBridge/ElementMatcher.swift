@@ -278,6 +278,110 @@ enum ElementMatcher {
         return nil
     }
 
+    /// Top N distinct matches — multi-target overlay UX 핵심 (Phase 5.x multi-target).
+    /// distinct: rect midpoint 거리 > distinctDistance (같은 element 중복 차단).
+    /// 사용자가 1번/2번 시각 선택 → 빅테크 agent 대비 *user-in-the-loop* 차별.
+    static func matchTop(
+        targetText: String,
+        candidates: [MatchCandidate],
+        llmHintRect: CGRect? = nil,
+        proximityRadius: CGFloat = 100,
+        preferredRole: String? = nil,
+        threshold: Double = defaultThreshold,
+        distinctDistance: CGFloat = 50,
+        maxResults: Int = 2
+    ) -> [MatchResult] {
+        let normalizedTarget = normalize(targetText)
+        guard !normalizedTarget.isEmpty, !candidates.isEmpty else { return [] }
+
+        // Proximity filter (Phase 6.1 spatial fusion)
+        let effective: [MatchCandidate]
+        if let hint = llmHintRect {
+            let hc = CGPoint(x: hint.midX, y: hint.midY)
+            let nearby = candidates.filter { c in
+                let bc = CGPoint(x: c.rectInLogicalPt.midX, y: c.rectInLogicalPt.midY)
+                return hypot(bc.x - hc.x, bc.y - hc.y) <= proximityRadius
+            }
+            effective = nearby.isEmpty ? candidates : nearby
+        } else {
+            effective = candidates
+        }
+
+        // Substring matches + preferred role filter
+        let allSubstring = effective.filter { normalize($0.text).contains(normalizedTarget) }
+        let substringCandidates: [MatchCandidate]
+        if let role = preferredRole {
+            let preferred = allSubstring.filter { roleMatches($0.source, preferred: role) }
+            substringCandidates = preferred.isEmpty ? allSubstring : preferred
+        } else {
+            substringCandidates = allSubstring
+        }
+
+        // Sort substring: shortest length + AX + confidence
+        let sortedSubstring = substringCandidates.sorted(by: { lhs, rhs in
+            let lhsLen = normalize(lhs.text).count
+            let rhsLen = normalize(rhs.text).count
+            if lhsLen != rhsLen { return lhsLen < rhsLen }
+            let lhsAX = isAX(lhs.source)
+            let rhsAX = isAX(rhs.source)
+            if lhsAX != rhsAX { return lhsAX }
+            return lhs.confidence > rhs.confidence
+        })
+
+        var results: [MatchResult] = []
+
+        // Substring 우선
+        for candidate in sortedSubstring {
+            if shouldAdd(candidate, to: results, distinctDistance: distinctDistance) {
+                results.append(MatchResult(
+                    rect: candidate.rectInLogicalPt,
+                    matchedText: candidate.text,
+                    sourceTag: sourceTag(candidate.source)
+                ))
+                if results.count >= maxResults {
+                    Log.dispatcher.info("[match] top \(results.count, privacy: .public) — primary=\(results[0].sourceTag, privacy: .public)\(results.count > 1 ? ", alt=" + results[1].sourceTag : "", privacy: .public)")
+                    return results
+                }
+            }
+        }
+
+        // Fuzzy fallback (substring 부족 시)
+        if results.count < maxResults {
+            let effectiveThreshold: Double = (threshold == Self.defaultThreshold && normalizedTarget.count <= 6)
+                ? shortTextThreshold
+                : threshold
+            let fuzzyScored: [(MatchCandidate, Double)] = effective.compactMap { c in
+                let sim = similarity(normalize(c.text), normalizedTarget)
+                return sim >= effectiveThreshold ? (c, sim) : nil
+            }
+            let sortedFuzzy = fuzzyScored.sorted { $0.1 > $1.1 }
+            for (candidate, _) in sortedFuzzy {
+                if shouldAdd(candidate, to: results, distinctDistance: distinctDistance) {
+                    results.append(MatchResult(
+                        rect: candidate.rectInLogicalPt,
+                        matchedText: candidate.text,
+                        sourceTag: sourceTag(candidate.source)
+                    ))
+                    if results.count >= maxResults { break }
+                }
+            }
+        }
+
+        if !results.isEmpty {
+            Log.dispatcher.info("[match] top \(results.count, privacy: .public) — primary=\(results[0].sourceTag, privacy: .public)")
+        }
+        return results
+    }
+
+    private static func shouldAdd(_ candidate: MatchCandidate, to results: [MatchResult], distinctDistance: CGFloat) -> Bool {
+        let c = CGPoint(x: candidate.rectInLogicalPt.midX, y: candidate.rectInLogicalPt.midY)
+        for existing in results {
+            let e = CGPoint(x: existing.rect.midX, y: existing.rect.midY)
+            if hypot(c.x - e.x, c.y - e.y) < distinctDistance { return false }
+        }
+        return true
+    }
+
     private static func sourceTag(_ source: MatchCandidate.Source) -> String {
         switch source {
         case .ocr: return "OCR"

@@ -146,15 +146,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             let stage = await coordinator.run(req)
             switch stage {
-            case .done(let result, let geometry, let matched):
-                // 1. OCR/AX matched (deterministic) — bubble에 한글 next_action + sourceTag
-                if let m = matched {
-                    Log.app.info("[analyze] HUD annotated (\(m.sourceTag, privacy: .public)) — target_text=\"\(result.targetText, privacy: .public)\"")
+            case .done(let result, let geometry, let matches):
+                // 1. OCR/AX matched (deterministic) — bubble + alternatives (multi-target overlay)
+                if let primary = matches.first {
+                    // Alternative — matches[1..] (있으면)
+                    let alts: [HUDAnnotation.Alternative] = matches.dropFirst().enumerated().map { idx, m in
+                        HUDAnnotation.Alternative(rect: m.rect, sourceTag: m.sourceTag, number: idx + 2)
+                    }
+                    Log.app.info("[analyze] HUD annotated (\(primary.sourceTag, privacy: .public)) — target_text=\"\(result.targetText, privacy: .public)\" alts=\(alts.count, privacy: .public)")
                     self.hud.presentAnnotation(
                         HUDAnnotation(
-                            rect: m.rect,
+                            rect: primary.rect,
                             nextAction: result.nextAction,
-                            sourceTag: m.sourceTag
+                            sourceTag: primary.sourceTag,
+                            alternatives: alts
                         ),
                         on: screen
                     )

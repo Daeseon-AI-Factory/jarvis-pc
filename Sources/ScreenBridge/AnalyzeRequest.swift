@@ -19,6 +19,9 @@ struct AnalyzeRequest: Sendable {
 enum AnalyzeStage: Sendable {
     case capturing
     case analyzing(elapsed: TimeInterval)
-    case done(result: AnalysisResult, geometry: DisplayGeometry, matched: MatchResult?)
+    /// `matches`: top N (max 2) distinct candidates. `matches[0]` = primary (빨강),
+    /// `matches[1]` (있으면) = alternative (회색 dashed + 2번 라벨).
+    /// 빈 배열이면 caller가 LLM coords fallback 또는 에러.
+    case done(result: AnalysisResult, geometry: DisplayGeometry, matches: [MatchResult])
     case failed(DispatcherError)
 }

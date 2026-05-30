@@ -121,16 +121,17 @@ struct AnalyzeCoordinatorTests {
             ax: EmptyAX()
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
-        guard case .done(let result, _, let matched) = stage else {
+        guard case .done(let result, _, let matches) = stage else {
             Issue.record("expected .done, got \(stage)")
             return
         }
         #expect(result.targetText == "Save")
         // OCR 매칭 → "Save" box (x:50, y:60, w:80, h:25)
-        #expect(matched != nil)
-        #expect(matched?.rect.minX == 50)
-        #expect(matched?.rect.minY == 60)
-        #expect(matched?.sourceTag == "OCR")
+        #expect(!matches.isEmpty)
+        #expect(matches.first?.rect.minX == 50)
+        #expect(matches.first?.rect.minY == 60)
+        #expect(matches.first?.sourceTag == "OCR")
+        #expect(matches.count == 1)
     }
 
     @Test("run — AX 매칭 성공 시 matchedRect (icon-only UI, OCR이 못 잡는 case, Phase 6.2)")
@@ -159,14 +160,14 @@ struct AnalyzeCoordinatorTests {
             ax: MockAX(elements: axElements)
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "Slack 어디?", triggeredAt: Date()))
-        guard case .done(_, _, let matched) = stage else {
+        guard case .done(_, _, let matches) = stage else {
             Issue.record("expected .done")
             return
         }
-        #expect(matched != nil)
-        #expect(matched?.rect.minX == 1200)
-        #expect(matched?.rect.minY == 1000)
-        #expect(matched?.sourceTag == "AX:AXDockItem")
+        #expect(!matches.isEmpty)
+        #expect(matches.first?.rect.minX == 1200)
+        #expect(matches.first?.rect.minY == 1000)
+        #expect(matches.first?.sourceTag == "AX:AXDockItem")
     }
 
     @Test("run — AX 권한 거부 시 OCR만으로 graceful (Phase 6.2)")
@@ -181,11 +182,11 @@ struct AnalyzeCoordinatorTests {
             ax: ThrowingAX()
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
-        guard case .done(_, _, let matched) = stage else {
+        guard case .done(_, _, let matches) = stage else {
             Issue.record("expected .done despite AX failure")
             return
         }
-        #expect(matched != nil)
+        #expect(!matches.isEmpty)
     }
 
     @Test("run — OCR + AX 매칭 실패 시 matchedRect nil (caller가 LLM fallback)")
@@ -197,11 +198,11 @@ struct AnalyzeCoordinatorTests {
             ax: EmptyAX()                // AX 결과 없음
         )
         let stage = await coord.run(AnalyzeRequest(instruction: "test", triggeredAt: Date()))
-        guard case .done(_, _, let matched) = stage else {
+        guard case .done(_, _, let matches) = stage else {
             Issue.record("expected .done")
             return
         }
-        #expect(matched == nil)
+        #expect(matches.isEmpty)
     }
 
     @Test("run — dispatcher throw → .failed(DispatcherError)")

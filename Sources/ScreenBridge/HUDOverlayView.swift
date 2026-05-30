@@ -13,11 +13,20 @@ struct HUDAnnotation: Sendable, Equatable {
     let rect: CGRect
     let nextAction: String      // 한글 친화 next_action (Phase 5.x)
     let sourceTag: String       // "OCR" / "AX:AXDockItem" / "LLM" (디버그 + 신뢰)
+    let alternatives: [Alternative]   // 2번/3번 후보 (multi-target overlay)
 
-    init(rect: CGRect, nextAction: String = "", sourceTag: String = "") {
+    /// 보조 후보. 회색 dashed 박스 + 번호 라벨로 표시.
+    struct Alternative: Sendable, Equatable {
+        let rect: CGRect
+        let sourceTag: String
+        let number: Int       // 2, 3, ...
+    }
+
+    init(rect: CGRect, nextAction: String = "", sourceTag: String = "", alternatives: [Alternative] = []) {
         self.rect = rect
         self.nextAction = nextAction
         self.sourceTag = sourceTag
+        self.alternatives = alternatives
     }
 }
 
@@ -58,17 +67,58 @@ private struct BoxAndBubble: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            // 빨간 박스 — 안경 메타포의 *유리알*
+            // Primary 빨간 박스 — 1번 (가장 likely)
             RoundedRectangle(cornerRadius: 4)
                 .stroke(Color.red, lineWidth: 3)
                 .frame(width: annotation.rect.width, height: annotation.rect.height)
                 .position(x: annotation.rect.midX, y: annotation.rect.midY)
+
+            // Primary 번호 라벨 "1" — 다중 후보면 표시
+            if !annotation.alternatives.isEmpty {
+                NumberBadge(number: 1, color: .red)
+                    .position(
+                        x: annotation.rect.minX - 14,
+                        y: annotation.rect.minY - 14
+                    )
+            }
+
+            // Alternative 회색 dashed 박스 + 번호 — *user-in-the-loop* (사용자가 선택)
+            ForEach(Array(annotation.alternatives.enumerated()), id: \.offset) { _, alt in
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(
+                        Color.gray.opacity(0.75),
+                        style: StrokeStyle(lineWidth: 2.5, dash: [6, 4])
+                    )
+                    .frame(width: alt.rect.width, height: alt.rect.height)
+                    .position(x: alt.rect.midX, y: alt.rect.midY)
+
+                NumberBadge(number: alt.number, color: .gray)
+                    .position(
+                        x: alt.rect.minX - 14,
+                        y: alt.rect.minY - 14
+                    )
+            }
 
             // 한글 bubble — next_action 있을 때만
             if !annotation.nextAction.isEmpty {
                 BubbleView(annotation: annotation, screenBounds: screenBounds)
             }
         }
+    }
+}
+
+/// 번호 라벨 (박스 좌상단 코너). 빨강 = primary, 회색 = alternative.
+private struct NumberBadge: View {
+    let number: Int
+    let color: Color
+
+    var body: some View {
+        Text("\(number)")
+            .font(.system(size: 14, weight: .bold))
+            .foregroundStyle(.white)
+            .frame(width: 24, height: 24)
+            .background(Circle().fill(color))
+            .shadow(color: .black.opacity(0.3), radius: 2)
     }
 }
 
@@ -86,6 +136,13 @@ private struct BubbleView: View {
                 .multilineTextAlignment(.leading)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
+
+            // Alternative 안내 — "또는 2번도 가능" (사용자 선택 권한)
+            if !annotation.alternatives.isEmpty {
+                Text("또는 2번 (회색)")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+            }
 
             if !annotation.sourceTag.isEmpty {
                 Text("[\(annotation.sourceTag)]")

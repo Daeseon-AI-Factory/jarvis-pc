@@ -147,18 +147,20 @@ actor AnalyzeCoordinator {
         if let role = preferredRole {
             Log.dispatcher.info("[match] preferred role from instruction: \(role, privacy: .public)")
         }
-        let matched = ElementMatcher.match(
+        // Multi-target: top 2 distinct candidates. 사용자가 1번/2번 시각 선택 (user-in-the-loop).
+        let matches = ElementMatcher.matchTop(
             targetText: result.targetText,
             candidates: allCandidates,
             llmHintRect: llmHintLogical,
-            preferredRole: preferredRole
+            preferredRole: preferredRole,
+            maxResults: 2
         )
 
         let totalElapsed = Date().timeIntervalSince(started)
-        let matchTag = matched?.sourceTag ?? "LLM-fallback"
+        let matchTag = matches.isEmpty ? "LLM-fallback" : matches[0].sourceTag
         Log.dispatcher.info(
-            "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public) (ocr=\(ocrBoxes.count, privacy: .public) ax=\(axElements.count, privacy: .public))"
+            "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public) matches=\(matches.count, privacy: .public) (ocr=\(ocrBoxes.count, privacy: .public) ax=\(axElements.count, privacy: .public))"
         )
-        return .done(result: result, geometry: geometry, matched: matched)
+        return .done(result: result, geometry: geometry, matches: matches)
     }
 }
