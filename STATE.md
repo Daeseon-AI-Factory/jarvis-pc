@@ -24,9 +24,10 @@
 - [x] Swift Phase 6.1 — Vision OCR + ElementMatcher → 99% + R9 swap back (`95d4c57`): OCRBox + OCRService + ElementMatcher + AnalyzeCoordinator async let 병렬 + AppDelegate 3-tier fallback. 13 new tests.
 - [x] Swift Phase 6.1 verify fix (`f08a603`): adversarial verify 3 HIGH + 2 MEDIUM. NFC normalize + short text 0.85 + Task + tiebreaker + punctuation strip.
 - [x] Swift Phase 6.1 spatial fusion (`fcc95b0`): LLM coords hint + OCR proximity filter (radius 200pt) → wrong-box 차단. SYSTEM_PROMPT hint 권장 (강제 X).
-- [x] Swift Phase 6.2 — AXUIElement matcher (이 commit, **icon-only UI 풀이**): AXElement struct + AXService protocol + LiveAXService (NSWorkspace + 재귀 tree walk depth 8, 화이트리스트 14 roles incl. AXDockItem). MatchCandidate unified type (OCR + AX 합집합, R9). ElementMatcher.match overload + 기존 backward compatible. AnalyzeCoordinator async let dispatcher + OCR + AX 3개 병렬 + graceful (AX 권한 거부도 OCR만으로). AppDelegate Accessibility 권한 startup trigger. **Swift 6 함정 R8 × 2**: kAX*Attribute extern var → string literal (Phase 3.1 lesson) + AXValueGetType 사전 check. 2 new tests (AX matched Slack case + AX denied graceful). 80 tests 통과 (`swift build` 3.79s, `swift test` 0.210s). **번역기 본질 도달** — OCR (text-rich) + AX (icon-only) hybrid → 모든 clickable UI deterministic.
+- [x] Swift Phase 6.2 — AXUIElement matcher (`d68746e`): icon-only UI 풀이. OCR + AX hybrid + MatchCandidate unified type.
+- [x] Swift Phase 6.2 fix — SYSTEM_PROMPT 강화 (이 commit): 사용자 dogfooding 발견 `target_text=""` 빈 string → LLM이 SYSTEM_PROMPT 룰 안 따름. fix: target_text 빈 string 절대 금지 + 아이콘은 AX label/앱 이름 줘 + 같은 텍스트 여러 곳 시 *사용자 동작 의도* 한 곳만 (intent-aware ranking) + reasoning에 의도 추론. **한계 인정 — Phase 7+ multi-target architecture** (사용자 통찰 "박스 하나만 치네... 질문 의도 어찌"). memory `intent-disambiguation-multi-target` 박음. 80 tests 통과 (`swift build` 2.97s).
 
-**Last commit:** Phase 6.2 (hash 다음 commit에 갱신)
+**Last commit:** Phase 6.2 fix (hash 다음 commit에 갱신)
 **검증 안 됨:** `swift run` 실제 smoke (menu bar 아이콘 + ⌥Space → panel). 사용자 manual 필요 — GUI라 agent가 직접 못 띄움.
 
 ## Next step (다음 세션 시작점)

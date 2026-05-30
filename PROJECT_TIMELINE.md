@@ -472,6 +472,37 @@ LLM 추정 좌표 ~70% 한계 → OCR matcher ~99% 도달. 번역기 본질 정�
 
 ---
 
+## 2026-05-30 — Phase 6.2 fix: SYSTEM_PROMPT 강화 (target_text 빈 string 금지 + intent-aware)
+
+**Phase 6.2 commit hash backfill:** `d68746e`.
+
+**사용자 dogfooding 발견 (log show 직접 query):**
+```
+[gemini] ok 10.4s — target_text=""              ← 빈 string!
+[ocr] 237 boxes  [ax] 187 elements              ← 둘 다 잡힘
+[analyze] complete 10.7s — target_text="" LLM-fallback  ← 매칭 불가
+```
+
+LLM이 "Slack 어디?" 질문에 *Dock 아이콘 = visible text 없음*이라 판단 → `target_text` 비우고 `coordinates`만 줌. ElementMatcher 매칭 불가 → LLM coords fallback (~70% 부정확).
+
+**fix (이 commit, SYSTEM_PROMPT만 변경):**
+- `target_text` 빈 문자열 **절대 금지** 명시.
+- 아이콘만이고 visible text 없어도 *AX label* (앱 이름) 줘 — 예: Dock의 Slack 아이콘 → `target_text: "Slack"`. backend AXUIElement matcher가 `AXTitle="Slack"`으로 deterministic 좌표.
+- 같은 텍스트 여러 곳 시 — 사용자 *동작 의도*에 가장 맞는 *한 곳*. "Slack 어디?" → 앱 열기 의도 → Dock. 본문 텍스트 X, 사이드바 파일 X.
+- `reasoning` 필드에 의도 추론.
+
+**번역기 본질 추가 인지**: backend (OCR + AX hybrid)는 잘 동작 — *번역의 input* (`target_text`)이 명확해야 작동. SYSTEM_PROMPT가 backend feature를 *제대로 사용*하게 LLM 안내해야.
+
+**한계 인정 — Phase 7+ multi-target architecture**: 사용자 통찰 "박스를 하나만 치네... 이런 질문의도는 어찌파악하는건가"가 결정적. v0.1엔 SYSTEM_PROMPT intent-aware ranking이 한계. v0.4+ `targets: [TargetCandidate]` + numbered overlay + 대화형 follow-up.
+
+memory: `intent-disambiguation-multi-target.md` 박음 — Phase 7+ architecture spec.
+
+R4: swift build 2.97s, swift test 80/80 pass (Prompts 변경, schema 동일).
+
+**다음**: 사용자 재시도 — "Slack 어디?" target_text 빈 string 안 줄 거 + AX matcher 매칭 → Dock 아이콘 위에 박스. 빗나가면 Phase 7+ multi-target 가속.
+
+---
+
 ## 2026-05-30 — Swift Phase 6.2: AXUIElement matcher → icon-only UI 풀이 (Dock 아이콘)
 
 **Phase 6.1 spatial fusion commit hash backfill:** `fcc95b0`.

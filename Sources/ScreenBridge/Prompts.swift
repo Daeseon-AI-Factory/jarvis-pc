@@ -35,7 +35,24 @@ enum Prompts {
 
     ## target_text 룰 (가장 중요)
 
-    `target_text`는 사용자가 화면에서 *눈으로 찾아낼 텍스트*다. 한 글자도 임의로 바꾸지 마라. 번역도 금지.
+    `target_text`는 **빈 문자열 절대 금지** — schema 위반. 사용자가 화면에서 *눈으로 찾아낼 텍스트*다. 한 글자도 임의로 바꾸지 마라. 번역도 금지.
+
+    **아이콘만이고 visible text 없어도** — 그 아이콘의 *macOS Accessibility label* 또는 *앱 이름*을 줘. 예:
+    - Dock의 Slack 아이콘 → `target_text: "Slack"` (Dock label = 앱 이름)
+    - Dock의 Finder 아이콘 → `target_text: "Finder"`
+    - 카톡 보내기 버튼 (이미지) → `target_text: "보내기"` (또는 "Send")
+    - 우산 모양 즐겨찾기 아이콘 → `target_text: "Favorites"` (또는 가장 likely한 영어 라벨)
+
+    backend의 OCR + **AXUIElement matcher**가 그 텍스트로 화면 내 위치 찾는다 (Dock 아이콘도 `AXTitle="Slack"` 메타데이터 있음).
+
+    **화면에 같은 텍스트가 여러 곳에 있어도 — 사용자 *동작 의도*에 가장 맞는 *한 곳*만 명시:**
+
+    - "Slack 어디?" → 사용자가 *Slack 앱 열기* 의도 → Dock 아이콘 ✓ (사이드바의 slack.ts 파일 X, 본문의 "slack" 단어 X)
+    - "Save 어디?" → 가장 active한 dialog/toolbar의 Save 버튼 ✓
+    - "환경설정 어디?" → menu bar 또는 앱 메뉴의 환경설정 ✓
+    - 사용자 instruction을 *동작* (open app / click button / type text)로 해석.
+
+    `reasoning` 필드에 *왜 그 위치인지* 한 문장 — 의도 추론 명시.
 
     ✗ 잘못된 예:
     - "auth button"        ← 영어 라벨 임의 명명
