@@ -225,11 +225,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func processAnalyzeStage(_ stage: AnalyzeStage, on screen: NSScreen) {
         switch stage {
         case .done(let result, let geometry, let matches):
-            // Phase 7.1: task 완료 → "끝났어요" pill + 1.5s 후 dismiss.
+            // Phase 7.3: task 완료 → 초록 ✓ completion pill + 2.5s 후 자동 dismiss.
             if result.taskComplete {
                 Log.app.info("[analyze] task complete — target_text=\"\(result.targetText, privacy: .public)\"")
-                let msg = result.nextAction.isEmpty ? "끝났어요! ✓" : result.nextAction
-                self.hud.presentError(message: msg, on: screen)   // Phase 7.2에 presentCompletion pill 별도 박음
+                let msg = result.nextAction.isEmpty ? "끝났어요!" : result.nextAction
+                self.hud.presentCompletion(message: msg, on: screen)
                 return
             }
             // 1. OCR/AX matched (deterministic) — bubble + alternatives (multi-target overlay)

@@ -1035,6 +1035,12 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[Hotkey 200ms throttle — Probe C race guard]**: Workflow Probe C 발견 — ⌥+Space 빠르게 2번 → 두 Task spawn 동시 → 같은 state snapshot → 중복 dispatcher 호출 (RPM burst). 옵션 = (a) `isHandlingHotkey` boolean guard (in-flight check) / (b) **시간 기반 throttle (200ms)** / (c) 무시 (actor 직렬화로 OK). 선택 (b) — guard (a)는 long-running dispatcher (9s) 동안 사용자가 *완료 후 빠르게 다음* 막힘. 200ms는 사람 손가락 한계 (~100-150ms) 약간 위 — *의도적 반복*만 통과. throttle X (c)는 RPM burst 그대로 (Gemini quota 20/day 사용자 빨리 소진). *되돌리기 비용*: throttle 변수 삭제 + guard 삭제 — 2분 revert. 200 → 100ms or 500ms 조정 자유.
 
+## Phase 7.3 (audit log + completion pill, 2026-05-31)
+
+**[SessionAuditLog — per-session JSON file, not append-only log]**: 옵션 = (a) 단일 append-only log file (sessions.log) — 단순 / (b) **per-session JSON file** (`<uuid>.json`) — atomic write, parse 쉬움 / (c) SQLite — overkill. 선택 (b) — 매 step `atomic write` (session 진행 중도 디버그 가능), `~/Library/Application Support/com.screenbridge.app/sessions/`에 박힘, menu-bar "Open sessions folder" item이 *이미* 사용. `SessionAuditEntry.steps` 배열에 매 step append (instruction X reapply — `currentInstruction` 1회만 박힘). `Outcome` enum: inProgress / completed / cancelledByUser / cancelledByTimeout / error. 매 step + finalize 시 save. *screenshot 절대 X* — Phase 7.0 bounded growth 결정 일관 (text summary only). *되돌리기 비용*: file 삭제 + AnalyzeCoordinator의 auditEntry/save 호출 삭제 — 15분 revert. Phase 7.4 TODO: 7일 후 자동 삭제 (rotation).
+
+**[Completion pill 초록 ✓ vs ErrorPill 재사용]**: 옵션 = (a) ErrorPill (빨강) 그대로 — 색만 message로 구분 / (b) **별도 CompletionPill (초록 + ✓)** — 명확. 선택 (b) — 사용자 *명확히 "성공적 완료"* 인식 (특히 시니어/non-tech). 초록 RGB(0.2, 0.65, 0.3) — accessible (WCAG AA contrast 흰 글씨). 2.5s auto-dismiss (Task.sleep 안에 `currentContent == .completion` check로 race 차단 — 새 task 떠있으면 dismiss X). *되돌리기 비용*: HUDContent.completion case + CompletionPill struct + HUDController.presentCompletion + auto-dismiss Task — 20줄 revert.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

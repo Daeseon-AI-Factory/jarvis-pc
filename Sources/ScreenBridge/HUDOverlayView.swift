@@ -34,6 +34,7 @@ enum HUDContent: Sendable, Equatable {
     case loading(message: String)
     case annotated(HUDAnnotation)
     case error(message: String)
+    case completion(message: String)   // Phase 7.3: task 끝났을 때 초록 ✓ pill
 }
 
 struct HUDOverlayView: View {
@@ -52,6 +53,8 @@ struct HUDOverlayView: View {
                     BoxAndBubble(annotation: ann, screenBounds: geo.size)
                 case .error(let message):
                     ErrorPill(message: message)
+                case .completion(let message):
+                    CompletionPill(message: message)
                 }
             }
         }
@@ -233,5 +236,27 @@ private struct ErrorPill: View {
             .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 14))
             .frame(maxWidth: 460)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    }
+}
+
+/// Phase 7.3: task 완료 pill — 초록 + ✓ + "끝났어요" 친화 메시지.
+/// ErrorPill과 색만 다름 (빨강 → 초록), 사용자가 *명확히* "성공적으로 끝남" 인식.
+private struct CompletionPill: View {
+    let message: String
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.title2)
+                .foregroundStyle(.white)
+            Text(message)
+                .font(.headline)
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 14)
+        .background(Color(red: 0.2, green: 0.65, blue: 0.3).opacity(0.92), in: RoundedRectangle(cornerRadius: 14))
+        .frame(maxWidth: 460)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 }

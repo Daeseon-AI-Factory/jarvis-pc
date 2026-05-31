@@ -38,6 +38,8 @@ actor AnalyzeCoordinator {
     private(set) var currentInstruction: String?
     // 45s idle timeout — waitingForUserClick 진입 시 set. 다음 transition (continue / cancel / complete) 시 unset.
     private(set) var idleDeadline: Date?
+    // Phase 7.3: audit log entry — session 통째 박음. 매 step append + finalize 시 save.
+    private var auditEntry: SessionAuditEntry?
 
     init(
         capture: ScreenCaptureService = LiveScreenCapture(),
@@ -77,12 +79,19 @@ actor AnalyzeCoordinator {
     /// 사용자가 cancel — esc / menu-bar item / 새 task 시작 / completion 후 timeout.
     func cancelSession(reason: CancelReason) {
         let prevID = sessionID
+        // Phase 7.3: audit finalize + save (취소도 박음 — 어디서 멈췄나 분석 가능).
+        if var entry = auditEntry {
+            entry.outcome = (reason == .idleTimeout) ? .cancelledByTimeout : .cancelledByUser
+            entry.completedAt = Date()
+            SessionAuditLog.save(entry)
+        }
+        auditEntry = nil
         sessionState = .cancelled(reason: reason)
         sessionID = nil
         currentInstruction = nil
         history.removeAll()
         idleDeadline = nil
-        Log.dispatcher.info("[session] cancel — reason=\(String(describing: reason), privacy: .public) prevID=\(prevID ?? "nil", privacy: .public)")
+        Log.dispatcher.info("[session] cancel — reason=\(String(describing: reason), privacy: .public) prevID=\(prevID ?? "nil", privacy: .public) audit saved")
         // .cancelled → 다음 hotkey 시 .idle로 자동 복귀 (sentinel transition).
         sessionState = .idle
     }
@@ -112,6 +121,15 @@ actor AnalyzeCoordinator {
             sessionID = UUID().uuidString
             history.removeAll()
             currentInstruction = req.instruction
+            // Phase 7.3: audit entry 박음. 매 step append + finalize 시 outcome 갱신.
+            auditEntry = SessionAuditEntry(
+                sessionID: sessionID!,
+                instruction: req.instruction,
+                startedAt: Date(),
+                steps: [],
+                completedAt: nil,
+                outcome: .inProgress
+            )
             Log.dispatcher.info("[session] new — sessionID=\(self.sessionID ?? "?", privacy: .public)")
         }
         sessionState = .analyzing(stepIndex: history.count)
@@ -267,11 +285,30 @@ actor AnalyzeCoordinator {
             "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public) matches=\(matches.count, privacy: .public) (ocr=\(ocrBoxes.count, privacy: .public) ax=\(axElements.count, privacy: .public)) irreversible=\(isIrreversible, privacy: .public) task_complete=\(result.taskComplete, privacy: .public)"
         )
 
+        // Phase 7.3: step record append to audit entry.
+        let primarySource = matches.first?.sourceTag ?? "LLM-fallback"
+        let stepNumber = history.count + 1
+        let stepRecord = SessionAuditEntry.StepRecord(
+            stepNumber: stepNumber,
+            targetText: safeResult.targetText,
+            nextAction: safeResult.nextAction,
+            sourceTag: primarySource,
+            stepActionSummary: safeResult.stepActionSummary,
+            requiresConfirmation: safeResult.requiresConfirmation,
+            analysisElapsedSec: totalElapsed,
+            timestamp: Date()
+        )
+        auditEntry?.steps.append(stepRecord)
+
         // Phase 7.1: state transition + history 누적.
         if result.taskComplete {
             sessionState = .completed
             idleDeadline = nil
-            Log.dispatcher.info("[session] task complete — sessionID=\(self.sessionID ?? "?", privacy: .public) total steps=\(self.history.count + 1, privacy: .public)")
+            // Phase 7.3: audit finalize + save.
+            auditEntry?.outcome = .completed
+            auditEntry?.completedAt = Date()
+            if let entry = auditEntry { SessionAuditLog.save(entry) }
+            Log.dispatcher.info("[session] task complete — sessionID=\(self.sessionID ?? "?", privacy: .public) total steps=\(self.history.count + 1, privacy: .public) audit saved")
         } else {
             // step 누적: 이번 step의 *사용자 행동 요약*을 다음 call의 previousSteps에 박을 거.
             // LLM이 step_action_summary 박았으면 사용, 없으면 fallback ("step N 진행").
@@ -281,6 +318,8 @@ actor AnalyzeCoordinator {
             let deadline = Date().addingTimeInterval(45)
             sessionState = .waitingForUserClick(stepIndex: history.count - 1, deadlineAt: deadline)
             idleDeadline = deadline
+            // Phase 7.3: 매 step audit save (atomic) — task complete 안 기다림, 디버그용.
+            if let entry = auditEntry { SessionAuditLog.save(entry) }
             Log.dispatcher.info("[session] waitingForUserClick step=\(self.history.count, privacy: .public) deadline=45s summary=\"\(summary, privacy: .public)\"")
         }
         return .done(result: safeResult, geometry: geometry, matches: matches)
