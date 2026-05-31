@@ -33,6 +33,11 @@ actor AnalyzeCoordinator {
     private var sessionState: SessionState = .idle
     private(set) var sessionID: String?
     private(set) var history: [StepSummary] = []
+    // Phase 7.1: 첫 instruction 저장 → continuation에서 LLM에 *같은 instruction* 박음.
+    // 사용자가 매 step 재입력할 필요 X.
+    private(set) var currentInstruction: String?
+    // 45s idle timeout — waitingForUserClick 진입 시 set. 다음 transition (continue / cancel / complete) 시 unset.
+    private(set) var idleDeadline: Date?
 
     init(
         capture: ScreenCaptureService = LiveScreenCapture(),
@@ -49,23 +54,51 @@ actor AnalyzeCoordinator {
     /// 외부 코드 (AppDelegate)가 state 읽을 때. await 강제 — race 차단 (synthesis risk #2).
     func snapshotState() -> SessionState { sessionState }
 
-    /// Phase 7.0 stub. 7.1에서 진짜 transition 박음. 지금은 run()에 delegate —
-    /// AppDelegate가 부르더라도 v0.1 single-shot 동작 그대로.
-    func continueSession(_ req: AnalyzeRequest) async -> AnalyzeStage {
-        Log.dispatcher.info("[session] continueSession called — Phase 7.0 stub, delegating to run()")
-        return await run(req)
+    /// Phase 7.1: 진짜 continuation. AppDelegate가 waitingForUserClick state 시 호출.
+    /// 같은 instruction + history 누적된 previousSteps로 LLM에 다음 step 물음.
+    /// req.instruction / sessionID / previousSteps는 caller가 박지 X — coordinator state 사용.
+    func continueSession() async -> AnalyzeStage {
+        guard let prevInstruction = currentInstruction,
+              let prevSessionID = sessionID else {
+            Log.dispatcher.notice("[session] continueSession: no active session, fallback to idle")
+            sessionState = .idle
+            return .failed(.invalidResponse("no_active_session"))
+        }
+        Log.dispatcher.info("[session] continue — sessionID=\(prevSessionID, privacy: .public) step=\(self.history.count + 1, privacy: .public) instruction=\"\(prevInstruction, privacy: .public)\"")
+        let req = AnalyzeRequest(
+            instruction: prevInstruction,
+            triggeredAt: Date(),
+            sessionID: prevSessionID,
+            previousSteps: history.isEmpty ? nil : history
+        )
+        return await run(req, isContinuation: true)
     }
 
-    /// Test/diagnostic 용. Phase 7.1에서 실제 cancel 흐름 wire (esc / menu-bar item).
+    /// 사용자가 cancel — esc / menu-bar item / 새 task 시작 / completion 후 timeout.
     func cancelSession(reason: CancelReason) {
+        let prevID = sessionID
         sessionState = .cancelled(reason: reason)
         sessionID = nil
+        currentInstruction = nil
         history.removeAll()
-        Log.dispatcher.info("[session] cancel — reason=\(String(describing: reason), privacy: .public)")
+        idleDeadline = nil
+        Log.dispatcher.info("[session] cancel — reason=\(String(describing: reason), privacy: .public) prevID=\(prevID ?? "nil", privacy: .public)")
+        // .cancelled → 다음 hotkey 시 .idle로 자동 복귀 (sentinel transition).
+        sessionState = .idle
+    }
+
+    /// idleDeadline 초과 시 호출 — AppDelegate가 timer로 check.
+    func checkIdleTimeout() -> Bool {
+        guard let deadline = idleDeadline else { return false }
+        guard Date() >= deadline else { return false }
+        Log.dispatcher.info("[session] idle timeout — auto-cancel")
+        cancelSession(reason: .idleTimeout)
+        return true
     }
 
     /// Analyze 1회 실행. 진행 중이면 즉시 `.failed(.invalidResponse)` 반환.
-    func run(_ req: AnalyzeRequest) async -> AnalyzeStage {
+    /// `isContinuation=true`면 기존 session state 유지. 새 task (false)는 fresh session 시작.
+    func run(_ req: AnalyzeRequest, isContinuation: Bool = false) async -> AnalyzeStage {
         if isRunning {
             Log.dispatcher.notice("[analyze] reject — 이미 진행 중")
             return .failed(.invalidResponse("이미 분석 중"))
@@ -73,8 +106,19 @@ actor AnalyzeCoordinator {
         isRunning = true
         defer { isRunning = false }
 
+        // Phase 7.1 — session bookkeeping. fresh task면 new sessionID/history,
+        // continuation이면 기존 유지. currentInstruction은 첫 run 시 박힘.
+        if !isContinuation {
+            sessionID = UUID().uuidString
+            history.removeAll()
+            currentInstruction = req.instruction
+            Log.dispatcher.info("[session] new — sessionID=\(self.sessionID ?? "?", privacy: .public)")
+        }
+        sessionState = .analyzing(stepIndex: history.count)
+        idleDeadline = nil
+
         Log.dispatcher.info(
-            "[analyze] begin — instruction \(req.instruction.count, privacy: .public) chars"
+            "[analyze] begin — step=\(self.history.count + 1, privacy: .public) instruction \(req.instruction.count, privacy: .public) chars continuation=\(isContinuation, privacy: .public)"
         )
         let started = Date()
 
@@ -198,11 +242,47 @@ actor AnalyzeCoordinator {
             maxResults: 2
         )
 
+        // Phase 7.1: 2-layer irreversible-action gate. LLM이 누락해도 backend가 강제 true.
+        let isIrreversible = result.requiresConfirmation
+            || IrreversibleActions.isIrreversible(nextAction: result.nextAction, targetText: result.targetText)
+        if isIrreversible && !result.requiresConfirmation {
+            Log.dispatcher.notice("[safety] keyword post-filter → requires_confirmation forced true")
+        }
+        let safeResult = AnalysisResult(
+            screenState: result.screenState,
+            nextAction: result.nextAction,
+            targetText: result.targetText,
+            targetRole: result.targetRole,
+            coordinates: result.coordinates,
+            reasoning: result.reasoning,
+            raw: result.raw,
+            taskComplete: result.taskComplete,
+            requiresConfirmation: isIrreversible,
+            stepActionSummary: result.stepActionSummary
+        )
+
         let totalElapsed = Date().timeIntervalSince(started)
         let matchTag = matches.isEmpty ? "LLM-fallback" : matches[0].sourceTag
         Log.dispatcher.info(
-            "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public) matches=\(matches.count, privacy: .public) (ocr=\(ocrBoxes.count, privacy: .public) ax=\(axElements.count, privacy: .public))"
+            "[analyze] complete \(String(format: "%.1f", totalElapsed), privacy: .public)s — target_text=\"\(result.targetText, privacy: .public)\" \(matchTag, privacy: .public) matches=\(matches.count, privacy: .public) (ocr=\(ocrBoxes.count, privacy: .public) ax=\(axElements.count, privacy: .public)) irreversible=\(isIrreversible, privacy: .public) task_complete=\(result.taskComplete, privacy: .public)"
         )
-        return .done(result: result, geometry: geometry, matches: matches)
+
+        // Phase 7.1: state transition + history 누적.
+        if result.taskComplete {
+            sessionState = .completed
+            idleDeadline = nil
+            Log.dispatcher.info("[session] task complete — sessionID=\(self.sessionID ?? "?", privacy: .public) total steps=\(self.history.count + 1, privacy: .public)")
+        } else {
+            // step 누적: 이번 step의 *사용자 행동 요약*을 다음 call의 previousSteps에 박을 거.
+            // LLM이 step_action_summary 박았으면 사용, 없으면 fallback ("step N 진행").
+            let summary = result.stepActionSummary ?? "step \(history.count + 1) 진행 (\(result.targetText))"
+            history.append(StepSummary(stepNumber: history.count + 1, actionTaken: summary))
+            // waitingForUserClick — 45s idle timeout.
+            let deadline = Date().addingTimeInterval(45)
+            sessionState = .waitingForUserClick(stepIndex: history.count - 1, deadlineAt: deadline)
+            idleDeadline = deadline
+            Log.dispatcher.info("[session] waitingForUserClick step=\(self.history.count, privacy: .public) deadline=45s summary=\"\(summary, privacy: .public)\"")
+        }
+        return .done(result: safeResult, geometry: geometry, matches: matches)
     }
 }

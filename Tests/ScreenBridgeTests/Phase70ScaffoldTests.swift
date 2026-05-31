@@ -126,7 +126,7 @@ struct AnalyzeCoordinatorSessionStateTests {
         #expect(state == .idle)
     }
 
-    @Test("cancelSession — state .cancelled")
+    @Test("cancelSession — Phase 7.1 sentinel transition: state .idle 복귀")
     func cancelClearsState() async {
         let coordinator = AnalyzeCoordinator(
             capture: Phase70Stub.Capture(),
@@ -136,7 +136,8 @@ struct AnalyzeCoordinatorSessionStateTests {
         )
         await coordinator.cancelSession(reason: .userEsc)
         let state = await coordinator.snapshotState()
-        #expect(state == .cancelled(reason: .userEsc))
+        // .cancelled → sentinel .idle 복귀 (다음 hotkey 시 새 task 시작 가능).
+        #expect(state == .idle)
     }
 
     @Test("CancelReason — 4 종 Equatable")
@@ -176,5 +177,63 @@ struct StepSummaryTests {
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(StepSummary.self, from: data)
         #expect(decoded == original)
+    }
+}
+
+@Suite("Phase 7.1 — Continuation wire")
+struct Phase71ContinuationTests {
+
+    @Test("continueSession with no active session → fails + state .idle")
+    func continueWithoutSession() async {
+        let coordinator = AnalyzeCoordinator(
+            capture: Phase70Stub.Capture(),
+            dispatcher: Phase70Stub.Dispatcher(),
+            ocr: Phase70Stub.OCR(),
+            ax: Phase70Stub.AX()
+        )
+        let stage = await coordinator.continueSession()
+        if case .failed(let err) = stage {
+            if case .invalidResponse(let msg) = err {
+                #expect(msg == "no_active_session")
+            } else {
+                Issue.record("expected invalidResponse")
+            }
+        } else {
+            Issue.record("expected .failed stage")
+        }
+        let state = await coordinator.snapshotState()
+        #expect(state == .idle)
+    }
+
+    @Test("cancelSession — currentInstruction + history 비움")
+    func cancelClearsContinuationState() async {
+        let coordinator = AnalyzeCoordinator(
+            capture: Phase70Stub.Capture(),
+            dispatcher: Phase70Stub.Dispatcher(),
+            ocr: Phase70Stub.OCR(),
+            ax: Phase70Stub.AX()
+        )
+        await coordinator.cancelSession(reason: .userEsc)
+        let instruction = await coordinator.currentInstruction
+        let historyCount = await coordinator.history.count
+        let sessionID = await coordinator.sessionID
+        #expect(instruction == nil)
+        #expect(historyCount == 0)
+        #expect(sessionID == nil)
+        // .cancelled → sentinel .idle 복귀 (다음 hotkey 시 새 task 시작 가능).
+        let state = await coordinator.snapshotState()
+        #expect(state == .idle)
+    }
+
+    @Test("checkIdleTimeout — deadline 없으면 false")
+    func idleTimeoutWithoutDeadline() async {
+        let coordinator = AnalyzeCoordinator(
+            capture: Phase70Stub.Capture(),
+            dispatcher: Phase70Stub.Dispatcher(),
+            ocr: Phase70Stub.OCR(),
+            ax: Phase70Stub.AX()
+        )
+        let triggered = await coordinator.checkIdleTimeout()
+        #expect(triggered == false)
     }
 }

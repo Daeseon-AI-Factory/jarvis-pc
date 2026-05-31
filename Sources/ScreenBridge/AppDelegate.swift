@@ -89,6 +89,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(triggerNow),
             keyEquivalent: ""
         )
+        menu.addItem(
+            withTitle: "현재 세션 취소",
+            action: #selector(cancelCurrentSession),
+            keyEquivalent: "."
+        ).keyEquivalentModifierMask = [.command]
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Open sessions folder",
@@ -116,14 +121,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// ⌥+Space 흐름: HUD 떠있으면 dismiss, 아니면 panel toggle.
-    /// (Phase 5.0 — Analyze 누르면 HUD 뜨고 panel close → 다시 ⌥+Space로 HUD 닫음)
+    /// ⌥+Space 흐름. Phase 7.1: state 분기.
+    /// - waitingForUserClick: HUD dismiss + continueSession (panel 안 띄움, 같은 instruction 재사용)
+    /// - 그 외: 기존 동작 (HUD 떠있으면 dismiss, 아니면 panel toggle)
     private func handleHotkey() {
-        if hud.isShowing {
-            hud.dismiss()
-            return
+        Task { @MainActor in
+            // continueSession path — active session 있을 때만.
+            if let coordinator,
+               case .waitingForUserClick = await coordinator.snapshotState() {
+                Log.hotkey.info("[hotkey] state=waitingForUserClick → continueSession (panel skip)")
+                if self.hud.isShowing { self.hud.dismiss() }
+                self.handleContinuation()
+                return
+            }
+            // 새 task path.
+            if self.hud.isShowing {
+                self.hud.dismiss()
+                if let coordinator {
+                    await coordinator.cancelSession(reason: .userEsc)
+                }
+                return
+            }
+            self.toggleTriggerPanel()
         }
-        toggleTriggerPanel()
+    }
+
+    /// Phase 7.1: continuation — 새 instruction 입력 X, 같은 task 다음 step.
+    /// coordinator state (currentInstruction + history)로 LLM 호출.
+    private func handleContinuation() {
+        guard let screen = cursorScreen(), let coordinator else { return }
+        hud.presentLoading(message: "다음 step 찾는 중... (3~5초)", on: screen)
+        Task { @MainActor in
+            let stage = await coordinator.continueSession()
+            self.processAnalyzeStage(stage, on: screen)
+        }
     }
 
     /// Analyze 콜백 — Phase 4.2: 진짜 capture + dispatcher + HUD.
@@ -153,56 +184,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         Task { @MainActor in
             let stage = await coordinator.run(req)
-            switch stage {
-            case .done(let result, let geometry, let matches):
-                // 1. OCR/AX matched (deterministic) — bubble + alternatives (multi-target overlay)
-                if let primary = matches.first {
-                    // Alternative — matches[1..] (있으면)
-                    let alts: [HUDAnnotation.Alternative] = matches.dropFirst().enumerated().map { idx, m in
-                        HUDAnnotation.Alternative(rect: m.rect, sourceTag: m.sourceTag, number: idx + 2)
-                    }
-                    Log.app.info("[analyze] HUD annotated (\(primary.sourceTag, privacy: .public)) — target_text=\"\(result.targetText, privacy: .public)\" alts=\(alts.count, privacy: .public)")
-                    self.hud.presentAnnotation(
-                        HUDAnnotation(
-                            rect: primary.rect,
-                            nextAction: result.nextAction,
-                            sourceTag: primary.sourceTag,
-                            alternatives: alts
-                        ),
-                        on: screen
-                    )
-                    return
+            self.processAnalyzeStage(stage, on: screen)
+        }
+    }
+
+    /// Phase 7.1: run / continueSession 결과 공통 처리.
+    /// taskComplete 시 완료 pill + state 자동 idle 복귀. waitingForUserClick 시 박스 표시 +
+    /// 사용자가 다음 ⌥+Space로 continueSession 진입.
+    private func processAnalyzeStage(_ stage: AnalyzeStage, on screen: NSScreen) {
+        switch stage {
+        case .done(let result, let geometry, let matches):
+            // Phase 7.1: task 완료 → "끝났어요" pill + 1.5s 후 dismiss.
+            if result.taskComplete {
+                Log.app.info("[analyze] task complete — target_text=\"\(result.targetText, privacy: .public)\"")
+                let msg = result.nextAction.isEmpty ? "끝났어요! ✓" : result.nextAction
+                self.hud.presentError(message: msg, on: screen)   // Phase 7.2에 presentCompletion pill 별도 박음
+                return
+            }
+            // 1. OCR/AX matched (deterministic) — bubble + alternatives (multi-target overlay)
+            if let primary = matches.first {
+                let alts: [HUDAnnotation.Alternative] = matches.dropFirst().enumerated().map { idx, m in
+                    HUDAnnotation.Alternative(rect: m.rect, sourceTag: m.sourceTag, number: idx + 2)
                 }
-                // 2. fallback — LLM 추정 coordinates (있으면)
-                if let coords = result.coordinates,
-                   let local = geometry.logicalRectFromSentBox(coords) {
-                    Log.app.info("[analyze] HUD annotated (LLM-fallback) — target_text=\"\(result.targetText, privacy: .public)\"")
-                    self.hud.presentAnnotation(
-                        HUDAnnotation(
-                            rect: local,
-                            nextAction: result.nextAction,
-                            sourceTag: "LLM"
-                        ),
-                        on: screen
-                    )
-                    return
-                }
-                // 3. 둘 다 실패 — 한국어 친화 에러. 「」 corner quote (postposition 회피).
-                Log.app.notice("[analyze] no match (OCR + LLM coords both nil) — target_text=\"\(result.targetText, privacy: .public)\"")
-                let truncated = result.targetText.count > 30
-                    ? String(result.targetText.prefix(30)) + "…"
-                    : result.targetText
-                self.hud.presentError(
-                    message: "화면에서 「\(truncated)」을(를) 찾을 수 없었어요.\n다시 시도하거나 다른 화면에서 시도해주세요.",
+                let confTag = result.requiresConfirmation ? " ⚠️CONFIRM" : ""
+                Log.app.info("[analyze] HUD annotated (\(primary.sourceTag, privacy: .public)\(confTag, privacy: .public)) — target_text=\"\(result.targetText, privacy: .public)\" alts=\(alts.count, privacy: .public)")
+                self.hud.presentAnnotation(
+                    HUDAnnotation(
+                        rect: primary.rect,
+                        nextAction: result.nextAction,
+                        sourceTag: primary.sourceTag,
+                        alternatives: alts
+                    ),
                     on: screen
                 )
-            case .failed(let err):
-                let msg = UserMessage.from(err)
-                Log.app.error("[analyze] failed → \(msg, privacy: .public)")
-                self.hud.presentError(message: msg, on: screen)
-            case .capturing, .analyzing:
-                break   // Phase 4.2 stream 모드 아님
+                return
             }
+            // 2. fallback — LLM 추정 coordinates (있으면)
+            if let coords = result.coordinates,
+               let local = geometry.logicalRectFromSentBox(coords) {
+                Log.app.info("[analyze] HUD annotated (LLM-fallback) — target_text=\"\(result.targetText, privacy: .public)\"")
+                self.hud.presentAnnotation(
+                    HUDAnnotation(
+                        rect: local,
+                        nextAction: result.nextAction,
+                        sourceTag: "LLM"
+                    ),
+                    on: screen
+                )
+                return
+            }
+            // 3. 둘 다 실패 — 한국어 친화 에러. 「」 corner quote (postposition 회피).
+            Log.app.notice("[analyze] no match (OCR + LLM coords both nil) — target_text=\"\(result.targetText, privacy: .public)\"")
+            let truncated = result.targetText.count > 30
+                ? String(result.targetText.prefix(30)) + "…"
+                : result.targetText
+            self.hud.presentError(
+                message: "화면에서 「\(truncated)」을(를) 찾을 수 없었어요.\n다시 시도하거나 다른 화면에서 시도해주세요.",
+                on: screen
+            )
+        case .failed(let err):
+            let msg = UserMessage.from(err)
+            Log.app.error("[analyze] failed → \(msg, privacy: .public)")
+            self.hud.presentError(message: msg, on: screen)
+        case .capturing, .analyzing:
+            break   // Phase 4.2 stream 모드 아님
         }
     }
 
@@ -223,6 +268,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func triggerNow() {
         toggleTriggerPanel()
+    }
+
+    /// Phase 7.1: 사용자가 menu-bar 또는 ⌘. 로 현재 session 취소.
+    /// state 시점 무관 — 항상 동작 (safety invariant: cancel <1 액션).
+    @objc private func cancelCurrentSession() {
+        Task { @MainActor in
+            guard let coordinator else { return }
+            await coordinator.cancelSession(reason: .userEsc)
+            self.hud.dismiss()
+            Log.app.info("[session] menu-bar cancel")
+        }
     }
 
     @objc private func openSessions() {

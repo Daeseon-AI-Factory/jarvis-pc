@@ -1019,6 +1019,14 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[Context bounded growth — text summary, not screenshot history]**: 옵션 = (a) Computer Use 식 full screenshot history (context window 폭주, token quadratic) / (b) stateless 매 call (v0.1) / (c) **rolling text summary** (≤30 words × 3 step = ~200 token). 선택 (c) — LLM이 본인 응답에 `step_action_summary` 박음, 다음 call의 `previousSteps`에 들어감. **bounded growth**. 4-step Slack task = 1 task당 input ~3000 token 안에. *되돌리기*: StepSummary struct 삭제 + AnalyzeRequest.previousSteps nil 강제 — 5분 revert.
 
+## Phase 7.1 (continuation wire, 2026-05-30)
+
+**[Same hotkey ⌥+Space — mode-aware 분기]**: 옵션 = (a) 새 hotkey (예 ⌥+.) 박음 / (b) 같은 ⌥+Space + state 분기. 선택 (b) — 사용자 학습 비용 0 (이미 익숙), state 분기는 `coordinator.snapshotState()` 1줄. 같은 keystroke이 *idle*에선 panel, *waitingForUserClick*에선 continueSession (panel skip, instruction 재사용). HUD 떠있고 그 외 state 시는 dismiss + cancelSession — *escape도 같은 키*. *되돌리기*: AppDelegate.handleHotkey 6줄 — 3분 revert.
+
+**[Sentinel .cancelled → .idle 복귀]**: 옵션 = (a) `.cancelled` state 유지 / (b) cancelSession 끝에서 .idle 자동 sentinel. 선택 (b) — 다음 hotkey가 *자연스럽게 새 task path* (panel 띄움). `.cancelled` value는 log엔 박지만 state는 immediate idle. *되돌리기*: 1줄 — `sessionState = .idle` 제거. test도 같이.
+
+**[Backend irreversible-action post-filter — run() 안에서 OR 강제]**: AnalyzeCoordinator.run 결과 처리 시 `IrreversibleActions.isIrreversible(...) || result.requiresConfirmation`로 safeResult 합성. LLM이 누락한 한국어 변형 (이체하기/확정/탈퇴) 잡힘. log `[safety] keyword post-filter`. 옵션 = (a) AppDelegate (UI layer) / (b) AnalyzeCoordinator (data layer). 선택 (b) — data invariant 한 곳에서 강제, AppDelegate는 *requires_confirmation 신뢰*. *되돌리기*: 12줄 — 5분 revert.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
