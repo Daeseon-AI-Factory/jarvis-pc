@@ -75,7 +75,7 @@ SCRATCHPAD.md 형식:
 
 ## 모델 사용 (Swift 기준)
 
-- **vision 호출 (채택): `gemini-2.5-flash`** (무료 250 RPD, 8-15s). responseSchema로 JSON 강제 필수.
+- **vision 호출 (채택): `gemini-2.5-flash`** (무료 **20 RPD** — 2026-05 기준, Google이 250 → 20 silent 변경. 8-15s). responseSchema로 JSON 강제 필수. *20 RPD 초과 시 일일 막힘* — 해결: GCP billing 활성화 또는 다른 project key 또는 Anthropic dispatcher swap.
 - 대안: `claude-sonnet-4-6` (Anthropic API, 정확도 최고, 유료) / claude CLI subprocess (Pro 구독, 느림).
 - Groq Llama 4 Scout 17B는 vision 76초 실측 → 폐기 (DECISIONS.md).
 - 모델명 하드코딩하지 말고 `Sources/ScreenBridge/GeminiDispatcher.swift` 등에 const로.

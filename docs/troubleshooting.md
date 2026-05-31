@@ -372,14 +372,27 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 
 ---
 
-## Gemini 429 retry burst — exp backoff가 "Please retry in Xs" 무시 → quota burn 더 빨리
+## Gemini 429 retry burst + 실제 quota는 *일당 20회* (분당 X)
 
 - **Symptom**: 사용자 dogfooding 중 "여러 번 시도했지만 실패" error 반복. log show 박힌 retry body:
   ```
   body={"message": "Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 29.667199528s.", "code": 429}
   ```
-- **Cause**: 우리 retry는 1/2/4s exp backoff (3 attempts) — Gemini가 *30초 기다리라* 명시했는데 7초 안에 3 retries 강행. *각 retry도 429* → 사용자 1 task당 4 calls burn (initial + 3 retries) → 20 RPM 더 빨리 도달. Gemini 2.5 Flash 무료 분당 한도 *20 RPM* (이전 추정 10 RPM은 부정확). 또 사용자 dogfooding 자주 재실행 + prewarm + multi-target overlay로 호출 자체가 많아짐.
-- **Fix**: GeminiDispatcher.sendWithRetry에 `parseRetryAfterFromBody(_:)` regex 추가 — body에서 `"Please retry in <num>s"` extract → 그 시간 + jitter wait (cap 60s). 429 시 exp backoff 안 함. maxAttempts 3 → 2 (Gemini 시간 기다린 후 1번 재시도만, 또 429면 fail). UserMessage.retriesExhausted lastStatus=429 분리 → "Gemini 무료 분당 한도(20회). 30초 후 다시 시도하거나 GCP 결제 활성화 (1달러 미만)". GeminiDispatcherTests에 4 parseRetryAfter tests.
-- **Commit**: (다음 commit hash 갱신)
-- **Pattern**: vendor가 *retry-after 명시*하면 *그 시간 respect 무조건*. exp backoff는 vendor 침묵 시 fallback. retry-after 무시는 vendor quota burn + 사용자 더 오래 막힘. Korean Gemini docs는 RPM 한도 자주 변경 (10→20→...) — 본 코드에서 hardcoded 한도 박지 X, error message에 *Gemini가 직접 알려준 시간* 사용. Universal: any rate-limited API의 first principle — "server tells you when, you listen".
+  retry-after는 *27-30초*로 짧게 박혀있지만, *daily counter는 PT midnight 후만 reset*. 그 안엔 *모든 call이 429*.
+- **Cause**: Workflow 4-probe 진단 (w0dkpqbs2). Probe B (direct curl) 확정:
+  - `quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier`
+  - `quotaValue: "20"` — gemini-2.5-flash 무료 *일당 20회* (per project per model)
+  - CLAUDE.md "250 RPD"는 stale (Google이 2026 어느 시점에 250 → 20 silent 변경)
+  - retry-after `27s`는 per-minute burst window 의미, *daily metric엔 무의미*
+  - gemini-2.0-flash는 limit=0 (free-tier 0 할당)
+  - 별도 client OK는 *paid tier 또는 다른 project key*
+  - 우리 retry 1/2/4s exp backoff는 *daily-exhausted에 무의미* — 7초 안 3 retries → quota *더 빨리* burn
+- **Fix (Phase 1 — partial)**: GeminiDispatcher.sendWithRetry에 `parseRetryAfterFromBody(_:)` regex 추가, body에서 `Please retry in <num>s` extract → 그 시간 respect (cap 60s, jitter). maxAttempts 3 → 2. UserMessage.retriesExhausted(lastStatus=429) 분리, 한국어 친화 "일일 한도 도달 — 내일 reset / GCP billing / 다른 project key" 3 옵션 안내. CLAUDE.md "250 RPD" → "20 RPD (2026-05)".
+- **Fix (Phase 2 — TODO)**: body의 `RetryInfo`/`QuotaFailure` parse → *per-minute* (sleep + retry OK) vs *daily-exhausted* (fail fast, retry 무의미) 구분. daily 시 *Anthropic dispatcher fallback* 자동 swap (ANTHROPIC_API_KEY 있을 때). race condition (handleHotkey + handleContinuation Task spawn race) 별도 fix.
+- **Commit (Phase 1)**: `8db0290` (retry-after respect) + 다음 commit (이번 — message 정정 + CLAUDE.md 갱신).
+- **Pattern**:
+  1. **Vendor docs는 silently 변경됨** — 250 RPD → 20 RPD가 *announce 없이* 적용. hardcoded 한도는 error response의 실제 값 사용.
+  2. **Server가 retry-after 명시하면 무조건 respect** — exp backoff는 침묵 시 fallback.
+  3. **Daily vs per-minute quota는 fix 전략 다름** — per-minute은 sleep+retry, daily는 fail fast + dispatcher swap.
+  4. **별도 client OK 사용자 신호**는 *quota 도달 X*가 아니라 *다른 key/project/tier* — 같은 key 다른 client 의미 X.
 
