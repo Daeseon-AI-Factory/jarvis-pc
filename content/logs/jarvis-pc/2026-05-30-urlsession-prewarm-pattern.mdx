@@ -1,0 +1,127 @@
+---
+title: "URLSession Cold-Start Optimization — Dispatcher.prewarm() Pattern"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "URLSession의 첫 호출 cold start (TLS 핸드셰이크 + DNS = 1-2초) 최적화. 앱 launch 시 dispatcher.prewarm()으로 경량 GET 요청 (응답 1KB, cost 0) 미리 실행 — 실제 analyze 호출 시 1-2초 단축."
+tags: ["screenbridge", "swift", "performance", "urlsession", "network", "optimization"]
+---
+
+## 문제
+
+**"첫 ⌥+Space는 왜 ~10초 걸려?"** 🔍
+
+사용자가 처음 hotkey를 눌렀을 때 analyze 응답이 ~10초:
+- 이미지 캡처 + 인코딩: ~1초
+- LLM API 호출 + 응답: ~7-8초
+- **TLS 핸드셰이크 + DNS: ~1-2초** ← 여기만 optimize 가능
+
+실측: HTTPSession이 keep-alive로 *두 번째 호출은* 이미 연결된 소켓 재사용하므로 빠름. 하지만 *첫 호출*은 TLS 협상 + DNS 리졸브를 처음부터.
+
+## 결정 분기
+
+3 옵션:
+
+**A. DNS prefetch + 더 큰 URLSession 풀링**
+- ✗ Darwin (macOS/iOS)에서 low-level DNS prefetch API 제약 많음
+- ✗ URLSession 풀링 옵션으로 해결 불가 (app lifetime 시작 전엔 열 수 없음)
+
+**B. 더 빠른 API endpoint로 swap**
+- ✗ Gemini 밖의 provider도 모두 동일 cold start 겪음
+- ✗ 문제 해결 아니고 미룰 뿐
+
+**C. ⭐ 앱 launch 시 prewarm() 호출**
+- ✓ 앱 시작할 때 가벼운 GET (model list, ~1KB, cost 0) 실행
+- ✓ TLS + DNS를 한 번 준비 → 실제 analyze는 이미 '핫' 상태
+- ✓ best-effort (실패해도 silent, 되돌리기 1분)
+- ✓ protocol 확장 가능 — 어떤 HTTP dispatcher에도 적용
+
+선택 **C**.
+
+## 박힌 거
+
+### 1. LLMDispatcher protocol에 prewarm() 추가
+
+```swift
+protocol LLMDispatcher: Sendable {
+    func analyze(
+        imageData: Data,
+        imageSize: CGSize,
+        instruction: String
+    ) async throws -> AnalysisResult
+
+    /// 앱 launch 시 TLS handshake + DNS resolve 미리. default noop — Gemini만 override.
+    func prewarm() async
+}
+
+extension LLMDispatcher {
+    func prewarm() async { /* noop */ }
+}
+```
+
+- default noop: ClaudeDispatcher, FallbackDispatcher 등은 override 안 해도 OK
+- GeminiDispatcher만 override → Gemini primary인 경우만 prewarm
+
+### 2. GeminiDispatcher.prewarm 구현
+
+```swift
+func prewarm() async {
+    let endpoint = "https://generativelanguage.googleapis.com/v1beta/models?key=\(apiKey)"
+    guard let url = URL(string: endpoint) else { return }
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.timeoutInterval = 5
+    let started = Date()
+    do {
+        _ = try await session.data(for: request)
+        let elapsed = Date().timeIntervalSince(started)
+        Log.dispatcher.info("[gemini] prewarm ok \(String(format: "%.2f", elapsed), privacy: .public)s")
+    } catch {
+        Log.dispatcher.notice("[gemini] prewarm failed (non-fatal): \(error.localizedDescription, privacy: .public)")
+    }
+}
+```
+
+- **model list endpoint** — Gemini 공식 models 반환, cost 0, 응답 ~1KB
+- **5초 timeout** — 너무 오래 기다리지 않음 (앱 launch 블로킹 회피)
+- **실패 silent** — best-effort. 실패하면 실제 analyze 호출 때 다시 TLS (손해 보상)
+
+### 3. AppDelegate.applicationDidFinishLaunching에서 Task.detached로 실행
+
+```swift
+if let dispatcher {
+    Task.detached {
+        await dispatcher.prewarm()
+    }
+}
+```
+
+- Task.detached = fire-and-forget (MainActor 바깥, concurrent queue)
+- app startup UI block 안 함
+- 권한 요청 (Screen Recording, Accessibility) 후에 바로 실행
+
+## 비용
+
+- **박는 비용**: ~20분 (protocol 확장 + GeminiDispatcher 메서드 + AppDelegate task)
+- **되돌리기 비용**: 5분 (protocol에서 `func prewarm()` 라인 제거, AppDelegate `Task.detached` 블록 제거)
+- **실제 architecture 비용**: 0 (default noop만으로 non-Gemini dispatchers 격리됨)
+
+## 실측
+
+- swift build 3.22s (no change)
+- swift test 86/86 pass (all unit + integration tests)
+- `./dev.sh` log에 `[gemini] prewarm ok 0.87s` 표시 (Latency playbook Trick C로 갱신)
+
+## 패턴
+
+**"첫 호출 cold의 정체를 network 계층 깊이까지 파고들기"**
+
+- URLSession keep-alive는 *두 번째*부터 효과. 첫 호출의 TLS/DNS는 피할 수 없지만, *앱 launch 같은 low-priority 시점*에서 미리 prepare하면 *user action 시점*에는 이미 '핫'.
+- best-effort prewarm = 실패해도 손해 0. 최악은 첫 호출이 다시 cold이지만, 모두가 그 상황이므로 regression 아님.
+- protocol default noop = transferable. Anthropic, Claude CLI dispatcher를 나중에 추가해도 override 필요 없음. Slack API, Github API 같은 다른 HTTP backend에도 동일 패턴 복사 가능.
+
+## Commit
+
+`c15578e` (2026-05-30 17:15 -0400)

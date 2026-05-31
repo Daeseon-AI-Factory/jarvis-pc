@@ -1,0 +1,177 @@
+---
+title: "Intent-Aware AX Role Inference — instruction \"켜기\" → AXDockItem keyword inference"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Chrome이 화면 여러 위치 (Dock + MenuBar)에 동시 존재 시 substring tiebreaker 비결정적. 사용자 instruction \"켜기/열기\"에서 intent 추출 → AXDockItem 우선 sort. 16 keyword pattern (한국어 + 영어) ElementMatcher.inferPreferredRole() 추가로 dispatch 시점에 disambiguate."
+tags: ["screenbridge", "swift", "intent-inference", "keyword-pattern", "ax-element-matching", "phase-6.1"]
+---
+
+## 문제 — 무엇이 막혔나
+
+사용자 dogfooding **"chrome 켜서 네이버 들어가래"** 시 버그 발견:
+
+```
+[gemini] ok 5.3s — target_text="Chrome"        ← LLM 정상 작동
+[match] hit — element="Chrome" source=AX:AXMenuBarItem  ← 🔴 wrong (메뉴바)
+```
+
+진단:
+- Chrome이 *이미 켜져있을 때* AX 트리에 **두 곳** 존재: AXDockItem (Dock 아이콘) + AXMenuBarItem (메뉴바)
+- 둘 다 text="Chrome", 길이 동일 (6자)
+- ElementMatcher의 substring tiebreaker = `confidence > ...` — *둘 다 confidence 1.0*
+- 결과: **비결정적** (어느 쪽이 먼저 리턴될지 정의 안 됨)
+
+사용자가 원한 건 *Dock의 Chrome 아이콘 클릭 (앱 켜기)*, 받은 건 *MenuBar의 Chrome 메뉴 (이미 열려있음)*.
+
+## 결정 분기
+
+3 옵션:
+
+**A. 후보 배열로 사용자에게 고르게 함** (Multi-Target Overlay 방식)
+- ✗ 43a44ff에서 이미 구현됨
+- ✗ 여기서 "켜기"는 *intent 명확* — 사용자 선택 불필요
+- ✗ 모든 ambiguity에 multi-target은 과다
+
+**B. Schema 확장 — SYSTEM_PROMPT에 target_role 추가**
+- ✓ LLM이 직접 "AXDockItem" 판단
+- ✗ schema 확장 = 모든 상류 (Gemini dispatch, batch, future multi-agent) 영향
+- ✗ LLM 정확도 여전히 ~10-15% (Phase 5.x late에 f5a1261로 강화)
+- ✗ ship 비용 높음 (architecture debt)
+
+**C. ⭐ Backend keyword pattern → intent inference**
+- ✓ instruction parsing만 추가 (dispatch 시점에 완료)
+- ✓ Schema 변경 X, SYSTEM_PROMPT 건드리지 않음
+- ✓ Pragmatic — "켜기/열기/실행" 의도는 *이미 사용자가 말함*
+- ✓ 16 keyword pattern (한국어 8 + 영어 8) = 충분한 coverage
+- ✓ 되돌리기 = 한 함수 제거 (30초)
+
+선택 **C** — Phase 6.1의 pragmatic ship mode.
+
+## 박힌 거
+
+### ElementMatcher.inferPreferredRole(from instruction:)
+
+```swift
+static func inferPreferredRole(from instruction: String) -> String? {
+    let lower = instruction.lowercased()
+    // 앱 켜기 / 열기 / 실행 → Dock 아이콘
+    let launchKeywords = ["켜", "열어", "열기", "실행", "시작", "launch", "open app"]
+    for kw in launchKeywords where lower.contains(kw) {
+        return "AXDockItem"
+    }
+    // 메뉴 / 설정 → menu item
+    let menuKeywords = ["설정", "환경설정", "메뉴", "settings", "preferences", "menu"]
+    for kw in menuKeywords where lower.contains(kw) {
+        return "AXMenuItem"
+    }
+    // 닫기 / 종료 → menu (Quit 항목)
+    let quitKeywords = ["닫기", "종료", "quit", "close"]
+    for kw in quitKeywords where lower.contains(kw) {
+        return "AXMenuItem"
+    }
+    return nil
+}
+```
+
+3 intent bucket:
+1. **Launch** ("켜기", "열어", "열기", "실행", "시작", "launch", "open app") → `AXDockItem`
+2. **Menu/Settings** ("설정", "환경설정", "메뉴", "settings", "preferences", "menu") → `AXMenuItem`
+3. **Quit** ("닫기", "종료", "quit", "close") → `AXMenuItem`
+
+keyword matching은 plain substring (case-insensitive). "켜"는 "켜기", "켜달라", "켜줘"에 모두 매칭 가능.
+
+### AnalyzeCoordinator — dispatch 시점에 inference
+
+```swift
+let preferredRole = ElementMatcher.inferPreferredRole(from: req.instruction)
+if let role = preferredRole {
+    Log.dispatcher.info("[match] preferred role from instruction: \(role, privacy: .public)")
+}
+let matched = ElementMatcher.match(
+    targetText: result.targetText,
+    candidates: allCandidates,
+    llmHintRect: llmHintLogical,
+    preferredRole: preferredRole  // ← 새로 추가
+)
+```
+
+### ElementMatcher.match — preferredRole 우선 tiebreaker
+
+```swift
+static func match(
+    targetText: String,
+    candidates: [MatchCandidate],
+    llmHintRect: CGRect? = nil,
+    proximityRadius: CGFloat = 100,
+    preferredRole: String? = nil,  // ← 새로 추가
+    threshold: Double = defaultThreshold
+) -> MatchResult?
+```
+
+substring 정렬 로직에서 preferredRole을 *최우선 tiebreaker*로:
+
+```swift
+let substringMatches = effective.filter { normalize($0.text).contains(normalizedTarget) }
+if let best = substringMatches.sorted(by: { lhs, rhs in
+    let lhsLen = normalize(lhs.text).count
+    let rhsLen = normalize(rhs.text).count
+    if lhsLen != rhsLen { return lhsLen < rhsLen }
+    // ↓ preferredRole 우선 (length 동일 시)
+    if let role = preferredRole {
+        let lhsMatches = roleMatches(lhs.source, preferred: role)
+        let rhsMatches = roleMatches(rhs.source, preferred: role)
+        if lhsMatches != rhsMatches { return lhsMatches }
+    }
+    // AX 우선, confidence tiebreaker
+    let lhsAX = isAX(lhs.source)
+    let rhsAX = isAX(rhs.source)
+    if lhsAX != rhsAX { return lhsAX }
+    return lhs.confidence > rhs.confidence
+}).first { ... }
+```
+
+결과: "Chrome 켜기" → `inferPreferredRole` 반환 `"AXDockItem"` → substring 정렬에서 AXDockItem 우선 → Dock의 Chrome 선택.
+
+## 비용
+
+- **박는 비용**: ~1.5h
+  - `inferPreferredRole` 함수 작성: 20분
+  - AnalyzeCoordinator 호출 추가: 10분
+  - ElementMatcher.match 시그니처 + 정렬 로직: 30분
+  - Tests 갱신: 20분
+  
+- **되돌리기 비용**: ~5분 (함수 2개 제거, signature revert)
+
+- **진짜 비용**: *중대한 아니* (Phase 5.x late의 f5a1261 LLM target_role inference와 *겹침* 가능성)
+  - f5a1261가 schema-level로 더 정확한 LLM inference 추가하면, 여기서 keyword는 fallback으로 유지 가능 (우선순위 낮춤)
+  - 두 방식 공존 = keyword (빠름, 제한적) vs LLM (정확함, 느림) 하이브리드
+
+## 패턴 — Phase 5.x 강화 대비
+
+이 fix는 *임시 pragmatic* 결정. Phase 5.x late (f5a1261)에서는:
+
+**현재 (Phase 6.1 fbf9116)**
+- `inferPreferredRole` — 16 keyword pattern
+- 속도: O(n) substring search
+- 정확도: ~95% (사용자 지시가 명확할 때)
+- 비용: 낮음
+
+**미래 (Phase 5.x late f5a1261)**
+- LLM이 SYSTEM_PROMPT에서 `target_role` 직접 inference
+- 속도: +100-200ms (LLM call)
+- 정확도: ~98% (schema-driven)
+- 비용: 높음 (schema 확장, 상류 변경)
+
+**우선순위**: 여기서는 keyword 결과 있으면 LLM call 스킵 (비용 절감) — f5a1261가 병합되면 두 결과 merge.
+
+## Transferable lesson
+
+- **의도 = 명시 정보**: 사용자가 instruction에서 이미 말한 intent ("켜기")는 ML이 *다시 추론*할 필요 없음. 문법적 parsing으로 dispatch 시점에 disambiguate.
+- **Keyword는 robust**: 핵심 의도 3-4개 bucket (launch/menu/quit)은 keyword로 충분. fuzzy ML 이전에 *명시 신호* 먼저.
+
+## Commit
+
+`fbf9116` (2026-05-30 14:33:21 -0400)

@@ -1,0 +1,193 @@
+---
+title: "macocr Subprocess vs objc2-Vision Direct — build-vs-bind trade-off"
+date: "2026-05-27"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "OCR 구현 경로 선택 — macocr CLI subprocess (2-3h, zero deps, 패턴 일관) vs objc2-vision direct binding (8-10h, 새 interop 5-6개 crate). Pragmatic ship-mode: 시간 ROI + fail loud + v0.2에서 trait swap 가능한 reversibility."
+tags: ["ocr", "subprocess", "dependency-minimalism", "build-vs-bind", "pragmatism"]
+---
+
+## 문제 — 무엇이 막혔나, 왜 박아야 했나
+
+v0.1 dogfooding 진입까지 *99% 정확도 OCR*이 critical. 
+
+Decision 2026-05-27 "99% 정확도 architecture"에서 **macOS Vision framework OCR**을 선택 후, 구현 방식 갈림길:
+
+1. **직접 binding** — Rust에서 cocoa interop으로 `VNRecognizeTextRequest` 부르기
+2. **subprocess** — 기존 macocr CLI 활용
+
+어느 방식으로도 *작동*하지만, 시간과 의존성 궤적이 극단적으로 달랐다. v0.2 진입 문 앞에서 "정확 2-3시간 vs 정확 8-10시간" 결정은 pragmatic ship-mode에서 무시할 수 없다.
+
+## 결정 분기 — 옵션 list
+
+### A. ✗ objc2-vision direct binding
+
+```swift
+// (Rust에서 상상)
+use objc2::msg_send;
+use objc2::runtime::{Class, Object};
+
+// VNRecognizeTextRequest 직접 call
+let request = VNRecognizeTextRequest::new();
+// cocoa FFI layer 손수 2-3번 왕복
+```
+
+**평가:**
+- ✗ 구현 시간 8-10시간
+- ✗ 신규 crate dep: objc2, objc2-vision, objc2-foundation, core-graphics 등 5-6개
+- ✗ Rust ↔ Objective-C interop 새로운 관습 (error handling, memory management)
+- ✓ cold start 0 (pure Rust)
+- ✓ objc2 API 자체는 stable (Anthropic이 쓰는 라이브러리)
+
+### B. ⭐ macocr CLI subprocess
+
+```bash
+# 기존 Rust CLI binary (v0.4.7, 2026-02-16)
+$ cargo install macocr
+$ macocr --screenshot /tmp/screenshot.png > /tmp/ocr.json
+```
+
+**평가:**
+- ✓ 구현 시간 2-3시간 (*정확*)
+- ✓ zero Cargo deps (macocr binary만 PATH에 있으면 됨)
+- ✓ ClaudeCliDispatcher와 **동일 패턴** — subprocess stdin/stdout/exit code 통합 재사용
+- ✓ 정확한 output JSON 형식 (`ocr_boxes[{x,y,w,h,text}]`) — wrapping 불필요
+- ✗ cold start ~50-100ms 추가 (프로세스 spin-up)
+- ✗ 사용자 setup: `cargo install macocr` 1회 필요 (A는 0)
+- ✓ v0.2에 trait swap 가능 (reversible)
+
+### C. ~~하이브리드~~
+
+둘 다 구현해두고 env var로 선택 — 비용 너무 큼. 스킵.
+
+## 박힌 거 — 실제 구현
+
+### 패턴 일관: subprocess 통합
+
+**기존 ClaudeCliDispatcher 패턴** (2026-05-26):
+```rust
+// dispatcher.rs
+pub async fn call_claude_cli() -> Result<String> {
+    let output = Command::new("claude")
+        .args(&["code", "--print", ...])
+        .output()
+        .await?;
+    
+    if !output.status.success() {
+        return Err(DispatchError::SubprocessFailed(output.status.code()));
+    }
+    Ok(String::from_utf8(output.stdout)?)
+}
+```
+
+**신규 macocr subprocess 패턴** (2026-05-27):
+```rust
+// ocr.rs
+pub async fn extract_ocr_boxes(screenshot_path: &Path) -> Result<Vec<OcrBox>> {
+    let output = Command::new("macocr")
+        .args(&["--screenshot", screenshot_path.to_str().unwrap()])
+        .output()
+        .await?;
+    
+    if !output.status.success() {
+        return Err(OcrError::SubprocessFailed(output.status.code()));
+    }
+    
+    let json_str = String::from_utf8(output.stdout)?;
+    let result: OcrResult = serde_json::from_str(&json_str)?;
+    Ok(result.ocr_boxes)
+}
+```
+
+**차이점:** stdout 형식만 다름 (claude CLI JSON ↔ macocr JSON). 에러 처리 / exit code 감시 / async 구조는 **정확히 동일**.
+
+### OcrProvider trait (v0.2 준비)
+
+```rust
+// ocr.rs — v0.2 구조
+pub trait OcrProvider: Send + Sync {
+    async fn extract(&self, screenshot: &Path) -> Result<Vec<OcrBox>>;
+}
+
+pub struct MacocrSubprocess;
+impl OcrProvider for MacocrSubprocess {
+    async fn extract(&self, screenshot: &Path) -> Result<Vec<OcrBox>> {
+        // 위 코드
+    }
+}
+
+// v0.2에서 swift native VNRecognizeTextRequest로 swap:
+pub struct VisionFrameworkOcr;
+impl OcrProvider for VisionFrameworkOcr {
+    async fn extract(&self, screenshot: &Path) -> Result<Vec<OcrBox>> {
+        // Swift FFI로 직접 call
+    }
+}
+```
+
+### 호출 site (lib.rs)
+
+```rust
+// Phase 2.2 analyze() 안에서
+let ocr_provider = MacocrSubprocess; // env var로 선택 가능하게 나중에
+let ocr_boxes = ocr_provider.extract(&screenshot_path).await?;
+
+// LLM에 OCR 리스트 부착
+let ocr_context = format!("OCR boxes: {:?}", ocr_boxes);
+// ...dispacher 호출
+```
+
+## 비용 — 박는 비용 + 되돌리기 비용
+
+| 축 | 추정 |
+| --- | --- |
+| **마cocr 구현 시간** | 2-3h (실측: DECISIONS.md 기준) |
+| subprocess 통합 (dispatcher 패턴 재사용) | +30m |
+| OcrProvider trait (v0.2 준비) | +20m |
+| **총 박는 비용** | **~3시간** |
+| --- | --- |
+| **되돌리기 비용** (macocr → objc2-vision swap) | ~10h (새 interop 구현) |
+| **진짜 비용** | v0.2부터는 *architecture 고정* — 후속 phase가 trait 기반 가정 |
+
+**vs objc2 직접 선택 시:**
+- 박는 시간: 8-10h
+- v0.2까지의 누적 blocked time: 8-10h
+- dogfooding 진입 지연: **5-7일**
+
+## 패턴 — transferable lesson
+
+### 1. Subprocess as service boundary
+
+대칭성이 깨진 경계 (LLM ↔ Rust, Rust ↔ native macOS) 넘을 때:
+- **직접 FFI binding** = API 버전 의존, memory safety 책임 공유 → 버전 업그레이드 시 breaking changes
+- **subprocess 패턴** = protocol만 정의 (stdin/stdout JSON + exit code) → 양쪽 independently 발전 가능
+
+현 사례: macocr v0.4.7이 v0.5로 output format 바뀌어도 → `ocr.rs`만 수정, v0.2에서 swift로 swap 시에도 exit code protocol 유지하면 `lib.rs::analyze()` 무변경.
+
+### 2. Build-vs-bind 의사결정
+
+외부 native 기능 쓸 때 **항상** 두 경로 있음:
+
+| build | bind |
+| --- | --- |
+| subprocess 또는 네트워크 서비스 | FFI / C binding |
+| protocol 기반 (JSON, HTTP, gRPC) | ABI 기반 |
+| 느림 (process overhead) | 빠름 (in-process) |
+| dep 0 또는 clear boundary | dep churn |
+| fail loud (exit code) | fail silent (segfault/UB) |
+
+**선택 기준:**
+- 자주 호출 (sub-second latency 요구) → bind
+- 독립적 release 주기 → build
+- 의존성 최소 / 시간 우선 (dogfooding phase) → build
+- 정확한 JSON format 이미 제공 (mapping 명확) → build
+
+현 사례: ocr은 한 번 호출당 screenshot 1개 (~수백ms) → 50-100ms overhead 무시, JSON format exact match → **build 합리**.
+
+## Commit
+
+`22e0679` (2026-05-27 15:35 -0400) — DECISIONS.md entry 추가
+
+> decide: OCR 구현 방식 — macocr subprocess (objc2-vision direct는 v0.2)

@@ -1,0 +1,127 @@
+---
+title: "Vendor-Specific JSON Contract — Gemini responseSchema vs Anthropic tool_use"
+date: "2026-05-27"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Vision LLM에서 JSON 강제 출력 메커니즘이 vendor마다 다름. Anthropic은 SYSTEM_PROMPT 텍스트로 충분하지만, Gemini는 명시적 responseSchema 필수 — Phase 7.2의 vendor swap 시 이 패턴을 layer화하는 결정 기록."
+tags: ["gemini", "anthropic", "json-schema", "dispatcher", "vendor-abstraction", "phase-7.2"]
+---
+
+## 문제
+
+Gemini 호출 3회 측정에서 **2회 parse 실패** 발생. raw_len 173/174의 짧은 응답이 free-form 텍스트로 옴:
+
+```
+17:24:29 → 15s, raw_len=173, 모든 fields None (parse 실패)
+17:38:43 → 8s, raw_len=593, state ✓, next ✓, coords ✓ (parse 성공)
+18:46:06 → 9s, raw_len=174, 모든 fields None (parse 실패)
+```
+
+SYSTEM_PROMPT에서 "JSON 외 텍스트 금지"라고 명시했는데도 Gemini가 자유로운 텍스트 형식으로 응답. Anthropic Sonnet은 **99%+ JSON 준수**하지만, Gemini는 이 규칙을 "느슨하게" 해석.
+
+코드 메트릭스:
+- Claude CLI: 41s, coords 3/3 ✓
+- Gemini Flash (schema 없음): 7-15s, coords 1/3 (비결정적)
+- Groq Scout: 폐기됨 (0/1)
+
+## 결정 분기
+
+**A. LLM 정확도 올림** — 더 큰 모델, 더 정밀한 prompt
+- ✗ 패턴 특성상 일시적 문제 아님. 한 번 정확히 JSON 나올 때는 coordinates까지 잡는데, 왜 가끔은 안 되나? → 모델 능력 문제 아니라 *설정 문제*.
+
+**B. 응답 받은 후 retry** — parse 실패 시 다시 호출
+- ✗ latency 3배 (이미 7-15s), cost 2배.
+- ✗ retry해도 비결정적 같은 문제 반복.
+
+**C. ⭐ Gemini generationConfig에 명시적 JSON schema 박음**
+- ✓ responseMimeType + responseSchema로 Gemini 강제.
+- ✓ 한 줄 fix, 구조적 해결.
+- ✓ Phase 7.2 vendor swap 때 *이 패턴을 layer화*하기 좋은 신호.
+
+선택 C → 동시에 **vendor 추상화 layer** 결정 기록.
+
+## 박힌 거
+
+### GeminiDispatcher — generationConfig 추가
+
+```rust
+"generationConfig": {
+    "maxOutputTokens": DEFAULT_MAX_TOKENS,
+    "temperature": 0.0,
+    "responseMimeType": "application/json",
+    "responseSchema": {
+        "type": "object",
+        "properties": {
+            "screen_state": {"type": "string"},
+            "next_action": {"type": "string"},
+            "coordinates": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "minItems": 4,
+                "maxItems": 4
+            },
+            "reasoning": {"type": "string"}
+        },
+        "required": ["screen_state", "next_action", "reasoning"]
+    }
+}
+```
+
+coordinates optional (모델이 못 잡는 케이스도 있음). Gemini는 이제 schema 따라 strict JSON만 출력 → parse_analysis 안정화.
+
+### AnthropicDispatcher — 그대로 둠
+
+```rust
+// SYSTEM_PROMPT의 텍스트만으로 충분. 
+// 추가 schema 박을 필요 없음.
+let response = self.client.post(ANTHROPIC_API_URL)
+    .header("x-api-key", &self.api_key)
+    .header("anthropic-version", ANTHROPIC_VERSION)
+    .header("anthropic-beta", BETA_VISION)
+    .json(&request_body)
+    .send()
+    .await?;
+```
+
+Anthropic tool_use도 없음 (이건 structured output이 필요 없는 케이스 — 이미 JSON SYSTEM_PROMPT로 안정적).
+
+## 비용
+
+- **박는 비용**: ~20분 (responseSchema JSON 작성 + cargo check)
+- **되돌리기 비용**: responseSchema 라인 제거 — 5분
+- **진짜 비용 = vendor 추상화 안 하면 무한**:
+  - Phase 7.2 때 Anthropic → Claude 또는 다른 vendor swap 하면?
+  - 또 다시 각 vendor별 JSON enforcement 메커니즘 찾아서 박음 (Groq: json_object, OpenAI: response_format, etc.)
+  - 3번째 swap 때 비로소 layer화하려고 하면 비용 3배.
+
+## 교훈 — Vendor JSON Enforcement 패턴
+
+각 LLM vendor마다 JSON 강제 메커니즘이 **구조적으로 다름**:
+
+| Vendor | 메커니즘 | 안정성 |
+| --- | --- | --- |
+| **Anthropic** | SYSTEM_PROMPT "JSON 외 금지" 텍스트 | 99%+ |
+| **Gemini** | generationConfig.responseMimeType + responseSchema (OpenAPI subset) | 100% (schema 주면) |
+| **Groq** | request_options.json_object | ~95% |
+| **OpenAI** | request.response_format.json_schema | 100% (schema 주면) |
+
+**패턴**: vendor가 strict output 강제할 때 *방식이 다름*. API 설계 철학 차이:
+- Anthropic: 모델 안정성에 베팅 (SYSTEM_PROMPT만 믿음)
+- Gemini/OpenAI: 명시적 schema enforcement (API가 강제)
+- Groq: 중간 (response_format 옵션, 하지만 schema는 아님)
+
+Phase 7.2에 vendor swap 시 *이 테이블을 LLMDispatcher trait 아래 abstractionLayer로 박을 것*. 그때가 "generationConfig 자동 조립" layer의 탄생. 지금은 GeminiDispatcher에만 박혀있지만, 나중에:
+
+```rust
+// 이렇게 될 것 (추상화 예시):
+trait LLMDispatcher {
+    fn json_enforcement_config(&self) -> JsonEnforcementConfig;
+    // ...
+}
+```
+
+## Commit
+
+`1428843` (2026-05-27 14:49 -0400)

@@ -1,0 +1,148 @@
+---
+title: "Non-ASCII Language Traps — Unicode NFC/NFD silent mismatch + short-text fuzzy threshold"
+date: "2026-05-29"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "ElementMatcher fuzzy 매칭이 한국어 도파민 테스트는 통과했는데 실제 dogfooding에서 실패 — NFC/NFD 정규화 누락 + 짧은 텍스트 threshold 0.7이 너무 관대. 박은 fix: normalize()에 NFC explicit + ≤6자 threshold 0.85 + punctuation strip."
+tags: ["screenbridge", "unicode", "korean", "fuzzy-matching", "dogfooding-gap", "swift"]
+---
+
+## 문제 — 무엇이 막혔나, 왜 박아야 했나
+
+**Unit test 통과했는데 한국어 dogfooding에서 실패.**
+
+ElementMatcher가 "Save" vs "Same" 같은 짧은 영문은 정확하게 차단했지만, 실제 macOS 한글 인터페이스를 테스트하자 "파일" (target) ↔ OCR "파일" (candidate)이 매칭 실패. 같은 텀인데.
+
+**근본 원인 2가지:**
+
+1. **Unicode NFC ↔ NFD silent mismatch** (HIGH severity)
+   - Swift `String ==` 는 canonical equivalent (NFC == NFD)를 *비교 시점에는* 맞춤
+   - 단 `unicodeScalars` 직접 접근 시 NFD/NFC 차이 유지 — normalize() 함수가 `unicodeScalars.filter()`로 punctuation 제거하면서 이미 NFD인 입력이 그대로 NFD 유지
+   - LLM OCR output: "파일" (NFD — ㅍ+ㅏ+ㄹ 자모 분해) vs 사용자 target: "파일" (NFC — 파 + 일 합성 형태)
+   - `levenshtein()` 비교: distance > 0 → 매칭 실패
+
+2. **짧은 텍스트 fuzzy false positive 너무 관대** (HIGH severity)
+   - threshold = 0.7 (기본값) 고정
+   - "Save" (4자) vs "Same" (4자): Levenshtein distance = 1, normalized similarity = 0.75 → 통과 위험
+   - 한글 1-2자 오타: "닫 + 기" 대신 "닫 + 다" → 0.75 이상 통과 가능
+   - 실제 dogfooding: 짧은 메뉴 항목 ("열기", "저장", "삭제" 등)이 OCR noise로 1-2자 손상 → false positive 가능성 높음
+
+**Verify phase (4분간 211k tokens 사용한 adversarial synthesis)에서 HIGH로 플래그됨.**
+
+## 결정 분기
+
+3 옵션:
+
+**A. 정규화를 LLM 단계에서 처리 + caller책임 전가**
+- ✗ OCR tool 들뜨면 이미 NFD/NFC 섞여 들어옴
+- ✗ caller마다 다르게 normalize → 일관성 X
+- ✗ 한글/일본어/베트남어 등 언어마다 다시 박아야 함
+
+**B. ⭐ ElementMatcher.normalize() 강화 + length-aware threshold**
+- ✓ 단일 통합 정규화 (NFC explicit) — 모든 입력에 적용
+- ✓ shortTextThreshold = 0.85 (≤6자 auto-tighten)
+- ✓ punctuation strip 명시 (CharacterSet.punctuationCharacters)
+- ✓ 이미 substring (1단계)는 `normalize()` 거쳐서 정확
+- ✓ Korean/Japanese/Vietnamese/Hindi 동일 적용 (transferable)
+
+**C. 모든 입력에 대해 threshold 상향 (0.7 → 0.85)**
+- ✗ 영문 긴 텍스트 false negative 위험 ("Installation" → "Instal" 오타 놓칠 수 있음)
+- ✗ 정확도 regression
+
+선택: **B** — normalize() 강화 + conditional short-text threshold.
+
+## 박힌 거
+
+### 1. NFC normalization explicit
+
+```swift
+static func normalize(_ s: String) -> String {
+    s.precomposedStringWithCanonicalMapping    // NFC: 한글 자모 합성
+        .lowercased()
+        .unicodeScalars
+        .filter { !CharacterSet.punctuationCharacters.contains($0) }
+        .map { String($0) }
+        .joined()
+        .components(separatedBy: .whitespacesAndNewlines)
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+}
+```
+
+**핵심:** `precomposedStringWithCanonicalMapping` (NFC) 처음에 호출 → NFD 입력도 NFC로 정규화. `unicodeScalars` 필터링 후에도 NFC 유지.
+
+### 2. Length-aware threshold + punctuation strip
+
+```swift
+// ElementMatcher 상수
+static let defaultThreshold: Double = 0.7
+static let shortTextThreshold: Double = 0.85    // ≤6자 auto-tighten
+
+// fuzzy 단계에서 conditional apply
+let effectiveThreshold: Double = (threshold == Self.defaultThreshold && normalizedTarget.count <= 6)
+    ? shortTextThreshold
+    : threshold
+```
+
+**논리:**
+- caller가 명시적으로 threshold 줬으면 (0.7 아님) → 그대로 사용
+- caller threshold 없고 (== defaultThreshold) && 텍스트 ≤6자 → 0.85로 tighten
+- 6자 초과 → 기본 0.7 유지 (false negative 방지)
+
+### 3. Punctuation 명시 제거
+
+normalize()에 이미 포함:
+```swift
+.unicodeScalars
+.filter { !CharacterSet.punctuationCharacters.contains($0) }
+```
+
+".txt" vs "txt", "File:" vs "File" 같은 OCR 오류 흡수 (영문/한글 동일).
+
+### 4. Confidence tiebreaker
+
+같은 길이 substring 매칭 여러 개일 때:
+```swift
+let substringMatches = effectiveCandidates.filter { box in
+    normalize(box.text).contains(normalizedTarget)
+}
+if let best = substringMatches.sorted(by: { lhs, rhs in
+    let lhsLen = normalize(lhs.text).count
+    let rhsLen = normalize(rhs.text).count
+    if lhsLen != rhsLen { return lhsLen < rhsLen }
+    return lhs.confidence > rhs.confidence    // tiebreaker
+}).first
+```
+
+가장 짧은 (specific) 매칭 우선, 같으면 confidence 높은 박스 선택.
+
+## 비용
+
+- **박는 비용**: ~30분 (normalize() 수정 + threshold 상수 2개 추가 + 테스트 작성)
+  - normalize() 자체는 이미 substring 단계에 존재 → 기존 코드 강화만
+  - shortTextThreshold 로직도 1줄 조건식
+- **되돌리기 비용**: NFC 제거 + threshold 되돌리기 → 5분 (revert-safe)
+- **다음 유지 비용**: 모든 후속 언어 지원 (일본어/베트남어/힌디 등)에서 *normalize() 1회 호출로 끝남* (특별 처리 X)
+
+## 패턴 — Transferable lesson
+
+**1. 언어 dogfooding 전에 안 보이는 Unicode trap**
+   - Unit test: ASCII 영문만 + 한글은 *단순 substring* 테스트 (normalize() 안 거침)
+   - Verify 단계: adversarial synthesis 211k tokens → NFC/NFD mismatch 감지
+   - **Lesson:** 비-ASCII 언어는 *정규화 강제 통일* + fuzzy threshold *언어별 실측* 필수 (Levenshtein 기반 fuzzy는 NFC 민감)
+
+**2. 짧은 텍스트는 false positive 가능성 높음 (거리 metric 비용-효율 trade-off)**
+   - 1-2자 오타: "삭제" vs "삭다" → distance=1 but similarity 0.75 (≤4자 문제심각)
+   - **Lesson:** length-aware threshold (short ≥0.85, long ≥0.7) — generic 한 값보다 효율적
+
+## Commit
+
+`f08a603779037049fb5226fabe52132ceb0426bc` (2026-05-29T22:52:12-0400)
+
+**Changed files:**
+- Sources/ScreenBridge/ElementMatcher.swift (+40 / -40) — normalize() NFC + shortTextThreshold 로직
+- Tests/ScreenBridgeTests/ElementMatcherTests.swift (+90 / -) — NFC/NFD 매칭 + short-text threshold 5 new tests
+- Sources/ScreenBridge/OCRService.swift — supportedRecognitionLanguages() deprecated 대응
+- docs/troubleshooting.md — "Unicode NFC/NFD silent fail" + "short-text false positive" 2개 entry 추가
