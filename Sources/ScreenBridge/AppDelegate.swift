@@ -138,10 +138,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Phase 7.2.1: hotkey throttle — 200ms 안 burst 차단. Probe C race 발견:
+    /// 사용자 ⌥+Space 두 번 빠르게 → 두 Task spawn → 둘 다 같은 state snapshot 봄 →
+    /// 중복 dispatcher 호출 (actor 직렬화로 RPM burst). throttle로 Task spawn 자체 차단.
+    private var lastHotkeyAt: Date = .distantPast
+    private let hotkeyThrottleMs: Double = 200
+
     /// ⌥+Space 흐름. Phase 7.1: state 분기.
     /// - waitingForUserClick: HUD dismiss + continueSession (panel 안 띄움, 같은 instruction 재사용)
     /// - 그 외: 기존 동작 (HUD 떠있으면 dismiss, 아니면 panel toggle)
     private func handleHotkey() {
+        let now = Date()
+        let elapsedMs = now.timeIntervalSince(lastHotkeyAt) * 1000
+        guard elapsedMs >= hotkeyThrottleMs else {
+            Log.hotkey.notice("[hotkey] throttled (\(Int(elapsedMs), privacy: .public)ms < \(Int(self.hotkeyThrottleMs), privacy: .public)ms)")
+            return
+        }
+        lastHotkeyAt = now
+
         Task { @MainActor in
             // continueSession path — active session 있을 때만.
             if let coordinator,

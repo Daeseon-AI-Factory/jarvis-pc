@@ -1033,6 +1033,8 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[JSONValue + AnyEncodable for tool input_schema]**: Anthropic tool input_schema는 nested JSON object — Swift Codable struct 매핑 불편 (5+ depth, generic value types). 옵션 = (a) struct 5+ tier 박음 (boilerplate 60+ lines) / (b) `[String: Any]` (Sendable X) / (c) **`JSONValue` enum (`.string / .int / .bool / .array / .object`)** — recursive, Sendable, Encodable/Decodable 둘 다. 선택 (c) — Sendable 강제 (Swift 6 strict concurrency), input_schema dictionary 직접 표현, ClaudeResponseBlock.input도 같은 type. *되돌리기 비용*: ClaudeDispatcher 안 JSONValue 사용처 — 30분 revert.
 
+**[Hotkey 200ms throttle — Probe C race guard]**: Workflow Probe C 발견 — ⌥+Space 빠르게 2번 → 두 Task spawn 동시 → 같은 state snapshot → 중복 dispatcher 호출 (RPM burst). 옵션 = (a) `isHandlingHotkey` boolean guard (in-flight check) / (b) **시간 기반 throttle (200ms)** / (c) 무시 (actor 직렬화로 OK). 선택 (b) — guard (a)는 long-running dispatcher (9s) 동안 사용자가 *완료 후 빠르게 다음* 막힘. 200ms는 사람 손가락 한계 (~100-150ms) 약간 위 — *의도적 반복*만 통과. throttle X (c)는 RPM burst 그대로 (Gemini quota 20/day 사용자 빨리 소진). *되돌리기 비용*: throttle 변수 삭제 + guard 삭제 — 2분 revert. 200 → 100ms or 500ms 조정 자유.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
