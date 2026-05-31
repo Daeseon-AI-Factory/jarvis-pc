@@ -396,3 +396,24 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
   3. **Daily vs per-minute quota는 fix 전략 다름** — per-minute은 sleep+retry, daily는 fail fast + dispatcher swap.
   4. **별도 client OK 사용자 신호**는 *quota 도달 X*가 아니라 *다른 key/project/tier* — 같은 key 다른 client 의미 X.
 
+<!-- skipped: 9e41b1d Add log entries for jarvis-pc (arch overview + 3 backfills) [no-log] -->
+<!-- skipped: 0347be0 docs: 보안 deep dive blog (884 lines) + transferable playbook (1048 lines) -->
+<!-- skipped: 4d57513 docs: local-first 로드맵 + 5-layer 보안 path 확정 (사용자 보안 우려 → 출시 가능 결정) -->
+<!-- skipped: 2ffc163 v0.2: SecretMasker regex mask — 10 pattern (sk-/AKIA/ghp_/카드/주민번호) -->
+<!-- skipped: a54b121 Phase 7.3: presentCompletion pill (초록 ✓) + SessionAuditLog JSON dump -->
+<!-- skipped: dcb9164 Phase 7.2.1: hotkey 200ms throttle (Probe C race condition guard) -->
+<!-- skipped: c412d6e backfill: 6 should-priority narrative entries (audit gap fill, 2 of 2) -->
+<!-- skipped: 33fd37e Phase 7.2: Claude dispatcher + 429 자동 fallback (Gemini quota 우회) -->
+<!-- skipped: ea77843 fix: Gemini quota 정정 — 일당 20회 (분당 X), CLAUDE.md 250 RPD stale -->
+<!-- skipped: 364810b backfill: 4 must-priority narrative entries (audit gap fill) -->
+<!-- skipped: 2506d59 Phase 7.1: continuation wire — hotkey 분기 + state transition + irreversible post-filter -->
+<!-- skipped: c15578e perf: Gemini TLS/DNS pre-warm — 첫 analyze 호출 ~1-2s 단축 -->
+<!-- skipped: f5a1261 feat: LLM target_role hint — schema-level AX role 명시 (multi-target 정확도 ↑) -->
+<!-- skipped: 43a44ff feat: multi-target overlay — top 2 후보 + 번호 라벨 (user-in-the-loop 차별) -->
+<!-- skipped: 62078ac fix: ElementMatcher prefer-only mode + AXService dock items log -->
+<!-- skipped: 04430d7 docs: 📖 latency optimization playbook (612 lines transferable asset) -->
+<!-- skipped: b5828c3 docs: 🚀 strategy update — pragmatic ship mode + target 확장 -->
+<!-- skipped: c003829 Phase 5.x bubble: 한글 next_action + sourceTag + 화면 가장자리 clamping -->
+<!-- skipped: cdd092b Phase 6.2 fix: SYSTEM_PROMPT 강화 (target_text 빈 string 금지 + intent-aware) -->
+<!-- skipped: 5897394 docs: vision update — global + multi-platform + 5-layer security -->
+<!-- skipped: fff55c5 dual-write log system 도입: docs/troubleshooting.md + content/logs/ -->
