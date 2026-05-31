@@ -115,16 +115,32 @@ actor AnalyzeCoordinator {
         isRunning = true
         defer { isRunning = false }
 
+        // v0.2: secret mask — instruction이 LLM에 가기 *전*, audit log에 박히기 *전*.
+        // sk-/AKIA/ghp_/카드/주민번호 등 detect → redact.
+        let maskedInstruction = SecretMasker.mask(req.instruction)
+        if maskedInstruction != req.instruction {
+            let hits = SecretMasker.detect(req.instruction)
+            Log.dispatcher.notice("[secret] instruction masked — \(hits.count, privacy: .public) pattern(s): \(hits.map { $0.name }.joined(separator: ","), privacy: .public)")
+        }
+        // 진짜 req 갱신 — masked version으로 dispatcher 호출.
+        let maskedReq = AnalyzeRequest(
+            instruction: maskedInstruction,
+            triggeredAt: req.triggeredAt,
+            sessionID: req.sessionID,
+            previousSteps: req.previousSteps
+        )
+
         // Phase 7.1 — session bookkeeping. fresh task면 new sessionID/history,
         // continuation이면 기존 유지. currentInstruction은 첫 run 시 박힘.
         if !isContinuation {
             sessionID = UUID().uuidString
             history.removeAll()
-            currentInstruction = req.instruction
+            currentInstruction = maskedInstruction
             // Phase 7.3: audit entry 박음. 매 step append + finalize 시 outcome 갱신.
+            // instruction은 *masked* version — disk persist 시점에 이미 secret 제거.
             auditEntry = SessionAuditEntry(
                 sessionID: sessionID!,
-                instruction: req.instruction,
+                instruction: maskedInstruction,
                 startedAt: Date(),
                 steps: [],
                 completedAt: nil,
@@ -136,7 +152,7 @@ actor AnalyzeCoordinator {
         idleDeadline = nil
 
         Log.dispatcher.info(
-            "[analyze] begin — step=\(self.history.count + 1, privacy: .public) instruction \(req.instruction.count, privacy: .public) chars continuation=\(isContinuation, privacy: .public)"
+            "[analyze] begin — step=\(self.history.count + 1, privacy: .public) instruction \(maskedInstruction.count, privacy: .public) chars continuation=\(isContinuation, privacy: .public)"
         )
         let started = Date()
 
@@ -166,10 +182,11 @@ actor AnalyzeCoordinator {
         )
 
         // 2. dispatcher + OCR + AX 3개 병렬 (Phase 6.2 — AX matcher 추가).
+        // v0.2: masked instruction 사용 — secret이 외부 LLM 서버에 안 감.
         async let dispatcherFuture: AnalysisResult = dispatcher.analyze(
             imageData: imageData,
             imageSize: geometry.sentSize,
-            instruction: req.instruction
+            instruction: maskedInstruction
         )
         async let ocrFuture: [OCRBox] = ocr.recognize(
             pngData: imageData,

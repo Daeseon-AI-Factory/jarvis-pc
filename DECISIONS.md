@@ -1041,6 +1041,12 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[Completion pill 초록 ✓ vs ErrorPill 재사용]**: 옵션 = (a) ErrorPill (빨강) 그대로 — 색만 message로 구분 / (b) **별도 CompletionPill (초록 + ✓)** — 명확. 선택 (b) — 사용자 *명확히 "성공적 완료"* 인식 (특히 시니어/non-tech). 초록 RGB(0.2, 0.65, 0.3) — accessible (WCAG AA contrast 흰 글씨). 2.5s auto-dismiss (Task.sleep 안에 `currentContent == .completion` check로 race 차단 — 새 task 떠있으면 dismiss X). *되돌리기 비용*: HUDContent.completion case + CompletionPill struct + HUDController.presentCompletion + auto-dismiss Task — 20줄 revert.
 
+## v0.2 (보안 layer, 2026-05-31)
+
+**[Secret regex mask at AnalyzeCoordinator.run boundary — instruction 박기 *전*]**: v0.2 보안 5-layer 첫 박음 (memory: product-vision-global-multi-platform). 옵션 = (a) ScreenCapture에 *image redact* — 화면 자체 secret 흐림 / (b) **AnalyzeCoordinator에 instruction + audit text mask** — LLM 외부 호출 전 + disk write 전 / (c) AppDelegate에 사용자 input 직후 mask. 선택 (b) — *data boundary* (외부 + 디스크) 정확히 1곳. (a) image redact는 v0.3+ (OCR 후 box-level redact 복잡). (c)는 *다른 path 또 박아야* (continuation의 history도 mask 필요 — 단 history는 LLM 자체 응답이라 secret 거의 X). SecretMasker 10 pattern (sk-/sk-ant-/sk-proj-/AIza/AKIA/github_pat_/ghp_/xox/PEM/주민번호/카드). *email은 mask X* — instruction "내 이메일 어디 입력?" 사용자 use case 보존. anti-false-positive: specific prefix 우선, broad pattern 피함 (예: 32-char hex 차단). *되돌리기 비용*: SecretMasker.swift 삭제 + AnalyzeCoordinator의 mask 호출 3곳 revert — 10분.
+
+**[Email mask 보류 — instruction에 visible 유지]**: 옵션 = (a) email도 mask — 보수적 / (b) **email mask X — instruction에 visible 유지** / (c) audit log엔 mask, instruction엔 X. 선택 (b) — 사용자 "내 이메일 [user@x.com] 입력" 같은 instruction에서 email 유지 필요 (LLM이 *어디 입력*인지 인식). PII 보호는 *outgoing data*만 — instruction은 사용자 본인 의도, 사용자 본인 LLM API key에 가는 거. v0.3+ 사용자 *opt-in mask* 가능. *되돌리기*: email pattern 한 줄 추가 — 1분.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
