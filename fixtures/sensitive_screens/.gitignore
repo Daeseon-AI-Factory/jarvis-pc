@@ -1,0 +1,6 @@
+# Sensitive screens 절대 commit X — *.png 모두 제외
+# README.md + instructions.json + .gitignore만 commit 박힘
+*.png
+*.jpg
+*.jpeg
+*.heic

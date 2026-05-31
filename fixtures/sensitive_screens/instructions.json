@@ -1,0 +1,50 @@
+{
+  "_comment": "Phase 9.0 Week 1 — Probe D-prime fixture instructions. 사용자 본인 Mac에서 박은 5 screenshot의 instruction + expected target. screenshot 자체는 .gitignore — 개인정보 commit 안 됨.",
+  "fixtures": [
+    {
+      "id": "1-1password-vault",
+      "instruction": "비밀번호 복사 어떻게?",
+      "expectedTarget": "복사",
+      "expectedRole": "AXButton",
+      "expectedRequiresConfirmation": false,
+      "category": "password-manager"
+    },
+    {
+      "id": "2-kakaobank-transfer",
+      "instruction": "송금 어떻게?",
+      "expectedTarget": "다음",
+      "expectedRole": "AXButton",
+      "expectedRequiresConfirmation": true,
+      "category": "banking"
+    },
+    {
+      "id": "3-mail-compose",
+      "instruction": "이메일 보내기 어떻게?",
+      "expectedTarget": "보내기",
+      "expectedRole": "AXButton",
+      "expectedRequiresConfirmation": true,
+      "category": "messaging"
+    },
+    {
+      "id": "4-slack-dm",
+      "instruction": "메시지 보내기 어떻게?",
+      "expectedTarget": "Send",
+      "expectedRole": "AXButton",
+      "expectedRequiresConfirmation": true,
+      "category": "messaging"
+    },
+    {
+      "id": "5-notion-page",
+      "instruction": "이 노트에 새 줄 추가 어떻게?",
+      "expectedTarget": "+",
+      "expectedRole": null,
+      "expectedRequiresConfirmation": false,
+      "category": "notes-with-fake-secrets"
+    }
+  ],
+  "successCriteria": {
+    "go": "정확도 >= 80% (4-5 fixture 매칭)",
+    "caution": "정확도 70-80% (3-4 fixture) — 다른 model 평가 (Gemma 3 / InternVL)",
+    "fallback": "정확도 < 70% (≤2 fixture) — cloud Gemini 영구 + SensitivityRouter v0.2 ship"
+  }
+}

@@ -7,13 +7,25 @@ let package = Package(
     name: "ScreenBridge",
     platforms: [
         // macOS 14 (Sonoma) — ScreenCaptureKit (12.3+), SwiftUI App, async/await
-        // 모두 안정. AXUIElement / Vision / NSWindow는 더 오래된 macOS에서도
-        // 가능하지만 v0.1엔 단순화.
+        // mlx-swift-examples는 macOS 14+. 안전.
         .macOS(.v14)
+    ],
+    dependencies: [
+        // Phase 9.0 — Local vision LLM (Qwen2.5-VL-3B 4-bit via MLXVLM).
+        // ml-explore/mlx-swift-examples: MLX (Metal), MLXLLM, MLXVLM, MLXLMCommon.
+        // Apple-official ML framework, M1+ Metal GPU. ~1-2GB build artifact 첫 resolve 시.
+        .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.21.0"),
     ],
     targets: [
         .executableTarget(
             name: "ScreenBridge",
+            dependencies: [
+                // Phase 9.0 — Qwen2.5-VL-3B local inference.
+                // MLXVLM: vision-language models (Qwen2.5-VL, SmolVLM, Idefics3).
+                // MLXLMCommon: shared types (Tokenizer, Generation, etc.).
+                .product(name: "MLXVLM", package: "mlx-swift-examples"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
+            ],
             path: "Sources/ScreenBridge"
         ),
         .testTarget(

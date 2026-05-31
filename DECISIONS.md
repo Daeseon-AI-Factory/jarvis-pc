@@ -1053,6 +1053,12 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[Qwen2.5-VL-3B 4-bit (mlx-swift-lm) over Llama 4 / Moondream / Gemma 3]**: Workflow 4-probe 비교. 옵션 = (a) Llama 4 Scout 17B (M1 32GB+ → 어머님 탈락 + EU license) / (b) Moondream 2 1.9B (Swift binding 없음 → Python subprocess → .app 단일 binary 깨짐) / (c) **Qwen2.5-VL-3B 4-bit via mlx-swift-lm** (Swift native, 1.9-2.2GB disk, 3-4GB RAM peak, M1 8GB 빠듯 가능, 정확도 ~80-85% vs Gemini) / (d) Gemma 3 4B swift-gemma-cli (단일 maintainer risk + responseSchema 부재) / (e) Apple FM (vision API 현재 막힘). 선택 (c) — 4 dim 모두 통과 (vision/Swift/M1 8GB/swift-native dep). 정확도 risk는 Probe D-prime (Week 1) 5장 fixture 빠른 sanity check로 GO/NO-GO 결정. <70%면 즉시 cloud-only ship으로 fallback. *되돌리기 비용*: QwenLocalDispatcher 삭제 + mlx-swift-lm dep 제거 — 30분.
 
+## Phase 9.0 (Local-first 시작, 2026-05-31)
+
+**[mlx-swift-examples (MLXVLM) over Python subprocess / Ollama HTTP]**: Local Qwen inference 옵션 = (a) Python subprocess (mlx-vlm) — .app 단일 binary 깨짐, ProcessIPC 추가 / (b) Ollama HTTP localhost — 사용자가 별도 daemon 설치 필요, ScreenBridge 단일 install 깨짐 / (c) **mlx-swift-examples MLXVLM Swift native dep** — Apple-official, M1 Metal GPU, single binary. 선택 (c) — pragmatic-ship-mode + .app 단일 install 일관. dep 추가 후 첫 resolve ~10s (mlx-swift 0.29.1 + 5 transitive: GzipSwift, swift-jinja, swift-collections, swift-numerics), 첫 build 63s (480 files, Metal kernel compile). 일반 build incremental ~3-5s. *되돌리기 비용*: Package.swift dep 1줄 제거 + QwenLocalDispatcher.swift 삭제 — 5분.
+
+**[fixtures/sensitive_screens/ .gitignore *.png + README + instructions.json]**: 사용자 본인 dogfooding fixture (1Password / 카카오뱅크 / Mail / Slack / Notion 5장)는 *개인정보* — git commit 안 됨. 옵션 = (a) 모두 commit (synthetic fake 만들기) / (b) 모두 commit X (fixture 없음) / (c) **README + instructions.json만 commit, *.png는 .gitignore**. 선택 (c) — 사용자가 *실제 본인 화면*에서 박음 (Probe D-prime 진짜 정확도), instructions.json은 expected target + role + irreversible flag 박힘, README는 박는 방법 + GO/NO-GO criteria. *되돌리기 비용*: fixtures/sensitive_screens/ directory 삭제 — 1분.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
