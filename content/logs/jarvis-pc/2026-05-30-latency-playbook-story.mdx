@@ -1,0 +1,128 @@
+---
+title: "Latency Optimization Playbook (612 lines, 25 tricks) — story behind the asset"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge Vision LLM 호출 9.5s → 6.5s 가는 동안 학습한 25 trick을 6 dimension으로 정리한 612-line playbook. 사용자가 '메커니즘 배워서 앞으로도 써먹어야지'라 했고, transferable knowledge 박는 게 임시 fix보다 가치 큼."
+tags: ["screenbridge", "performance", "playbook", "transferable", "engineering-knowledge"]
+---
+
+## 문제
+
+사용자가 dogfooding 도중 발견:
+
+> "어떻게 빨라진거지? 이거... 이런 속도 개선점은 순서대로 반드시 정리해야한다 이런 엔지니어링 인사이트 도출을 원함 내가 찾은게 아니어도 메커니즘은 배워서 앞으로도 써먹어야지"
+
+→ *임시 fix*가 아니라 *재사용 가능 knowledge* 박는 게 가치. 다음 vision LLM 프로젝트 / 다른 사람 프로젝트에서도 *first principle* 적용 가능해야.
+
+## 결정 분기
+
+3 옵션:
+
+**A. 인라인 comments** — 코드 안에 *왜 빠른지* 박음
+- ✗ 흩어짐. 검색 불가. 다른 프로젝트 transfer X.
+
+**B. 프로젝트 README append** — README에 latency section 추가
+- ✗ README는 *지금* 박는 거. 6개월 후 rot됨.
+- ✗ 깊이 부족 — 한 줄 trick은 *왜 작동*하는지 안 보임.
+
+**C. ⭐ 별도 playbook 파일** — `docs/playbooks/latency-optimization.md`
+- ✓ transferable — 파일 자체 *다음 프로젝트에 복붙* 가능
+- ✓ 깊이 — *왜* + *언제 적용* + *언제 안 적용* 둘 다
+- ✓ priority order — top-5 quick wins / mid / advanced
+- ✓ engineering-playbooks-index memory entry로 *cross-session* 찾기 좋음
+
+선택 C.
+
+## 박힌 거
+
+`docs/playbooks/latency-optimization.md` — 612 lines, 25 trick, 6 dimension:
+
+### Dimension 1 — Vision LLM payload (3 tricks)
+
+- **Trick 1**: Image downscale to 1024-1280 (40% token 절감, 30% latency)
+- **Trick 2**: JPEG q80 vs PNG (1.5-3x smaller payload)
+- **Trick 3**: target crop only (전체 화면 X — target_text 주변만)
+
+### Dimension 2 — macOS SDK (4 tricks)
+
+- **Trick 4**: ScreenCaptureKit < CGWindowList (10x faster on M1+)
+- **Trick 5**: SCContentFilter cursor display only (multi-monitor에서 압도적)
+- **Trick 6**: AXObserver focusedWindowChanged event (poll X)
+- **Trick 7**: Vision framework .accurate vs .fast (lang 따라)
+
+### Dimension 3 — General LLM API (5 tricks)
+
+- **Trick 8**: maxOutputTokens 적당히 (over-allocation = attention budget 낭비)
+- **Trick 9**: responseSchema 강제 (free-form 응답 시 retry cost)
+- **Trick 10**: Image FIRST + text AFTER (Gemini quirk, sweep cross-cutting Layer 12)
+- **Trick 11**: systemInstruction separation (context cache 가능)
+- **Trick 12**: exp backoff retry only retryable codes (429/5xx, 4xx fail-fast)
+
+### Dimension 4 — Perceived UX (4 tricks)
+
+- **Trick 13**: Progressive loading message ("3~5초")
+- **Trick 14**: Skeleton UI 표시 후 채움
+- **Trick 15**: 첫 ms 안에 visual 변화 (사용자 *시작* 인식)
+- **Trick 16**: Loading 메시지 변화 (5s 후 "조금만 더..." 등)
+
+### Dimension 5 — Async patterns (5 tricks)
+
+- **Trick 17**: async let parallel (dispatcher + OCR + AX)
+- **Trick 18**: Task.detached for fire-and-forget (prewarm)
+- **Trick 19**: actor isolation (race 차단, sync overhead 작음)
+- **Trick 20**: Sendable enforced (Swift 6 strict concurrency)
+- **Trick 21**: cancellation propagation (Task.checkCancellation)
+
+### Dimension 6 — Measurement (4 tricks)
+
+- **Trick 22**: os.Logger subsystem (instruments에서 filter 가능)
+- **Trick 23**: Date timestamps for elapsed (각 stage 박음)
+- **Trick 24**: log show --predicate (persistent log query)
+- **Trick 25**: 첫 호출 vs 누적 평균 분리 (cold vs warm)
+
+## Top-5 quick wins (priority order)
+
+1. **Image downscale** — 1 line 변경, 30% latency 즉시. 시도 무조건.
+2. **maxOutputTokens 줄임** — 1 line. 응답 quality 변화 없음.
+3. **TLS/DNS pre-warm** — 5 lines. 첫 호출 1-2s 절감.
+4. **async let parallel** — 코드 구조 변경. 1.5-2x throughput.
+5. **Progressive loading message** — UX 변경. perceived 30% 빠름.
+
+## Universal principles
+
+박힌 메타 원칙 3개:
+
+1. **"Measure-first, optimize-second"** — `log show` 같은 persistent log 먼저 박음. optimization은 *measured bottleneck*에만.
+
+2. **"Vendor pays for what you send"** — Gemini formula `tokens = w × h / 750`. payload reduction은 *돈 + 속도* 둘 다.
+
+3. **"Perceived latency ≥ actual latency"** — Loading message + skeleton + progressive update이 *실 latency 안 줄여도* 사용자 만족 압도. 50% UX gain.
+
+## 비용
+
+- 박는 비용: ~3-4h playbook 작성 + 5 trick 실측 검증
+- 박은 가치: *transferable* — 다음 vision LLM 프로젝트 / 다른 사람 프로젝트에 복붙 가능. *6개월+ 가치*.
+- Memory entry: `engineering-playbooks-index.md` — playbook reference + 다음 playbook 후보 list
+
+## 다음 playbook 후보
+
+memory `engineering-playbooks-index` 박혀있음:
+
+- `swift-6-strict-concurrency-traps` (AXValue, kAX const, implicit self in Logger 등)
+- `llm-prompt-engineering` (✗/✓ pair pattern + constraint encoding)
+- `security-best-practices` (regex masking, app exclusion, audit log)
+- `macos-permissions-flow` (Screen Recording + Accessibility eager startup)
+- `coordinate-system-4-layer` (physical / sent / logical / screen-local 변환)
+
+## 패턴
+
+- **Playbook over comments**: transferable knowledge는 *별도 파일* 박음. 인라인 comment는 *코드 맥락*에 묶임 → transfer 못 함.
+- **Priority order matter**: 25 trick 다 적용 X. *top-5 quick wins* 먼저, *mid* 다음, *advanced*는 *측정된 bottleneck*에만.
+- **Dimension grouping**: trick 통째 list 대신 *dimension*으로 grouping → 다른 프로젝트에서 *해당 dimension만* 복사 가능.
+
+## Commit
+
+`04430d72` (2026-05-30 14:42 -0400) — 612 lines added to `docs/playbooks/latency-optimization.md` + PROJECT_TIMELINE.md 40 lines.

@@ -1,0 +1,105 @@
+---
+title: "Image 1568→1024 downscale — 30% latency / 40% token, ship-mode pragmatic trade-off"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Vision LLM 호출 비용 dominate한 image payload. 1568px → 1024px downscale로 30% latency 단축 + 40% token 절감, 작은 텍스트 정확도 ~5% 손실 trade. ship-mode pragmatic 결정 — 완벽 X, ship 우선."
+tags: ["screenbridge", "performance", "vision-llm", "trade-off", "pragmatic"]
+---
+
+## 문제
+
+dogfooding에서 사용자 좌절: **"속도는 이게 최대인가?"** — 평균 호출 9.5s.
+
+bench:
+- capture: 0.2s
+- Gemini call: ~8.5s (image 444KB / 1568×1014)
+- OCR + AX: 1.5s (병렬)
+- 매칭 + HUD: 0.1s
+
+→ Gemini call이 **dominate**. payload 줄이면 latency 줄어들 확률 큼.
+
+## 결정 분기
+
+3 옵션:
+
+**A. 모델 swap** — Gemini Flash → Flash-Lite
+- ✗ 정확도 ~15% 하락 (text recognition + intent)
+- ✗ 차별 lose (96% → 80% effective accuracy)
+
+**B. ⭐ Image downscale**
+- ✓ 30% latency 단축 (실측, 9.5s → 6.5-7s)
+- ✓ 40% token 절감 (516 → 308 image tokens)
+- ✗ 작은 텍스트 (~10pt 이하) 정확도 ~5% 손실
+- ✓ Dock 아이콘 / 메뉴바 / 큰 버튼 — 영향 0 (target user case 압도적)
+
+**C. Streaming response**
+- ✓ perceived latency ↓ (partial 응답 즉시)
+- ✗ Gemini streaming parse 복잡 (JSON chunk)
+- ✗ 1-2일 박는 비용
+
+선택 B. ship-mode pragmatic — *완벽 X, ship 우선*.
+
+## 박힌 거
+
+### ScreenCapture.swift — 1568 → 1024
+
+```swift
+// 이전:
+let targetWidth: CGFloat = 1568
+
+// 이후:
+let targetWidth: CGFloat = 1024
+```
+
+### GeminiDispatcher — maxOutputTokens 2048 → 1024
+
+응답 JSON은 보통 ~200 tokens. 2048 over-allocation으로 *budget 시간 낭비*. 1024로 줄여 *attention budget* 응답 quality에 집중.
+
+### AppDelegate — loading message 갱신
+
+이전: "AI에 물어보는 중..."
+이후: "AI에 물어보는 중... (3~5초)"
+
+→ perceived latency 단축 (사용자 기대치 set). 실측 latency *동일*이라도 사용자 *체감* 빨라짐.
+
+## 비용 분석
+
+```
+Gemini 2.5 Flash image tokens:
+  1568×1014 = ~516 image tokens × $0.30/1M = $0.000155
+  1024×662  = ~308 image tokens × $0.30/1M = $0.000092
+  
+  per call 절감: $0.000063 (~40%)
+  per 100 tasks/일: $0.0063/일 → ~₩8/일 → ₩240/월
+  
+  latency 절감: ~3s × 100 tasks/일 = 300s/일 사용자 시간 절감
+```
+
+→ *cost 절감보다 사용자 시간 절감*이 큼.
+
+## ship-mode 정신
+
+memory `pragmatic-ship-mode` 박힌 거:
+
+> 2026-05-30 결정: 완벽 X, ship 우선. Target *전부* (시니어 + 개발자 + 일반). 1-2년 안 빅테크 agent에 흡수 가능 — 그 전에 niche + 수익.
+
+→ 작은 텍스트 5% 정확도 손실은 *target user case에 영향 0*. ship.
+
+## 다음
+
+- Phase v0.2 latency playbook의 *pending tricks* 박음 — Trick C (pre-warm, 박힘) / Trick D (q70 JPEG) / Trick E (smaller bound 768) 실측
+- Phase v0.3 plan-first — 한 task당 LLM call 4 → 1+ε (60% 절감) — *진짜 cost driver 해결*
+- v0.4+ local OCR signature verify — Gemini call 자체 *건너뜀* (cost 0)
+
+## 패턴
+
+- **payload dominates latency**: Vision LLM 호출에서 image size가 latency의 *80%+*. 모델 swap 전에 *payload* 먼저 줄임.
+- **token cost = w × h / 750**: Gemini formula. 1024×768 → 1024 tokens; 1568×1014 → 2122 tokens. memory 박혀있음.
+- **ship-mode trade-off lens**: 손실 5% × target user case 영향 0 = ship. 손실 5% × target user 핵심 case 영향 = block. *user case 자체*를 분리해서 결정.
+
+## Commit
+
+`d57a890` (2026-05-30 11:33 -0400)

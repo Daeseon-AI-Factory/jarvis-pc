@@ -1,0 +1,195 @@
+---
+title: "Phase 7.1 Continuation Wire — state machine + hotkey 분기 + idle timeout + irreversible filter"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Phase 7.0 scaffold (additive 필드 + SessionState enum)를 *진짜 wire*. AnalyzeCoordinator state transition + currentInstruction 저장 + continueSession + idle timeout. AppDelegate hotkey mode-aware 분기 (idle → panel, waitingForUserClick → continueSession). 사용자 'Chrome 켜고 Naver 가기' 같은 multi-step task를 매 step 재입력 X 진행 가능."
+tags: ["screenbridge", "swift", "continuation", "state-machine", "jarvis"]
+---
+
+## 문제
+
+사용자 dogfooding 직접 quote:
+
+> "크롬 켠다음 naver 들어가기 햇는데 지금 크롬만 키고 끝이다 그담 후속을 대응못함 얘가"
+
+Phase 7.0은 *scaffold only* — additive 필드 + enum + IrreversibleActions keyword 박았지만 *behavior change X*. AppDelegate는 항상 panel 띄움. 사용자가 *연속 task* 시도해도 1 step 후 끝.
+
+## 결정 — 같은 ⌥+Space mode-aware 분기
+
+옵션 A: 새 hotkey (예 ⌥+.) 추가
+- ✗ 사용자 학습 비용 (외워야 할 키 +1)
+- ✗ "전부" target에 부담
+
+옵션 B ⭐: 같은 ⌥+Space + state 분기
+- ✓ 학습 비용 0
+- ✓ `coordinator.snapshotState()` 1줄
+- ✓ 같은 키가 *escape도* — HUD 떠있고 그 외 state 시 cancel
+
+선택 B.
+
+## 박힌 거
+
+### AnalyzeCoordinator — state machine
+
+```swift
+// 새 fields:
+private(set) var currentInstruction: String?    // 첫 run 시 저장 → continuation에서 재사용
+private(set) var idleDeadline: Date?            // 45s waitingForUserClick
+
+// run(_: isContinuation:) — fresh vs continuation 분기
+func run(_ req: AnalyzeRequest, isContinuation: Bool = false) async -> AnalyzeStage {
+    if !isContinuation {
+        sessionID = UUID().uuidString
+        history.removeAll()
+        currentInstruction = req.instruction
+        Log.dispatcher.info("[session] new — sessionID=\(self.sessionID ?? "?")")
+    }
+    sessionState = .analyzing(stepIndex: history.count)
+    // ... capture + dispatcher + OCR + AX 병렬 (기존)
+    
+    // state transition:
+    if result.taskComplete {
+        sessionState = .completed
+    } else {
+        let summary = result.stepActionSummary ?? "step \(history.count + 1) 진행"
+        history.append(StepSummary(stepNumber: history.count + 1, actionTaken: summary))
+        let deadline = Date().addingTimeInterval(45)
+        sessionState = .waitingForUserClick(stepIndex: history.count - 1, deadlineAt: deadline)
+        idleDeadline = deadline
+    }
+}
+
+// continueSession — no-arg, coordinator state로 req 자가 박음
+func continueSession() async -> AnalyzeStage {
+    guard let prevInstruction = currentInstruction,
+          let prevSessionID = sessionID else {
+        sessionState = .idle
+        return .failed(.invalidResponse("no_active_session"))
+    }
+    let req = AnalyzeRequest(
+        instruction: prevInstruction,
+        triggeredAt: Date(),
+        sessionID: prevSessionID,
+        previousSteps: history.isEmpty ? nil : history
+    )
+    return await run(req, isContinuation: true)
+}
+```
+
+### 2-layer irreversible-action gate
+
+```swift
+// LLM result + backend keyword filter OR
+let isIrreversible = result.requiresConfirmation
+    || IrreversibleActions.isIrreversible(nextAction: result.nextAction, targetText: result.targetText)
+if isIrreversible && !result.requiresConfirmation {
+    Log.dispatcher.notice("[safety] keyword post-filter → requires_confirmation forced true")
+}
+let safeResult = AnalysisResult(/* ... */, requiresConfirmation: isIrreversible, /* ... */)
+```
+
+→ LLM이 한국어 변형 ("이체하기" / "확정" / "탈퇴") 누락해도 *backend가 강제*. 2-layer safety.
+
+### AppDelegate — hotkey 분기
+
+```swift
+private func handleHotkey() {
+    Task { @MainActor in
+        // continueSession path
+        if let coordinator,
+           case .waitingForUserClick = await coordinator.snapshotState() {
+            if self.hud.isShowing { self.hud.dismiss() }
+            self.handleContinuation()
+            return
+        }
+        // HUD 떠있고 그 외 state → dismiss + cancel
+        if self.hud.isShowing {
+            self.hud.dismiss()
+            if let coordinator {
+                await coordinator.cancelSession(reason: .userEsc)
+            }
+            return
+        }
+        // 새 task path
+        self.toggleTriggerPanel()
+    }
+}
+```
+
+### Sentinel `.cancelled → .idle` 복귀
+
+```swift
+func cancelSession(reason: CancelReason) {
+    let prevID = sessionID
+    sessionState = .cancelled(reason: reason)
+    sessionID = nil
+    currentInstruction = nil
+    history.removeAll()
+    idleDeadline = nil
+    Log.dispatcher.info("[session] cancel — reason=\(...) prevID=\(...)")
+    // sentinel: .cancelled → 다음 hotkey 시 자연스럽게 새 task path
+    sessionState = .idle
+}
+```
+
+→ `.cancelled` value는 *log에 박혀있지만* state는 immediate idle. 다음 hotkey가 *panel* 띄움 (새 task path).
+
+### Menu-bar "현재 세션 취소" + ⌘.
+
+```swift
+menu.addItem(
+    withTitle: "현재 세션 취소",
+    action: #selector(cancelCurrentSession),
+    keyEquivalent: "."
+).keyEquivalentModifierMask = [.command]
+```
+
+→ safety invariant: *cancel 항상 <1 액션*.
+
+## 비용
+
+- 박는 비용: ~4-5h (Phase 7.0 scaffold 위에 wire)
+- 되돌리기 비용: AppDelegate.handleHotkey 6줄 revert + run() 안 state transition 12줄 revert → 15분
+- 테스트: Phase 7.1 suite 3 new (continueSession without active / cancelSession state / checkIdleTimeout). 101/101 pass.
+
+## 검증
+
+사용자 dogfooding log:
+
+```
+22:00:15 첫 시도 — OK (4.5s, Chrome 박스 ✓)
+  [session] new sessionID=1E686D67...
+  [analyze] begin step=1 continuation=false
+  [analyze] complete 4.5s — target_text="Chrome" task_complete=false
+  [session] waitingForUserClick step=1 deadline=45s
+
+22:00:35 ⌥+Space 다시 (16s 후) — continuation wire 작동 ✓
+  [hotkey] state=waitingForUserClick → continueSession (panel skip)
+  [session] continue sessionID=1E686D67... step=2
+  [analyze] begin step=2 continuation=true
+  
+  → 4초 후 Gemini 429 retriesExhausted (rate limit / quota)
+```
+
+**continuation wire 자체는 작동**. 단 *Gemini quota*가 별도 문제 (해당 시기 무료 tier ceiling 도달). 사용자가 "지금 Gemini가 내껀 응답해줘"라 했지만 *별도 client 다른 API key*일 가능성. 다음 commit에서 *429 body log 박음* — 진단 후 follow-up.
+
+## 다음 (Phase 7.2)
+
+- `presentCompletion` pill 별도 (현재는 `presentError` 재사용)
+- audit log JSON dump (`~/Library/Application Support/.../sessions/<uuid>.json`)
+- idle timeout UI countdown (45s → 35s → 25s 표시)
+- `checkIdleTimeout` AppDelegate Timer 박음 (현재는 호출만 가능, auto-trigger X)
+
+## 패턴
+
+- **Scaffold-first + wire-second**: Phase 7.0 (additive 필드 + enum, behavior X) → Phase 7.1 (실제 transition + branching). *revert 비용 작게 유지*하면서 *큰 변화* commit 분리.
+- **State machine in actor**: Swift 6 strict concurrency에서 actor가 state machine 박는 거 자연스러움. `snapshotState()` await 강제로 race 차단.
+- **Sentinel transition**: `.cancelled` value는 log/event용, state는 immediate idle 복귀 → 다음 hotkey 자연스럽게 새 path.
+- **2-layer safety gate**: LLM 응답 + backend keyword OR. LLM이 *언어 변형* 빠뜨려도 backend가 잡음. Korean 한정 trap (이체하기/확정/탈퇴) 명시.
+
+## Commit
+
+`2506d59d9f6def11093631c1b75599e8466dc634` (2026-05-30 21:52 -0400)

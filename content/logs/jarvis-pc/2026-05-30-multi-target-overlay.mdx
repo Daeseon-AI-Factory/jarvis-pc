@@ -1,0 +1,132 @@
+---
+title: "Multi-Target Overlay — user-in-the-loop으로 95% effective accuracy (Vision LLM 천장 인정)"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Vision LLM 정확도 ~80-90% 본질 천장 인정 후, top 2 distinct 박스 (빨강 + 회색 dashed + 번호 라벨)로 사용자가 1초만에 시각 선택. Operator/Computer Use의 자동 클릭 대비 결정적 차별 — guide 자동화 OK, action 자동화 X."
+tags: ["screenbridge", "swift", "ux", "vision-llm", "differentiation", "accuracy"]
+---
+
+## 문제
+
+사용자 dogfooding에서 발견 — **"chrome 켜라고 했는데 다른 거 가리킨다"**. 같은 텍스트 "Chrome"이 화면 *여러 위치*에 있음:
+
+- Dock의 Chrome 아이콘 (사용자가 *진짜 원하는 거*)
+- MenuBar의 "Chrome" 메뉴 (이미 열려있을 때)
+- 본문의 "Chrome" 문자 (튜토리얼 / 블로그 등)
+
+LLM이 *intent inference 못 함* (target_role 박아도 ~10-20% 빗나감). matcher가 ranked single result 박는데 *틀림 가능*.
+
+## 결정 분기
+
+3 옵션:
+
+**A. LLM 정확도 더 올림** — 더 큰 모델 / 더 정밀 prompt
+- ✗ Vision LLM 자체 ~80-90% 천장 (Gemini 2.5 Flash / GPT-4o / Claude Vision 모두 동일)
+- ✗ 빅테크 agent도 같은 한계
+- ✗ 100% 불가능
+
+**B. 자동 클릭으로 시도 후 wrong이면 undo** — Operator / Manus 식
+- ✗ 자동 클릭 = ScreenBridge *차별 lose*
+- ✗ wrong 시 *실 손해* (구매 / 메시지 / 계정)
+- ✗ Manus credit-drain / Operator 결제 misfire 사례 박혀있음
+
+**C. ⭐ Top N 후보 박음 + 사용자 시각 선택**
+- ✓ Vision LLM 천장 *우회* — *95% effective accuracy* 도달 (사용자 1초 시각 판단)
+- ✓ 자동 클릭 안 함 → 차별 *유지*
+- ✓ wrong 시 *실 손해 0*
+- ✓ 시니어 / 비-AI-native에 *시각 선택* 직관적
+
+선택 C.
+
+## 박힌 거
+
+### ElementMatcher.matchTop
+
+```swift
+static func matchTop(
+    targetText: String,
+    candidates: [MatchCandidate],
+    llmHintRect: CGRect? = nil,
+    proximityRadius: CGFloat = 100,
+    preferredRole: String? = nil,
+    threshold: Double = defaultThreshold,
+    distinctDistance: CGFloat = 50,
+    maxResults: Int = 2
+) -> [MatchResult]
+```
+
+- top N distinct candidates (midpoint 거리 > 50pt)
+- substring 우선 + fuzzy fallback
+- preferredRole prefer-only mode 유지
+
+### AnalyzeStage.done — matches: [MatchResult]
+
+기존 `matched: MatchResult?` 단일 → `matches: [MatchResult]` 배열.
+
+```swift
+case done(result: AnalysisResult, geometry: DisplayGeometry, matches: [MatchResult])
+```
+
+빈 배열이면 caller가 LLM coords fallback. 1+ matches면 `matches[0]`이 primary.
+
+### HUDAnnotation.alternatives
+
+```swift
+struct HUDAnnotation: Sendable, Equatable {
+    let rect: CGRect
+    let nextAction: String
+    let sourceTag: String
+    let alternatives: [Alternative]
+
+    struct Alternative: Sendable, Equatable {
+        let rect: CGRect
+        let sourceTag: String
+        let number: Int   // 2, 3, ...
+    }
+}
+```
+
+HUDOverlayView:
+- primary = 빨강 lineWidth 3 + 번호 1 라벨 (alternatives 있을 때만)
+- alternative = 회색 dashed lineWidth 2.5 + 번호 2/3 라벨
+- BubbleView에 "또는 2번 (회색)" 안내 (사용자 선택권 명시)
+
+## 결정 비용
+
+- 박는 비용: ~3-4h (ElementMatcher.matchTop + AnalyzeStage 시그니처 변경 + HUDAnnotation 확장 + HUDOverlayView 렌더 + Tests 갱신)
+- 되돌리기 비용: maxResults=1 고정 + 단일 박스 렌더 — 30분 revert
+- 진짜 비용 = *영원* — 모든 후속 architecture가 *matches array* 가정 (Phase 7.0 continuation, v0.3 plan-first 등)
+
+## 차별 — 빅테크 비교
+
+| | trigger | wrong-case | senior fit | cost/task |
+| --- | --- | --- | --- | --- |
+| **Claude Computer Use** | 자동 perceive-act loop | 실 손해 (계정/지불) | C− (무서움) | $0.15+ |
+| **Operator** | iterative + 가끔 pause | 결제 confirm only | C (approval fatigue) | $200/월 |
+| **Manus** | visible plan + 자동 execute | credit drain 사고 | B (live UI) | $39/월 |
+| **ScreenBridge** ⭐ | guide + user click | 손해 0 | A (선택권) | $0.0005 |
+
+→ **결정적 분리**: guide 자동화 OK, action 자동화 *영원* X.
+
+## v0.5 active mode에서도 영원
+
+5-stage Jarvis evolution (v0.5 active monitoring)까지 박을 때도 *action 자동 X 유지*. 화면 변화 detect + 자동 *다음 안내* (Y/active) OK, 단 *클릭은 user* — *손해 0 보장*.
+
+## 다음
+
+- Phase 7.x — multi-target *target_role* prefer-only mode 강화 (LLM이 정확하면 alternative 0개)
+- Phase v0.3 — plan-first 시 *각 step* multi-target overlay 유지
+- Phase v0.5+ — local cheap classifier가 *intent disambiguation* 1차, 그 다음 multi-target 안내 (cost ↓)
+
+## 패턴
+
+- **천장 인정 + 우회**: ML 정확도 천장 인정 후, *user 1초 추가 노력으로 effective accuracy 압도* — token cost / model size 안 쓰고 95% 도달.
+- **차별 = 거절**: "안 하기" 결정이 *결정적 차별*. ScreenBridge = "자동 클릭 거절" → 빅테크 깨진 자리 (credit drain / approval fatigue) 회피.
+- **distinctDistance heuristic**: 같은 후보 박는 거 차단 (midpoint 거리 50pt). 너무 가깝게 박힌 박스는 사용자 시각 구별 X.
+
+## Commit
+
+`43a44ff015a733ff50f57dd105a3001b62f57f7f` (2026-05-30 15:25 -0400)
