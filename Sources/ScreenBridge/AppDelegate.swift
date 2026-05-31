@@ -10,14 +10,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var triggerPanel: TriggerPanel?
     private let hud = HUDController()
 
-    /// GEMINI_API_KEY 있으면 dispatcher 생성. 없으면 handleAnalyze에서 HUD 에러.
-    private let dispatcher: GeminiDispatcher? = GeminiDispatcher.fromEnvironment()
-    private lazy var coordinator: AnalyzeCoordinator? = {
-        guard let dispatcher else {
-            Log.dispatcher.error("GEMINI_API_KEY 없음 — AnalyzeCoordinator 생성 실패. .env 또는 process env 확인.")
+    /// Phase 7.2: dispatcher 결정.
+    /// - GEMINI_API_KEY + ANTHROPIC_API_KEY → FallbackDispatcher (Gemini primary, Claude fallback)
+    /// - GEMINI_API_KEY only → Gemini only (v0.1 동작)
+    /// - ANTHROPIC_API_KEY only → Claude only
+    /// - 둘 다 없음 → nil (HUD 에러)
+    private let dispatcher: (any LLMDispatcher)? = {
+        let gemini = GeminiDispatcher.fromEnvironment()
+        let claude = ClaudeDispatcher.fromEnvironment()
+        switch (gemini, claude) {
+        case (let g?, let c?):
+            Log.dispatcher.info("AnalyzeCoordinator ready — FallbackDispatcher (Gemini primary, Claude fallback)")
+            return FallbackDispatcher(primary: g, primaryName: "gemini", fallback: c, fallbackName: "claude")
+        case (let g?, nil):
+            Log.dispatcher.info("AnalyzeCoordinator ready — Gemini only (ANTHROPIC_API_KEY 없음, fallback 비활성)")
+            return g
+        case (nil, let c?):
+            Log.dispatcher.info("AnalyzeCoordinator ready — Claude only (GEMINI_API_KEY 없음)")
+            return c
+        case (nil, nil):
+            Log.dispatcher.error("API 키 없음 — GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 필요. .env 확인.")
             return nil
         }
-        Log.dispatcher.info("AnalyzeCoordinator ready — Gemini dispatcher loaded")
+    }()
+    private lazy var coordinator: AnalyzeCoordinator? = {
+        guard let dispatcher else { return nil }
         return AnalyzeCoordinator(dispatcher: dispatcher)
     }()
 

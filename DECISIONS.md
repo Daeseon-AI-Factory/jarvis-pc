@@ -1027,6 +1027,12 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[Backend irreversible-action post-filter — run() 안에서 OR 강제]**: AnalyzeCoordinator.run 결과 처리 시 `IrreversibleActions.isIrreversible(...) || result.requiresConfirmation`로 safeResult 합성. LLM이 누락한 한국어 변형 (이체하기/확정/탈퇴) 잡힘. log `[safety] keyword post-filter`. 옵션 = (a) AppDelegate (UI layer) / (b) AnalyzeCoordinator (data layer). 선택 (b) — data invariant 한 곳에서 강제, AppDelegate는 *requires_confirmation 신뢰*. *되돌리기*: 12줄 — 5분 revert.
 
+## Phase 7.2 (dispatcher fallback, 2026-05-31)
+
+**[Gemini 429 → Claude 자동 fallback dispatcher]**: 사용자 Gemini 무료 *일당 20회* 도달 (Probe B 확정, CLAUDE.md 갱신). 옵션 = (a) 사용자가 수동 dispatcher swap (env 변경 + 재시작) / (b) 1 vendor 끝나면 사용자 에러 (현재) / (c) **wrapper dispatcher가 primary 429 시 자동 fallback**. 선택 (c) — 사용자 *zero-touch unblock*. `FallbackDispatcher`가 `LLMDispatcher` protocol 구현 → caller 무관. `shouldFallback(on:)` 결정 rule: `retriesExhausted(429)` / `httpStatus(429)` 만 swap, 다른 error는 throw (primary code bug 가능성). Claude `tool_use` forced JSON (`tool_choice: {type: "tool", name: "respond_with_analysis"}`) — Anthropic `responseSchema` 없는 대신 tool input schema 강제. AppDelegate가 env 키 조합으로 dispatcher 결정 (Gemini+Claude → Fallback / Gemini only / Claude only / 둘 다 없음). *되돌리기 비용*: FallbackDispatcher 삭제 + AppDelegate dispatcher 단일 복귀 — 15분 revert. 비용: Claude Sonnet ~$0.003/M input, Gemini의 30배지만 dogfooding ₩100-200/월 안 넘음. Gemini paid 활성화 후엔 Fallback 거의 안 trigger.
+
+**[JSONValue + AnyEncodable for tool input_schema]**: Anthropic tool input_schema는 nested JSON object — Swift Codable struct 매핑 불편 (5+ depth, generic value types). 옵션 = (a) struct 5+ tier 박음 (boilerplate 60+ lines) / (b) `[String: Any]` (Sendable X) / (c) **`JSONValue` enum (`.string / .int / .bool / .array / .object`)** — recursive, Sendable, Encodable/Decodable 둘 다. 선택 (c) — Sendable 강제 (Swift 6 strict concurrency), input_schema dictionary 직접 표현, ClaudeResponseBlock.input도 같은 type. *되돌리기 비용*: ClaudeDispatcher 안 JSONValue 사용처 — 30분 revert.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)
