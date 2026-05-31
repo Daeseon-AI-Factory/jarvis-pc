@@ -1,0 +1,74 @@
+---
+title: "Architecture overview — ScreenBridge (jarvis-pc) as of 2026-05-31"
+date: "2026-05-31"
+project: "jarvis-pc"
+kind: "snapshot"
+visibility: "public"
+language: "en"
+summary: "Swift 6.3 macOS native app that captures the cursor monitor, fuses Vision OCR with AXUIElement, dispatches to a vision LLM (Gemini/Claude with a local Qwen2.5-VL path under construction), and overlays a red box plus bubble on the same monitor."
+tags: ["architecture", "snapshot"]
+---
+
+## System shape
+
+```
+[HotKey ⌥Space / NSStatusItem]
+        │ records trigger cursor monitor
+        ▼
+[TriggerPanel] ── user pastes instruction ──┐
+                                            ▼
+                              [AnalyzeCoordinator]
+                                            │
+        ┌───────────────────────────────────┼───────────────────────────────────┐
+        ▼                                   ▼                                   ▼
+[ScreenCaptureService]              [OCRService]                        [AXService]
+ (ScreenCaptureKit)                 (Vision framework)                  (AXUIElement)
+        │                                   │                                   │
+        └────────────► [ElementMatcher: OCR + AX spatial fusion] ◄───────────────┘
+                                            │
+                                            ▼
+                          [LLMDispatcher] → Gemini / Claude / (Qwen local, in progress)
+                            FallbackDispatcher on 429
+                                            │
+                                            ▼
+                          [HUDController → HUDOverlayWindow / HUDOverlayView]
+                          red box + bubble on the cursor monitor
+                                            │
+                                            ▼
+                          [SessionAuditLog] JSON per session
+                          [SecretMasker] regex mask before LLM
+```
+
+## Key libs / modules
+
+- `Sources/ScreenBridge/AnalyzeCoordinator.swift` — orchestrates capture → OCR/AX → LLM → HUD.
+- `Sources/ScreenBridge/ScreenCaptureService.swift` + `ScreenCapture.swift` — ScreenCaptureKit-based monitor capture.
+- `Sources/ScreenBridge/OCRService.swift` + `OCRBox.swift` — Vision-framework OCR with bounding boxes.
+- `Sources/ScreenBridge/AXService.swift` + `AXElement.swift` + `ElementMatcher.swift` — Accessibility tree probe + spatial fusion with OCR for deterministic coordinates.
+- `Sources/ScreenBridge/LLMDispatcher.swift` with `GeminiDispatcher.swift`, `ClaudeDispatcher.swift`, `FallbackDispatcher.swift`, `QwenLocalDispatcher.swift` — pluggable vision-LLM backends; FallbackDispatcher swaps on 429.
+- `Sources/ScreenBridge/HUDOverlayWindow.swift` + `HUDOverlayView.swift` + `HUDController.swift` — transparent overlay window on the captured monitor.
+- `Sources/ScreenBridge/SecretMasker.swift` + `SessionAuditLog.swift` — pre-LLM secret regex masking and per-session audit JSON dumps.
+
+## Why these choices
+
+- Swift native over the earlier Tauri stack — Tauri attempt broke on multi-monitor and macOS Spaces traps; swap rationale recorded in `DECISIONS.md` and the `tauri-archive` branch.
+- `Package.swift` targets `macOS 14` because ScreenCaptureKit (12.3+), Swift 6 concurrency, and `mlx-swift-examples` (Apple Silicon Metal) all need that floor.
+- MLX dependency `ml-explore/mlx-swift-examples` from `2.21.0` pinned in `Package.swift` for the local Qwen2.5-VL-3B 4-bit path (Phase 9.0 Week 1, scaffold only per commit `26a1286`).
+- OCR + AXUIElement fusion instead of LLM coordinates alone — Phase 6.1/6.2 commits show LLM-only coords were unreliable on icon-only Dock items, so deterministic AX matching is layered on top.
+- FallbackDispatcher exists because Gemini 2.5 Flash hit daily-quota 429s (commits `8db0290`, `ea77843`, `33fd37e`) — Claude dispatcher serves as the auto-fallback.
+
+## Boundaries
+
+- Product intent / why: `PRODUCT.md`.
+- Behavioral spec: `SPEC.md`.
+- Current build state: `STATE.md`.
+- Decision history (incl. Tauri → Swift swap): `DECISIONS.md`.
+- Phase history: `PROJECT_TIMELINE.md`.
+- Debug learning assets: `TROUBLESHOOTING.md` (project-local) and `docs/troubleshooting.md`.
+- Transferable playbooks: `docs/playbooks/latency-optimization.md`, `docs/playbooks/security-for-screen-llm-agents.md`.
+- Tauri-era v0.1 build artifact narrative: `BUILD_REPORT.md`.
+
+## State of completion
+
+Phases 1–7.3 are landed: capture, OCR+AX fusion, multi-target overlay, continuation hotkey, completion pill, session audit, secret masking, and Claude/Gemini dispatch with 429 fallback are all in `Sources/ScreenBridge/`. Phase 9.0 (local Qwen2.5-VL via MLX) is at Week 1 skeleton only — `QwenLocalDispatcher.swift` exists, the mlx-swift-examples dep is pinned, but the local path is not yet wired into `AnalyzeCoordinator`. No production `.app` bundle yet; dev loop is `swift run`.
+

@@ -1,0 +1,49 @@
+---
+title: "Phase 7.3: completion pill + per-session JSON audit log"
+date: "2026-05-31"
+project: "jarvis-pc"
+kind: "tech-retro"
+
+visibility: "public"
+language: "en"
+summary: "Closed out Phase 7.1 deferred work: a green checkmark completion pill on the HUD and a per-session JSON audit log written to Application Support, completing the 5-layer security architecture."
+backfilled: true
+tags: ["jarvis-pc", "swift", "hud", "audit-log", "security", "phase-7"]
+---
+
+## What was done
+
+Two pieces that were deferred from Phase 7.1 landed together as Phase 7.3:
+
+1. **`presentCompletion` pill** — a green (RGB 0.2, 0.65, 0.3) `checkmark.circle.fill` pill on the HUD that auto-dismisses after 2.5s when a task completes. Replaces the prior reuse of `presentError` for the "we're done" state.
+2. **`SessionAuditLog`** — per-session JSON dump written to `~/Library/Application Support/com.screenbridge.app/sessions/<uuid>.json`. Captures the instruction, every step's target/action/source/timing, and the final outcome. This is Layer 5 of the 5-layer security architecture — the user-visible "what did ScreenBridge actually see/do?" record.
+
+## Why it was needed
+
+From the commit message: Phase 7.1 deferred both items; this commit picks them up for dogfooding UX. The completion pill exists because reusing the error pill for "task complete" was wrong-signal (red box on success). The audit log exists for three stated purposes: debug retro, user trust ("Open sessions folder" menu-bar item already wired), and pattern extraction for the mother-dogfooding scenario — figuring out *where* a session gets stuck.
+
+## Files / functions changed
+
+- `Sources/ScreenBridge/HUDOverlayView.swift` — new `HUDContent.completion` case + `CompletionPill` view (headline font, 462pt max width).
+- `Sources/ScreenBridge/HUDController.swift` — `presentCompletion(message:on:autoDismissAfter:)`, plus a `currentContent` property guarding against the auto-dismiss racing a new task's content.
+- `Sources/ScreenBridge/AppDelegate.swift` — `processAnalyzeStage` swaps `presentError` for `presentCompletion` on task complete, with the Korean-friendly default message "끝났어요!" when `nextAction` is empty.
+- `Sources/ScreenBridge/SessionAuditLog.swift` (NEW, 88 lines) — `SessionAuditEntry`, `StepRecord`, `Outcome` enum (`inProgress` / `completed` / `cancelledByUser` / `cancelledByTimeout` / `error`), `save()` (atomic write, prettyPrinted + sortedKeys + ISO8601), `load()` for debug.
+- `Sources/ScreenBridge/AnalyzeCoordinator.swift` — wires the audit entry: new entry on fresh task, append + save on every step success, finalize with outcome on `taskComplete` or `cancelSession`.
+- `DECISIONS.md` — records R9 Phase 7.3 decisions: per-session JSON (vs append-only log / SQLite) and green checkmark pill (vs ErrorPill reuse).
+
+180 LOC across 6 files.
+
+## Result / verification
+
+From the commit message: `swift build` 2.69s, `swift test` 116/116 passing (unchanged — audit save is a best-effort side effect that unit tests don't reach). The dogfooding handle described in the commit: run `"chrome 켜고 naver 가기"` to completion and a green "끝났어요!" pill appears for 2.5s; mid-session, the `<uuid>.json` file is already written under `~/Library/Application Support/com.screenbridge.app/sessions/` and inspectable via the existing menu-bar "Open sessions folder".
+
+Safety invariants held: no screenshot in the JSON (bounded growth), audit save is best-effort and silent on failure so it can't block a session, and the file path stays local — never cloud-synced (called out as a Phase 7.0 synthesis invariant in the file header comment).
+
+## Open / what didn't get done
+
+- 7-day automatic deletion of session JSON files is marked `TODO Phase 7.4` in the file header.
+- Audit save is best-effort by design — there is no surfaced UI when a save fails (only an `Log.app.notice`).
+- No unit tests for `SessionAuditLog` itself; coverage relies on dogfooding the menu-bar "Open sessions folder" path.
+
+## Commit — `a54b121`
+

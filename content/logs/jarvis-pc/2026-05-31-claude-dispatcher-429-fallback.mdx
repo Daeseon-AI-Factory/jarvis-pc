@@ -1,0 +1,80 @@
+---
+title: "Multi-vendor LLM failover: Gemini 429 auto-swap to Claude"
+date: "2026-05-31"
+project: "jarvis-pc"
+kind: "decision"
+tier: "1"
+status: "accepted"
+reversibility: "easy"
+visibility: "public"
+language: "en"
+summary: "Wrap two LLM dispatchers so a 429 from primary (Gemini) auto-swaps to fallback (Claude) inside the same call, keeping the caller unaware of vendors."
+backfilled: true
+tags: ["jarvis-pc", "llm", "fallback", "gemini", "claude", "swift", "dispatcher"]
+---
+
+## Context & constraints
+
+Probe B against workflow `w0dkpqbs2` confirmed Gemini 2.5 Flash free tier caps at 20 calls/day. After hitting it, every call returns 429 until the daily reset (PT midnight = 16:00 KST). Retry bursts inside the existing `GeminiDispatcher` do not help — the quota is already gone for the day.
+
+Constraints visible in the diff:
+- `LLMDispatcher` is a protocol used by `AnalyzeCoordinator`; callers must not learn which vendor handled a request.
+- Swift 6 strict concurrency requires `Sendable` values across actor boundaries — rules out `[String: Any]` for JSON.
+- Anthropic Messages API has no `responseSchema` equivalent to Gemini's; structured output has to come from `tool_use` + `tool_choice`.
+- Project already commits to one shortcut (⌥+Space) — adding a manual "switch vendor" UI would block the user mid-flow.
+
+## Goals (ranked, inferred from commit context)
+
+1. Zero-touch unblock when Gemini quota is exhausted (user keeps hitting ⌥+Space, swap happens silently).
+2. Don't paper over real bugs — non-429 errors must still surface (primary code path bugs, network errors, decoding failures).
+3. Keep `LLMDispatcher` protocol stable; no changes to `AnalyzeCoordinator` or the HUD.
+4. Pass Swift 6 strict concurrency without `@unchecked Sendable` escape hatches.
+
+## Options considered
+
+Options surfaced from the diff (DECISIONS.md Phase 7.2 entry):
+
+- **(a) Manual dispatcher swap** — user edits `.env` to swap `GEMINI_API_KEY` for `ANTHROPIC_API_KEY` and restarts the app. Rejected: breaks the ⌥+Space flow, needs restart on every quota hit.
+- **(b) Single-vendor error** (status quo) — when Gemini 429s, surface "quota exhausted" in the HUD and stop. Rejected: user is blocked until the daily reset.
+- **(c) Wrapper dispatcher with auto-fallback** — `FallbackDispatcher` implements `LLMDispatcher`, holds primary + fallback, swaps on 429 only. **Chosen.**
+
+Adjacent decision in the same commit for nested JSON tool schema:
+- struct hierarchy 5+ tiers deep (rejected: 60+ lines of boilerplate)
+- `[String: Any]` (rejected: not `Sendable` under Swift 6)
+- **`JSONValue` enum + `AnyEncodable` wrapper** — recursive, `Sendable`, `Codable`. Chosen.
+
+## Trade-off accepted (inferred)
+
+- Cost asymmetry: Claude Sonnet 4.6 input is ~30x Gemini Flash. The DECISIONS.md note bounds personal dogfooding at ~₩100–200/month, so it's tolerable. Anyone running this at higher volume will want Gemini paid tier so fallback rarely triggers.
+- Silent vendor switch: user does not see which vendor served a given call beyond an `os_log` line `[fallback] gemini → claude swap (primary 429/quota)`. Accepted because the HUD already shows the result, and the log line is enough for debugging.
+- Anthropic structured output is shaped via `tool_choice: {type: "tool", name: "respond_with_analysis"}` — a workaround for missing `responseSchema`. Accepted; tool input schema duplicates the Phase 7.0 8-field shape.
+- Both vendors failing throws the fallback's error, not the primary's. Acceptable because the user is already in degraded territory at that point.
+
+## Decision criteria to flip
+
+Reverse this design if:
+
+- Gemini paid tier removes the 429 quota constraint and fallback never triggers for a sustained period (then the wrapper becomes dead code worth deleting).
+- A third vendor (e.g., local on-device model) makes a chain rather than a pair more useful — `FallbackDispatcher` would need to become a list or be replaced.
+- `shouldFallback(on:)` proves too narrow — e.g., transient `500`s from Gemini start happening and users want auto-swap on those too. The static method is the single place to broaden the rule.
+
+## Success measure (or "not measured at the time")
+
+Not measured at the time. Commit reports `swift build 2.50s, swift test 116/116 pass (+11 new)` and the planned next-step is dogfooding: "지금 ⌥+Space → Gemini 429면 자동 Claude swap. log에 `[fallback] gemini → claude swap (primary 429/quota)` 박힘." No production telemetry on swap frequency or fallback latency was added.
+
+## Reversal plan
+
+DECISIONS.md sets the cost at ~15 minutes: delete `FallbackDispatcher.swift`, collapse the 4-way switch in `AppDelegate.swift` back to a single `GeminiDispatcher.fromEnvironment()`. `ClaudeDispatcher.swift` can stay (still usable as a primary). `JSONValue` rollback is separate and harder (~30 min) because it spreads through `ClaudeDispatcher` request/response types.
+
+## Verified by (post-hoc — what later commits prove this works?)
+
+- 11 new tests in `Tests/ScreenBridgeTests/FallbackDispatcherTests.swift`: 7 cases for `shouldFallback` (429 retriesExhausted / 429 httpStatus / 500 / 401 / missing keys / decoding / invalidResponse) plus 4 `analyze` scenarios (primary 429 → fallback served, primary 500 → throw, both fail → fallback's error, primary OK → no swap). The tests use a `StubDispatcher` with a `Behavior` enum so the logic is verified without hitting either vendor.
+- `swift test 116/116 pass` per the commit message.
+- Dogfooding trace expected in unified logs: `[fallback] gemini → claude swap (primary 429/quota)` — not verified in a follow-up commit visible from this hash alone.
+
+Original rationale beyond what is captured in DECISIONS.md Phase 7.2: reconstructed from the diff.
+
+## Status — Accepted (backfilled)
+
+## Commit — `33fd37e`
+
