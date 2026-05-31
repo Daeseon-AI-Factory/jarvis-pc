@@ -24,6 +24,10 @@ struct AnalysisResult: Codable, Sendable, Equatable {
     let coordinates: [Int]?
     let reasoning: String
     let raw: String
+    // Phase 7.0: continuation 필드. default 값으로 v0.1 single-shot 동작 보존.
+    let taskComplete: Bool        // true = task 끝, HUD presentCompletion pill. v0.1는 무시.
+    let requiresConfirmation: Bool // true = 되돌릴 수 없는 동작, HUD 빨강 border + 경고.
+    let stepActionSummary: String? // ≤30 words, *다음* call의 previousSteps에 박을 거.
 
     init(
         screenState: String,
@@ -32,7 +36,10 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         targetRole: String? = nil,
         coordinates: [Int]? = nil,
         reasoning: String,
-        raw: String = ""
+        raw: String = "",
+        taskComplete: Bool = false,
+        requiresConfirmation: Bool = false,
+        stepActionSummary: String? = nil
     ) {
         self.screenState = screenState
         self.nextAction = nextAction
@@ -41,6 +48,9 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         self.coordinates = coordinates
         self.reasoning = reasoning
         self.raw = raw
+        self.taskComplete = taskComplete
+        self.requiresConfirmation = requiresConfirmation
+        self.stepActionSummary = stepActionSummary
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -50,6 +60,9 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         case targetRole = "target_role"
         case coordinates
         case reasoning
+        case taskComplete = "task_complete"
+        case requiresConfirmation = "requires_confirmation"
+        case stepActionSummary = "step_action_summary"
     }
 
     init(from decoder: Decoder) throws {
@@ -61,7 +74,10 @@ struct AnalysisResult: Codable, Sendable, Equatable {
             targetRole: try c.decodeIfPresent(String.self, forKey: .targetRole),
             coordinates: try c.decodeIfPresent([Int].self, forKey: .coordinates),
             reasoning: try c.decode(String.self, forKey: .reasoning),
-            raw: ""
+            raw: "",
+            taskComplete: (try? c.decode(Bool.self, forKey: .taskComplete)) ?? false,
+            requiresConfirmation: (try? c.decode(Bool.self, forKey: .requiresConfirmation)) ?? false,
+            stepActionSummary: try? c.decodeIfPresent(String.self, forKey: .stepActionSummary)
         )
     }
 
@@ -73,6 +89,9 @@ struct AnalysisResult: Codable, Sendable, Equatable {
         try c.encodeIfPresent(targetRole, forKey: .targetRole)
         try c.encodeIfPresent(coordinates, forKey: .coordinates)
         try c.encode(reasoning, forKey: .reasoning)
+        try c.encode(taskComplete, forKey: .taskComplete)
+        try c.encode(requiresConfirmation, forKey: .requiresConfirmation)
+        try c.encodeIfPresent(stepActionSummary, forKey: .stepActionSummary)
     }
 
     func withRaw(_ raw: String) -> AnalysisResult {
@@ -83,7 +102,31 @@ struct AnalysisResult: Codable, Sendable, Equatable {
             targetRole: targetRole,
             coordinates: coordinates,
             reasoning: reasoning,
-            raw: raw
+            raw: raw,
+            taskComplete: taskComplete,
+            requiresConfirmation: requiresConfirmation,
+            stepActionSummary: stepActionSummary
         )
+    }
+}
+
+// Phase 7.0: 되돌릴 수 없는 동작 keyword post-filter.
+// LLM이 requires_confirmation 빼먹어도 *backend가 강제 true* — 2-layer safety gate.
+// "이체하기" / "확정" / "확인" 같은 Korean 변형 적극 추가 — synthesis risk #3.
+enum IrreversibleActions {
+    static let keywords: [String] = [
+        // 한국어 — 금융/메시지/삭제
+        "송금", "이체", "결제", "결재", "지불", "보내기", "전송", "삭제", "지우기",
+        "확정", "확인", "동의", "구매", "주문", "예약", "취소", "탈퇴", "로그아웃",
+        // 영어
+        "send", "delete", "remove", "transfer", "pay", "purchase", "buy", "confirm",
+        "submit", "publish", "post", "cancel", "unsubscribe", "sign out", "logout",
+        "agree", "accept",
+    ]
+
+    /// next_action 또는 target_text에 위험 keyword 있으면 true. LLM 응답과 OR 통합.
+    static func isIrreversible(nextAction: String, targetText: String) -> Bool {
+        let blob = (nextAction + " " + targetText).lowercased()
+        return keywords.contains { blob.contains($0.lowercased()) }
     }
 }

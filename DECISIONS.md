@@ -1011,6 +1011,14 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[2026-05-30 갱신, dispatcher pre-warm]**: 첫 analyze 호출이 cold TLS handshake + DNS resolve로 ~1-2s 추가. LLMDispatcher protocol에 `func prewarm() async` (default noop) — GeminiDispatcher만 override (model list GET, cost 0). 앱 launch 시 Task.detached 호출 → 사용자가 ⌥+Space 누를 때 connection pool warm. *되돌리기 비용*: protocol 4줄 + AppDelegate 5줄 — 5분 revert. 추적 — Latency playbook Trick C 실측.
 
+## Phase 7.0 (continuation scaffold, 2026-05-30)
+
+**[Jarvis mode hybrid X→W path]**: 선택지 = X (tap-next via 재-⌥+Space) / Y (screen-change auto) / Z (in-bubble [다음] 버튼) / W (plan-first checklist). Workflow 8-agent design (research + 4 design + synthesis) 박음. **선택: Hybrid X v0.2 + W v0.3 + Y v0.4 보류**. 근거: X는 *affirmative user signal* 1:1 매핑으로 *user-in-the-loop 차별* maximally 유지 (Operator/Manus가 깨진 자리), 22-28h dev cost로 ship-mode 압축 timeline 안. Y는 senior 신뢰 *불가역* 손상 위험 (false-positive) + Electron AX 취약. W는 *correct asymptote*이나 38-52h → X의 SessionState actor 재사용으로 v0.3에 *추가*. *되돌리기 비용*: scaffold만 박은 7.0 단계 — additive 필드 (taskComplete/requiresConfirmation/stepActionSummary) + SessionState enum + IrreversibleActions keyword 뿐, *behavior change X*. 15분 안에 revert 가능. 5-stage evolution: v0.1 single-shot → v0.2 tap-next → v0.3 plan-first → v0.4 screen-change opt-in → v0.5 active monitoring (hybrid edge+cloud, ₩15-50k/월 viable).
+
+**[Irreversible-action 2-layer gate]**: 송금/결제/삭제 같은 *되돌릴 수 없는 동작*에서 자동 advance 막아야. 옵션 = (a) LLM `requires_confirmation: true` schema만 / (b) backend hardcoded keyword post-filter만 / (c) **둘 다 OR로**. 선택 (c) — LLM이 한국어 변형 "이체하기"/"확정" 누락 가능 (synthesis risk #3), backend keyword가 강제 true. + v0.3에 app-exclusion list (1Password/카카오뱅크 bundleID) 3-layer gate. *되돌리기*: enum 1개 + Prompts 1 clause — 10분 revert.
+
+**[Context bounded growth — text summary, not screenshot history]**: 옵션 = (a) Computer Use 식 full screenshot history (context window 폭주, token quadratic) / (b) stateless 매 call (v0.1) / (c) **rolling text summary** (≤30 words × 3 step = ~200 token). 선택 (c) — LLM이 본인 응답에 `step_action_summary` 박음, 다음 call의 `previousSteps`에 들어감. **bounded growth**. 4-step Slack task = 1 task당 input ~3000 token 안에. *되돌리기*: StepSummary struct 삭제 + AnalyzeRequest.previousSteps nil 강제 — 5분 revert.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

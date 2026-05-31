@@ -17,6 +17,23 @@ actor AnalyzeCoordinator {
     private let ax: AXService
     private var isRunning: Bool = false
 
+    // Phase 7.0: SessionState scaffold. Transition은 7.1에서 wire (AppDelegate hotkey 분기).
+    // 지금은 *snapshot 가능*만 — 외부 코드가 state 읽을 수 있으나 자동 transition X.
+    enum SessionState: Sendable, Equatable {
+        case idle
+        case analyzing(stepIndex: Int)
+        case waitingForUserClick(stepIndex: Int, deadlineAt: Date)
+        case completed
+        case cancelled(reason: CancelReason)
+    }
+    enum CancelReason: Sendable, Equatable {
+        case userEsc, idleTimeout, error, appQuit
+    }
+
+    private var sessionState: SessionState = .idle
+    private(set) var sessionID: String?
+    private(set) var history: [StepSummary] = []
+
     init(
         capture: ScreenCaptureService = LiveScreenCapture(),
         dispatcher: LLMDispatcher,
@@ -27,6 +44,24 @@ actor AnalyzeCoordinator {
         self.dispatcher = dispatcher
         self.ocr = ocr
         self.ax = ax
+    }
+
+    /// 외부 코드 (AppDelegate)가 state 읽을 때. await 강제 — race 차단 (synthesis risk #2).
+    func snapshotState() -> SessionState { sessionState }
+
+    /// Phase 7.0 stub. 7.1에서 진짜 transition 박음. 지금은 run()에 delegate —
+    /// AppDelegate가 부르더라도 v0.1 single-shot 동작 그대로.
+    func continueSession(_ req: AnalyzeRequest) async -> AnalyzeStage {
+        Log.dispatcher.info("[session] continueSession called — Phase 7.0 stub, delegating to run()")
+        return await run(req)
+    }
+
+    /// Test/diagnostic 용. Phase 7.1에서 실제 cancel 흐름 wire (esc / menu-bar item).
+    func cancelSession(reason: CancelReason) {
+        sessionState = .cancelled(reason: reason)
+        sessionID = nil
+        history.removeAll()
+        Log.dispatcher.info("[session] cancel — reason=\(String(describing: reason), privacy: .public)")
     }
 
     /// Analyze 1회 실행. 진행 중이면 즉시 `.failed(.invalidResponse)` 반환.

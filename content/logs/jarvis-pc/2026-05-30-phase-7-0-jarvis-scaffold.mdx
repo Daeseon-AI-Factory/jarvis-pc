@@ -1,0 +1,108 @@
+---
+title: "Phase 7.0 — Jarvis 5-stage evolution scaffold (continuation mode 시작)"
+date: "2026-05-30"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Single-shot ScreenBridge가 multi-step continuation으로 진화. Workflow 8-agent design (research + 4 design + synthesis)으로 4 trigger model 비교 → Hybrid X (v0.2) + W (v0.3) + Y (v0.4 opt-in) 선택. Phase 7.0은 *scaffold only* — additive 필드 + SessionState enum + IrreversibleActions keyword filter, behavior change X."
+tags: ["screenbridge", "swift", "macos", "architecture", "continuation-mode", "jarvis"]
+---
+
+## 문제
+
+ScreenBridge v0.1은 *single-shot*. 사용자가 ⌥+Space → instruction 입력 → 박스 1개 + 한 동작 안내 → 끝.
+
+자연 multi-step task ("Slack에 메시지 보내" = 앱 열기 → 친구 선택 → 입력 → 전송)에서 *매번 처음부터* 다시 trigger 필요 → 사용자 좌절.
+
+## 4 trigger model 후보
+
+Workflow 8-agent design으로 비교:
+
+| Option | 비고 |
+| --- | --- |
+| **X tap-next** | 같은 hotkey 재누름 → 다음 step |
+| **Y screen-change auto** | 화면 변화 detect → 자동 다음 |
+| **Z hover [다음 ▸]** | bubble에 버튼 visible |
+| **W plan-first** | 1 trigger → 전체 plan + 사용자 step별 click |
+
+## 선택: **Hybrid X v0.2 + W v0.3 + Y v0.4 보류**
+
+근거:
+
+- **X**가 *affirmative user signal* 1:1 매핑 — *user-in-the-loop 차별* maximally 유지 (Operator/Manus가 깨진 자리)
+- **Y**는 senior 신뢰 *불가역* 손상 위험 (false-positive) + Electron AX 취약
+- **W**가 *correct asymptote*이나 38-52h → X SessionState actor 재사용으로 v0.3에 *추가*
+- Pragmatic ship mode 압축 timeline (2-4주) 안 ship X 가능 (22-28h)
+
+## 5-stage Jarvis evolution
+
+| Stage | 시점 | LLM call/task | 비용/월 |
+| --- | --- | --- | --- |
+| v0.1 single-shot ✅ | 박힘 | 1 | ₩0 |
+| v0.2 tap-next 🔜 | 이번 주 | 4 | ₩0 |
+| v0.3 plan-first | 2-3주 | 1+ε | ₩0 |
+| v0.4 screen-change opt-in | 4-6주 | 2-3 | ₩3-10k |
+| v0.5 active monitoring | 2027+ | 분당 1-5 (대부분 local) | ₩15-50k |
+
+영원 분리: **guide 자동화 OK, action 자동화 X**. v0.5에서도 자동 클릭 안 함 → 잘못해도 손해 0.
+
+## Phase 7.0 scaffold (이번 commit)
+
+*Behavior change 없음*. additive 필드만:
+
+- `AnalysisResult.taskComplete: Bool` (default false)
+- `AnalysisResult.requiresConfirmation: Bool` (default false)
+- `AnalysisResult.stepActionSummary: String?` — *다음* call의 previousSteps에 박힐 거
+- `AnalyzeRequest.sessionID: String?` + `previousSteps: [StepSummary]?`
+- `StepSummary` struct (≤30 words actionTaken)
+- `AnalyzeCoordinator.SessionState` enum (idle / analyzing / waitingForUserClick / completed / cancelled)
+- `CancelReason` enum (userEsc / idleTimeout / error / appQuit)
+- `snapshotState()` + `continueSession(_:)` stub + `cancelSession(reason:)`
+- `Prompts` 2 새 clause (연속 작업 + 되돌릴 수 없는 동작)
+- `IrreversibleActions.keywords` (송금/이체/결제/보내기/삭제 + 영어 30+ 단어) + `isIrreversible(...)` 헬퍼
+- `JSONSchema.boolean` case (Gemini schema 확장용)
+- `responseSchema`에 3 새 필드 (all optional)
+
+98 tests 통과. v0.1 동작 그대로.
+
+## 비용 reality
+
+```
+Gemini 2.5 Flash:
+  1 call = $0.00047 (~3000 in / 200 out)
+  4-step Slack task = $0.0019 ≈ ₩2.6
+  어머님 10 tasks/일 = ₩0 (250 RPD 무료 tier 안)
+  헤비 200 tasks/일 = ₩0 (여전히 무료 tier)
+  62+ 4-step tasks/일 = 유료 시작 (~₩3,500/월)
+```
+
+BYOK (Bring Your Own Key) architecture — 사용자 본인 GEMINI_API_KEY. Saas 호스팅 비용 ₩0.
+
+## 문맥 누적 strategy
+
+3-layer **bounded growth**:
+
+```
+Layer 1 — 현재 session: ≤30 words × 3 step = ~200 token (매 call)
+Layer 2 — 24h rolling: ~2000 token (LLM 자기 자신 어제 summary)
+Layer 3 — user profile: ~500 token cache (거의 안 변함)
+```
+
+**full screenshot history 박지 X** — Computer Use 깨진 자리 (context window 폭주).
+
+## 다음 (Phase 7.1)
+
+- AppDelegate hotkey 분기 (idle → panel, waitingForUserClick → continueSession)
+- HUDController.updateAnnotation in-place swap
+- 45s idle timeout + 10s 경고
+- menu-bar "Cancel current session"
+- IrreversibleActions post-filter wire (run() 안에서 result OR)
+- audit log JSON dump (`~/Library/Application Support/.../sessions/<uuid>.json`)
+- 어머님 + 개발자 친구 1주 dogfooding
+
+## 패턴
+
+- **Scaffold-first**: 큰 architecture 변화는 *additive 필드 + enum*만 먼저 ship → behavior wire는 다음 commit. revert 비용 작게 유지.
+- **Workflow design 가치**: 4 trigger model 비교 + research + synthesis로 *과도 design X*. 가장 큰 ROI 답이 자연스럽게 박힘 (X hybrid). 419K tokens / 14분 cost로 *재작업 위험 0* 결정.
+- **Memory granularity**: 5-stage evolution은 자주 referenced될 transferable knowledge → 새 memory entry로 박음 (`jarvis-evolution-5-stage`).

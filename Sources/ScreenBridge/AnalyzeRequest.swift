@@ -11,6 +11,28 @@ import Foundation
 struct AnalyzeRequest: Sendable {
     let instruction: String
     let triggeredAt: Date
+    // Phase 7.0: continuation context. nil = single-shot (v0.1 동작 그대로).
+    let sessionID: String?
+    let previousSteps: [StepSummary]?
+
+    init(
+        instruction: String,
+        triggeredAt: Date,
+        sessionID: String? = nil,
+        previousSteps: [StepSummary]? = nil
+    ) {
+        self.instruction = instruction
+        self.triggeredAt = triggeredAt
+        self.sessionID = sessionID
+        self.previousSteps = previousSteps
+    }
+}
+
+/// 이전 step의 *결과* 요약. LLM이 자기 자신 응답으로 next call에 자기 history 박음
+/// (≤30 words). full screenshot history 박는 거 X — token quadratic 방지 (Phase 7.0 design).
+struct StepSummary: Sendable, Codable, Equatable {
+    let stepNumber: Int
+    let actionTaken: String   // ≤30 words, LLM-authored on prior call
 }
 
 /// Analyze 진행 stage. Phase 5.x에서 AsyncStream으로 progressive UI 가능.

@@ -360,3 +360,13 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Commit**: (Phase 6.2 — 다음 commit에 hash 갱신)
 - **Pattern**: CFTypeRef downcasting은 항상 type check 동반. AXValue 같은 polymorphic container는 GetType 호출 후 안전한 GetValue.
 
+---
+
+## Single-shot 마다 재입력 좌절 → continuation scaffold (Phase 7.0)
+
+- **Symptom**: "Slack에 메시지 보내" 같은 4-step task가 매 step ⌥+Space + instruction 재입력 → 사용자 quote: "그떄그떄 새로 치는게 너무 불합리하다".
+- **Cause**: AnalyzeCoordinator가 *stateless single-shot* — 매 run() 이후 state 안 남김. AppDelegate.handleHotkey는 *항상* TriggerPanel 띄움.
+- **Fix**: SessionState scaffold만 박음 (additive). AnalyzeRequest에 sessionID/previousSteps optional, AnalysisResult에 taskComplete/requiresConfirmation/stepActionSummary default false/nil, AnalyzeCoordinator에 SessionState enum + snapshotState/continueSession stub. *Behavior change X* — Phase 7.1에서 hotkey 분기 + HUD in-place swap + 45s idle timeout + IrreversibleActions post-filter wire.
+- **Commit**: (Phase 7.0 — 다음 commit에 hash 갱신)
+- **Pattern**: 큰 architecture 변화는 *scaffold-first* — additive 필드 + enum만 commit, behavior wire는 다음 commit. revert 비용 작게 (15분 안). Workflow design (4 trigger model 비교 + research + synthesis)으로 *과도 design 회피* — 가장 큰 ROI 답 (X hybrid) 자연 박힘.
+

@@ -205,6 +205,10 @@ actor GeminiDispatcher: LLMDispatcher {
             "target_role": .string,                       // optional — AX role hint
             "coordinates": .array(items: .integer),
             "reasoning": .string,
+            // Phase 7.0: continuation 필드. all optional — Phase 7.1에서 wire 시 LLM이 채움.
+            "task_complete": .boolean,
+            "requires_confirmation": .boolean,
+            "step_action_summary": .string,
         ],
         required: ["screen_state", "next_action", "target_text", "reasoning"]
     )
@@ -270,6 +274,7 @@ struct GeminiGenerationConfig: Encodable, Sendable {
 indirect enum JSONSchema: Encodable, Sendable, Equatable {
     case string
     case integer
+    case boolean
     case array(items: JSONSchema)
     case object(properties: [String: JSONSchema], required: [String])
 
@@ -280,6 +285,8 @@ indirect enum JSONSchema: Encodable, Sendable, Equatable {
             try c.encode("STRING", forKey: .type)
         case .integer:
             try c.encode("INTEGER", forKey: .type)
+        case .boolean:
+            try c.encode("BOOLEAN", forKey: .type)
         case .array(let items):
             try c.encode("ARRAY", forKey: .type)
             try c.encode(items, forKey: .items)

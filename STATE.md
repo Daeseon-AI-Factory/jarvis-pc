@@ -27,8 +27,10 @@
 - [x] Swift Phase 6.2 — AXUIElement matcher (`d68746e`): icon-only UI 풀이. OCR + AX hybrid + MatchCandidate unified type.
 - [x] Swift Phase 6.2 fix — SYSTEM_PROMPT 강화 (`cdd092b`): target_text 빈 string 금지 + intent-aware ranking. 사용자 검증 OK (Slack 아이콘 정확).
 - [x] Swift Phase 5.x bubble (이 commit, **번역기 본질 완성 — 어머님 dogfooding 가능 단계**): MatchResult struct (rect + matchedText + sourceTag) + AnalyzeStage.done matched: MatchResult?. HUDAnnotation 확장 (nextAction + sourceTag). HUDOverlayView GeometryReader + BoxAndBubble + BubbleView (한글 title3 + sourceTag caption2). BubblePositioner (박스 아래 우선 + 4면 가장자리 clamping). AppDelegate.handleAnalyze nextAction/sourceTag 전달. 6 new BubblePositioner tests. 86 tests 통과 (`swift build` 2.37s, `swift test` 0.211s). **번역기 본질 도달**: 박스 + 한글 안내 + source 신뢰 표시.
+- [x] Swift Phase 5.x-late — multi-target overlay + LLM target_role hint + Gemini pre-warm (`43a44ff`, `f5a1261`, `c15578e`): top 2 distinct candidates + primary 빨강/alternative 회색 dashed + 번호 라벨. LLM schema-level `target_role` AX role 명시 (keyword fallback). TLS/DNS pre-warm으로 첫 호출 ~1-2s ↓. 86 tests.
+- [x] Swift Phase 7.0 — Jarvis continuation scaffold (이 commit, **5-stage evolution 시작**): SessionState enum + CancelReason + sessionID/history fields + snapshotState/continueSession/cancelSession (transition 미-wire stub). AnalysisResult 3 새 필드 (taskComplete/requiresConfirmation/stepActionSummary, *default 값으로 v0.1 호환*). AnalyzeRequest 2 새 필드 (sessionID/previousSteps) + StepSummary struct. Prompts 2 새 clause (연속 작업 + 되돌릴 수 없는 동작). IrreversibleActions keyword filter (한국어 + 영어 30+ 단어). responseSchema에 3 새 필드. 12 new tests. **98 tests 통과**. *behavior change 없음* — Phase 7.1에서 hotkey 분기 + HUD in-place swap 박음.
 
-**Last commit:** Phase 5.x bubble (hash 다음 commit에 갱신)
+**Last commit:** Phase 7.0 scaffold (hash 다음 commit에 갱신)
 **검증 안 됨:** `swift run` 실제 smoke (menu bar 아이콘 + ⌥Space → panel). 사용자 manual 필요 — GUI라 agent가 직접 못 띄움.
 
 ## Next step (다음 세션 시작점)
@@ -50,9 +52,15 @@
 7e. ✅ Phase 6.2 fix (`cdd092b`) — SYSTEM_PROMPT intent-aware. 사용자 검증 OK.
 8. ✅ Phase 5.x bubble (이 commit) — 한글 next_action + sourceTag + clamping. **번역기 본질 완성.**
 9. ★ **어머님 첫 dogfooding** (1주 안) + **개발자 친구 1-2명** (AWS/Vercel) *동시* — 진짜 검증.
-10. **v0.1 latency speedup** (35분, A+B+F: image 1568→1024 + maxOutputTokens 줄임 + progressive UI). ~40% 가속.
-11. **v0.2 minimum viable** (2-4주, *pragmatic ship mode*): secret regex masking 5-10개 + clipboard auto + Mac App Store 준비. **senior UX 미루기** — 일반 user 형태로 ship 먼저.
-12. **Ship + monetization** — $5/월 freemium 또는 $30 one-time.
+10. ✅ **v0.1 latency speedup** — image 1024 + maxOutputTokens 줄임 + progressive UI + pre-warm 박힘 (commits `d57a890`, `c15578e`).
+11. ✅ **v0.1.5 multi-target overlay + LLM target_role + pre-warm** — top 2 박스 + 번호 라벨. user-in-the-loop 차별 강화.
+12. **Phase 7.1 — continuation 진짜 wire** (다음 작업, 12-16h): AppDelegate hotkey 분기 (idle→panel, waitingForUserClick→continueSession), HUDController.updateAnnotation in-place swap, presentCompletion/Timeout pill, 45s idle timeout + 10s 경고, menu-bar "Cancel current session", IrreversibleActions post-filter 적용 (AnalyzeCoordinator.run 안에서 OR), audit log JSON dump.
+13. **Phase 7.2 — 연속 동작 dogfooding** — "Slack에 메시지 보내" 같은 4-step task 어머님이 *한 번* trigger → 박스 4번. 실 사용 검증.
+14. **v0.2 minimum viable** (2-4주, *pragmatic ship mode*): secret regex masking 5-10개 + clipboard auto + Mac App Store 준비.
+15. **v0.3 — Plan-first (W)** (2-3주, 7.0 SessionState 재사용): `plan: [PlanStep]?` schema, 1 LLM call로 전체 plan, local OCR signature verify, checklist sidebar, TTS, Dock 도우미 icon, panic-X widget, 1Password/카카오뱅크 app-exclusion.
+16. **v0.4 — Screen-change auto (Y) opt-in** — 능동 모드 toggle. v0.2/v0.3 misfire telemetry 확인 후.
+17. **v0.5 — 진짜 Jarvis** — hybrid edge+cloud (local model이 분당 모니터링, cloud LLM이 도움 trigger시만). local LLM dispatcher swap (Apple Foundation Model / Llama 4 Vision). 24h rolling summary + user profile cache.
+18. **Ship + monetization** — $5/월 freemium 또는 $30 one-time + BYOK architecture (cloud 호스팅 비용 0).
 
 ⚡ memory `pragmatic-ship-mode` 박음 — 완벽 X, ship 우선, target *전부*.
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).
