@@ -1047,6 +1047,12 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[Email mask 보류 — instruction에 visible 유지]**: 옵션 = (a) email도 mask — 보수적 / (b) **email mask X — instruction에 visible 유지** / (c) audit log엔 mask, instruction엔 X. 선택 (b) — 사용자 "내 이메일 [user@x.com] 입력" 같은 instruction에서 email 유지 필요 (LLM이 *어디 입력*인지 인식). PII 보호는 *outgoing data*만 — instruction은 사용자 본인 의도, 사용자 본인 LLM API key에 가는 거. v0.3+ 사용자 *opt-in mask* 가능. *되돌리기*: email pattern 한 줄 추가 — 1분.
 
+## v0.2 (local-first roadmap, 2026-05-31)
+
+**[3-tier Hybrid: Cloud + Router + Local + Apple FM]**: 사용자 우려 정당 — 화면 전체 cloud → senior/기업 못 씀. Workflow `wiy4w4h3y` 5-agent survey 후 path 확정. 옵션 = (a) cloud only ship (Operator/Manus 자리, 차별 lose) / (b) 100% local ship (Apple FM vision 막힘 + Llama 4 Scout M1 8GB 불가 → 1-3개월 시간 lose) / (c) **3-tier hybrid (cloud default + SensitivityRouter deny-list fail-closed + Qwen2.5-VL-3B 민감 화면 → 추후 Apple FM swap)**. 선택 (c) — pragmatic-ship-mode 일치, LLMDispatcher protocol 박혀있어 swap 30분-2일, fail-closed 라우팅이 100% local보다 *감사 가능성* 측면 강력 (enterprise/B2G 통과 후보). v0.2 SensitivityRouter만 박혀도 senior + 기업 pilot 시작 가능. v0.3 Qwen local (1-3개월). v0.4 Apple FM (WWDC26 ~3주 후 발표 dependent — vision API 막힌 게 *blocker*, text-only confirmed). *되돌리기 비용*: SensitivityRouter 1 file + AnalyzeCoordinator 4줄 — 10분 revert. *Vendor roadmap에 의존 X*: Apple FM은 bonus 취급, v0.2/v0.3 일정 결정에 영향 X.
+
+**[Qwen2.5-VL-3B 4-bit (mlx-swift-lm) over Llama 4 / Moondream / Gemma 3]**: Workflow 4-probe 비교. 옵션 = (a) Llama 4 Scout 17B (M1 32GB+ → 어머님 탈락 + EU license) / (b) Moondream 2 1.9B (Swift binding 없음 → Python subprocess → .app 단일 binary 깨짐) / (c) **Qwen2.5-VL-3B 4-bit via mlx-swift-lm** (Swift native, 1.9-2.2GB disk, 3-4GB RAM peak, M1 8GB 빠듯 가능, 정확도 ~80-85% vs Gemini) / (d) Gemma 3 4B swift-gemma-cli (단일 maintainer risk + responseSchema 부재) / (e) Apple FM (vision API 현재 막힘). 선택 (c) — 4 dim 모두 통과 (vision/Swift/M1 8GB/swift-native dep). 정확도 risk는 Probe D-prime (Week 1) 5장 fixture 빠른 sanity check로 GO/NO-GO 결정. <70%면 즉시 cloud-only ship으로 fallback. *되돌리기 비용*: QwenLocalDispatcher 삭제 + mlx-swift-lm dep 제거 — 30분.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

@@ -1,0 +1,174 @@
+---
+title: "Local-first 로드맵 — Apple FM 대기 + Qwen2.5-VL hybrid + 5-layer 보안 (출시 가능 path 확정)"
+date: "2026-05-31"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "사용자 우려 정당. cloud only는 Operator/Manus 자리, 차별 lose. Workflow 5-agent local-vision-LLM survey로 path 확정: v0.2 SensitivityRouter (deny-list) → v0.3 Qwen2.5-VL-3B local → v0.4 Apple FM (WWDC26 dependent). 3-tier hybrid가 senior + enterprise + global 동시 만족하는 유일 path."
+tags: ["screenbridge", "swift", "local-llm", "security", "roadmap", "strategy", "v0.2"]
+---
+
+## 문제
+
+사용자 직관 quote:
+> "이거... 진짜 보안문제되겠는데 제미나이가 다 볼거아니냐"
+> "이거는 출시무리인가.... 로컬 llm을 쓰지 않는이상"
+
+화면 전체 capture → Gemini 외부 서버. 그 안에:
+- 옆 Slack 채팅 (회사 NDA, 친구 private)
+- 1Password 열려있으면 password vault 노출
+- 카카오뱅크 계좌 / 잔액
+- 코드 secret (.env, API key)
+- 의료/법률/세무 정보
+- 누군가의 카톡 메시지
+
+→ **target user (시니어 + 비-AI-native + 기업 + global) 못 씀**. ScreenBridge 차별 (user-in-the-loop + *local-first*) 의 *3번째 layer*가 빠져있음.
+
+## 박혀있는 product vision 5-layer 보안
+
+(memory: product-vision-global-multi-platform)
+
+| Layer | 박힘 | 빠짐 |
+| --- | --- | --- |
+| 1. regex text masking | ✓ v0.2 SecretMasker 박힘 (1817564) | |
+| 2. App exclusion (1Password/카카오뱅크) | | ✗ |
+| 3. Sensitive region opt-out | | ✗ |
+| 4. **Local-first LLM** | | ✗ ⭐ |
+| 5. Audit log | ✓ Phase 7.3 박힘 (a54b121) | |
+
+→ 5 중 2 박힘, 3 빠짐. *Layer 4 (local LLM)*가 *진짜 차별*.
+
+## Workflow 5-agent local-vision-LLM survey (`wiy4w4h3y`)
+
+5 model option 실측 cross-reference (Apple FM / Llama 4 / Gemma 3 / Qwen / Moondream / MiniCPM / Florence-2 / InternVL).
+
+### 결론 — *오늘* 박을 수 있는 path는 1개
+
+| Model | Vision | RAM | Disk | M1 8GB | Swift | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| Apple FM (~3B) | ❌ vision API 막힘 (text only) | ~2GB shared | 0 (system) | OK | native | **WWDC26 (~3주 후) 결과 기다림** |
+| **Qwen2.5-VL-3B 4-bit** ⭐ | ✓ native | 3-4GB peak | 1.9-2.2GB | 빠듯 가능 | **mlx-swift-lm** native | **현실 유일 path** |
+| Llama 4 Scout 17B | ✓ native | **32GB+** | 55-67GB | ❌ | 없음 | **어머님 탈락 + EU license** |
+| MiniCPM-V 2.6 (8B) | ✓ | 6-7GB | 4.5-5GB | ❌ | Python subprocess | M1 8GB 불가 |
+| Moondream 2/3 (1.9B) | ✓ (OCR-heavy) | 2.5-3GB | 1.8GB | OK | Swift binding 없음 | .app 단일 binary 깨짐 |
+| Gemma 3 4B | ✓ (SigLIP) | 3.6-4.3GB | 2.1-2.8GB | 빠듯 | swift-gemma-cli | 단일 maintainer risk + responseSchema 부재 |
+| Florence-2 (0.77B) | classifier only | <1GB | 470MB | OK | Core ML 변환 | Q&A 안 됨 (classifier 슬롯) |
+| InternVL 2.5-4B | ✓ | 4-5GB | 2.5GB | 불가 | wrapper 약함 | M1 8GB 불가 |
+
+## 결정 — 3-tier Hybrid
+
+### v0.2 (오늘~2-4주, ship blocker 풀이)
+
+```
+Cloud Gemini default + SensitivityRouter (Layer 0)
+  ↓ bundleID deny-list 매칭 시
+"이 화면은 인터넷에 안 보내요" alert + 요청 차단 (fail-closed)
+  ↓ (v0.3까지 차단)
+사용자 보안 우려 즉시 부분 답 + Mac App Store 가능
+```
+
+deny-list 박힐 거:
+- 비밀번호: 1Password / Bitwarden / KeychainAccess
+- 한국 은행: 카카오뱅크 / 국민 / 신한 / 하나 / Toss / 우리
+- 신용카드: 신한카드 / BC / 삼성
+- Mail compose window (sender app == Mail.app + compose window 식별)
+- 옵션: 카카오톡 (논의 — 박을지)
+
+### v0.3 (1-3개월, local 본격)
+
+```
+Qwen2.5-VL-3B 4-bit (mlx-swift-lm) dispatcher 추가
+- 민감 화면 → local-only
+- 일반 화면 → cloud (사용자 setting toggle)
+- first-launch download 2GB (App Store binary 비대화 회피)
+- M1 8GB: load-on-demand (cold start 2-4s)
+- M1 16GB+: resident 옵션
+```
+
+`LLMDispatcher` protocol 박혀있어 dispatcher 추가만. Phase 7.2 FallbackDispatcher (Gemini → Claude swap) 박은 pattern 그대로 활용.
+
+### v0.4 (WWDC26 결과 dependent, ~6월 중순)
+
+```
+Apple FM vision API 발표:
+  → 즉시 FoundationModelDispatcher.swift swap (12-24h)
+  → 어머님 fit *완벽*: 0GB disk, 0GB RAM, 2-4s, offline, 무료
+
+발표 안 함:
+  → Qwen 유지, ship 진행
+  → 다음 분기 (WWDC27 또는 macOS 27 release) 재확인
+```
+
+## 어머님 M1 8GB persona fit
+
+```
+v0.2  은행/메시지 자동 차단 + alert. 평소 RAM 0. *지금 가능* ⭐
+v0.3  민감 화면 진입 시 "보안 모드 켜는 중..." 2-4s cold start
+       30초 idle 후 unload. Safari + 카톡 동시 가능 (실측 필요)
+v0.4  완벽 fit (Apple FM 발표 dependent)
+```
+
+## 기업/B2G fit
+
+```
+v0.2  deny-list + fail-closed + audit log 박혀있음 → enterprise pilot 시작 가능
+       admin이 plist/MDM으로 deny-list 확장 (자사 ERP/Confluence)
+v0.3  "Always local" 모드 강제 (관리자 정책 cloud 차단)
+v0.4  Apple FM swap → Apple 보안 인증 활용 (privacy nutrition labels)
+B2G  한국 금융감독원/개인정보보호위 기준: Qwen2.5-VL-3B + audit log 조합 통과 후보
+```
+
+## 비용
+
+- v0.2 박는 비용: 1-2h (SensitivityRouter + deny-list + Router 통과 + alert) ⭐
+- v0.3 박는 비용: 1-3주 (mlx-swift-lm dep + QwenLocalDispatcher + first-launch download UI + setting toggle + 어머님 실측)
+- v0.4 박는 비용: 12-24h (Apple FM swap, WWDC26 발표 dependent)
+- 되돌리기 비용 (v0.2): SensitivityRouter 1 file 삭제 + AnalyzeCoordinator 라우터 호출 4줄 revert — 10분
+
+## 핵심 risks
+
+1. **Probe D-prime 결과 Qwen 정확도가 fixtures에서 <70%** → 1-2주 lose. 완화: Week 1에 5장 fixture 빠른 sanity check, GO/NO-GO 결정.
+2. **어머님 M1 8GB OOM** → Safari + 카톡 + Qwen 동시 시 swap. 완화: Week 3 어머님 노트북 실측, OOM 시 Moondream 2 Python subprocess fallback (.app 단일 binary 양보).
+3. **WWDC26 발표 X** → Apple FM 막힘. 완화: 추측 위에 v0.2 일정 짜지 X, Qwen 영구 path.
+4. **SensitivityRouter deny-list 누락** → 민감 화면 cloud 새는 incident → 신뢰 lose. 완화: conservative bias (불확실 시 차단), audit log + 매주 자동 fuzz test.
+5. **Mac App Store reviewer 2GB download 또는 권한 사유 반려** → 2-4주 ship 지연. 완화: v0.2 cloud-only + Router만으로 먼저 submit (model download는 v0.3).
+
+## 다음 action
+
+**오늘 박을 거** (1-2h):
+- `Sources/ScreenBridge/SensitivityRouter.swift` 신규
+- bundleID deny-list (1Password / 카카오뱅크 / Toss / 신한 / 국민 / 하나 / 삼성카드 / BC카드 / Mail compose / KeychainAccess)
+- `LLMRoutingDecision` enum: `.cloud / .localOnly / .blockedLocalModelNotInstalled`
+- AnalyzeCoordinator.run() 안 capture 후 dispatcher 호출 *전* Router 통과
+- `.blockedLocalModelNotInstalled` → UserMessage "🔒 이 화면은 인터넷에 안 보내요. 다음 업데이트에서 보안 모드 추가됩니다."
+- 1-2 unit tests (Router decision)
+
+**1주 안**:
+- fixtures/sensitive_screens/ 10장 (1Password vault, 카카오뱅크 입금, Mail compose, KakaoTalk DM 등)
+- Router 회귀 test
+- mlx-swift-lm dep 추가 + QwenLocalDispatcher Probe D-prime (1장 inference 시도 → latency/정확도 첫 실측)
+
+**4주 안** (Phase 8):
+- Qwen2.5-VL-3B 정확도 fixtures 전체 측정 (Gemini 대비)
+- First-launch model downloader UI (~2GB, 진행률 + 백그라운드 재개)
+- M1 RAM 자동 감지 → 8GB load-on-demand / 16GB+ resident
+- SettingsView "Privacy mode (off/auto/always-local)" 3-state toggle
+- WWDC26 keynote 직후 (~6/8-12) 재평가 — Apple FM vision 발표 시 즉시 swap (12-24h)
+
+## 패턴
+
+- **Cloud-first ship + local-first migration**: pragmatic-ship-mode 메모리 일치. 100% local-first ship 기다리면 1-2년 timeline + 빅테크 흡수 윈도우 lose. Router layer만 박힌 cloud ship → enterprise pilot 시작 가능 → local swap은 *protocol 박힌 architecture*가 30분에 박음.
+- **Fail-closed routing > 100% local**: 기업 컴플라이언스 측면에서 "deny-list 매치 시 무조건 on-device, fail-closed"가 100% local보다 *감사 가능성*이 더 강함. 명확한 routing rule.
+- **vendor roadmap에 의존 X**: Apple FM은 *bonus*로 취급, v0.2 일정 결정에 영향 X. WWDC26 발표 dependent path는 v0.4에 박음.
+- **Multi-dispatcher protocol 가치**: Phase 2.3에 박은 `LLMDispatcher` protocol이 v0.2 Claude swap + v0.3 Qwen local + v0.4 Apple FM swap *3 시점*에 활용. 한 번 박은 *추상화 layer*가 *3년+ 가치*.
+
+## 관련
+
+- Workflow `wiy4w4h3y` (5 agents, 273s) — local vision LLM survey 결과
+- DECISIONS.md "3-tier hybrid path" entry (이 commit)
+- memory `local-first-roadmap-5-layer-security` (이 commit)
+- memory `product-vision-global-multi-platform` — 5-layer 박힌 거
+- memory `pragmatic-ship-mode` — v0.2 timeline 압축
+- memory `target-user-senior-non-tech` — 어머님 M1 8GB persona
+- memory `jarvis-evolution-5-stage` — v0.4 active mode와 hybrid 결합

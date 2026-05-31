@@ -51,16 +51,55 @@
 7d. ✅ Phase 6.2 AXUIElement matcher (`d68746e`) — icon-only UI 풀이 (Slack/Dock).
 7e. ✅ Phase 6.2 fix (`cdd092b`) — SYSTEM_PROMPT intent-aware. 사용자 검증 OK.
 8. ✅ Phase 5.x bubble (이 commit) — 한글 next_action + sourceTag + clamping. **번역기 본질 완성.**
-9. ★ **어머님 첫 dogfooding** (1주 안) + **개발자 친구 1-2명** (AWS/Vercel) *동시* — 진짜 검증.
+9. ★ **어머님 첫 dogfooding** (Phase 8.0 박은 후) + **개발자 친구 1-2명** (AWS/Vercel) *동시* — 진짜 검증.
 10. ✅ **v0.1 latency speedup** — image 1024 + maxOutputTokens 줄임 + progressive UI + pre-warm 박힘 (commits `d57a890`, `c15578e`).
 11. ✅ **v0.1.5 multi-target overlay + LLM target_role + pre-warm** — top 2 박스 + 번호 라벨. user-in-the-loop 차별 강화.
-12. **Phase 7.1 — continuation 진짜 wire** (다음 작업, 12-16h): AppDelegate hotkey 분기 (idle→panel, waitingForUserClick→continueSession), HUDController.updateAnnotation in-place swap, presentCompletion/Timeout pill, 45s idle timeout + 10s 경고, menu-bar "Cancel current session", IrreversibleActions post-filter 적용 (AnalyzeCoordinator.run 안에서 OR), audit log JSON dump.
-13. **Phase 7.2 — 연속 동작 dogfooding** — "Slack에 메시지 보내" 같은 4-step task 어머님이 *한 번* trigger → 박스 4번. 실 사용 검증.
-14. **v0.2 minimum viable** (2-4주, *pragmatic ship mode*): secret regex masking 5-10개 + clipboard auto + Mac App Store 준비.
-15. **v0.3 — Plan-first (W)** (2-3주, 7.0 SessionState 재사용): `plan: [PlanStep]?` schema, 1 LLM call로 전체 plan, local OCR signature verify, checklist sidebar, TTS, Dock 도우미 icon, panic-X widget, 1Password/카카오뱅크 app-exclusion.
-16. **v0.4 — Screen-change auto (Y) opt-in** — 능동 모드 toggle. v0.2/v0.3 misfire telemetry 확인 후.
-17. **v0.5 — 진짜 Jarvis** — hybrid edge+cloud (local model이 분당 모니터링, cloud LLM이 도움 trigger시만). local LLM dispatcher swap (Apple Foundation Model / Llama 4 Vision). 24h rolling summary + user profile cache.
-18. **Ship + monetization** — $5/월 freemium 또는 $30 one-time + BYOK architecture (cloud 호스팅 비용 0).
+12. ✅ **Phase 7.0 scaffold** (`75a02ca`) — SessionState enum + AnalysisResult new fields (taskComplete/requiresConfirmation/stepActionSummary) + IrreversibleActions keyword filter. additive, behavior change X.
+13. ✅ **Phase 7.1 continuation wire** (`2506d59`) — currentInstruction 저장 + continueSession + state transition + hotkey 분기 + 2-layer irreversible gate. 사용자가 매 step 재입력 X.
+14. ✅ **Phase 7.2 dispatcher fallback** (`33fd37e`) — ClaudeDispatcher + FallbackDispatcher (Gemini 429 → Claude swap, JSONValue Sendable, tool_use forced JSON).
+15. ✅ **Phase 7.2.1 hotkey throttle** (`dcb9164`) — 200ms (Probe C race guard).
+16. ✅ **Phase 7.3 completion pill + audit log** (`a54b121`) — 초록 ✓ presentCompletion + SessionAuditLog JSON dump (`~/Library/Application Support/.../sessions/<uuid>.json`).
+17. ✅ **v0.2 SecretMasker** (`2ffc163` — push protection amend) — 10 regex pattern (sk-/AKIA/ghp_/카드/주민번호). 5-layer 보안 Layer 1 박힘.
+
+## 🔒 v0.2 local-first 로드맵 (2026-05-31 결정, Workflow `wiy4w4h3y`)
+
+사용자 우려 정당 — cloud only는 Operator/Manus 자리 (차별 lose, senior/기업 못 씀). **3-tier hybrid** 박음.
+
+### Phase 8.0 ⭐ — SensitivityRouter (오늘 다음 commit, 1-2h)
+- `Sources/ScreenBridge/SensitivityRouter.swift` 신규
+- `LLMRoutingDecision` enum: `.cloud / .localOnly / .blockedLocalModelNotInstalled`
+- bundleID deny-list: 1Password / Bitwarden / KeychainAccess / 카카오뱅크 / 국민 / 신한 / 하나 / Toss / 신한카드 / BC / 삼성카드 / Mail compose
+- AnalyzeCoordinator.run() 안 capture 후, dispatcher 호출 *전* Router 통과
+- `.blockedLocalModelNotInstalled` → UserMessage "🔒 이 화면은 인터넷에 안 보내요. 다음 업데이트에서 보안 모드 추가됩니다."
+- 5-layer 보안 Layer 2 박힘.
+
+### Phase 8.1 — fixtures/sensitive_screens/ + Router 회귀 test (1주, ~3-4h)
+- 1Password vault / 카카오뱅크 입금 / Mail compose / KakaoTalk DM 등 10장
+- Router unit test 통과 (어떤 bundleID에서 어떤 decision 박는지)
+
+### Phase 9.0 — Qwen2.5-VL-3B local dispatcher (1-3개월)
+- `Package.swift` mlx-swift-lm dep 추가
+- `Sources/ScreenBridge/QwenLocalDispatcher.swift` 신규 — LLMDispatcher protocol 구현
+- First-launch model downloader UI (~2GB, 진행률, 백그라운드 재개)
+- M1 RAM 감지 → 8GB load-on-demand (cold start 2-4s) / 16GB+ resident 옵션
+- SettingsView "Privacy mode (off/auto/always-local)" 3-state toggle
+- Probe D-prime (Week 1): 5 fixture sanity check, <70% 정확도면 즉시 cloud-only fallback
+
+### Phase 9.5 — Apple FM swap (WWDC26 결과 dependent, ~6/8-12)
+- 발표 시: `FoundationModelDispatcher.swift` 12-24h swap. 어머님 fit 완벽 (0GB shared, 2-4s).
+- 발표 X: Qwen 유지, ship 진행. 다음 분기 재확인.
+
+### Phase 10 — Mac App Store submission (v0.2 후)
+- v0.2 cloud-only + Router 박힌 후 *먼저* submit (model download는 v0.3)
+- reviewer note: deny-list + audit log + secret masking 명시
+
+### v0.3-v0.4 (이후)
+- **v0.3 W (plan-first)** — `plan: [PlanStep]?` schema, 1 LLM call 전체 plan, local OCR verify, checklist sidebar, TTS, Dock 도우미 icon, panic-X widget
+- **v0.4 Y (screen-change auto opt-in)** — 능동 모드 toggle
+- **v0.5 active monitoring** — hybrid edge+cloud, local 분류 + cloud trigger
+- **Monetization** — $5/월 freemium + $30 one-time + BYOK (cloud 호스팅 비용 0)
+
+⚡ memory `local-first-roadmap-5-layer-security` 박음 — 다음 세션 참조용.
 
 ⚡ memory `pragmatic-ship-mode` 박음 — 완벽 X, ship 우선, target *전부*.
 4. Phase 3.1 — ScreenCaptureKit + Permissions (startup trigger 0.5단계 빨리) + LastTriggerContext (hotkey 콜백 즉시 cursor 저장, Layer 10 회피) + DisplayGeometry (4-layer 좌표 변환 캡슐화).

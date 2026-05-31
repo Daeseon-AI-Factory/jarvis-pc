@@ -753,4 +753,30 @@ Apple Intelligence / Microsoft Copilot / Anthropic Computer Use / OpenAI Operato
 
 ---
 
+## 2026-05-31 — Local-first 로드맵 확정 (사용자 보안 우려 → 출시 path 결정)
+
+**Trigger**: 사용자 quote "이거 진짜 보안문제되겠는데 제미나이가 다 볼거아니냐" / "출시 무리인가 로컬 llm 안 쓰는 이상". 화면 전체 cloud → senior + 기업 + global 시장 못 씀. ScreenBridge 차별 3 (user-in-the-loop + 추상→구체 + local-first)의 *3번째 layer* 비어있음.
+
+**Workflow `wiy4w4h3y`** (5-agent local vision LLM survey, 273s, 180K tokens):
+- Apple Foundation Model: ❌ vision API 막힘 (text only, May 2026 confirmed via Apple newsroom + WWDC25 + 개발자 write-ups). WWDC26 (~6월 8-12) 발표 기다림.
+- Llama 4 Scout 17B: ❌ M1 32GB+ + EU license, 어머님 M1 8GB 탈락.
+- **Qwen2.5-VL-3B 4-bit (mlx-swift-lm)**: ✅ Swift native, ~2GB disk, 3-4GB RAM, M1 8GB 빠듯 가능, 정확도 ~80-85% vs Gemini.
+- Moondream 2/Gemma 3/MiniCPM: 백업 후보.
+
+**결정 — 3-tier Hybrid**:
+- v0.2 (오늘~2-4주): Cloud Gemini default + **SensitivityRouter** (bundleID deny-list fail-closed). 1-2h 박는다.
+- v0.3 (1-3개월): Qwen2.5-VL-3B local dispatcher 추가 (mlx-swift-lm dep + first-launch download).
+- v0.4 (WWDC26 dependent, ~6/8-12): Apple FM vision 발표 시 즉시 swap.
+
+**Phase 8.0 — SensitivityRouter** = 다음 박을 commit. 5-layer 보안 Layer 2.
+
+**상세**:
+- content/logs/jarvis-pc/2026-05-31-local-first-roadmap.mdx (full narrative + 5 risks + 어머님/기업 fit)
+- DECISIONS.md "v0.2 (local-first roadmap)" 2 entry (3-tier hybrid 결정 + Qwen 선택)
+- memory `local-first-roadmap-5-layer-security` (cross-session 참조용)
+
+**우선순위 갱신**: v0.2 SecretMasker ✅ → v0.2 SensitivityRouter (Layer 2) → v0.3 Qwen local (Layer 4) → v0.4 Apple FM swap (WWDC26 결과 dependent).
+
+---
+
 (append-only — 각 phase / stack swap / 큰 결정 즉시 추가. 사후 정리 금지.)
