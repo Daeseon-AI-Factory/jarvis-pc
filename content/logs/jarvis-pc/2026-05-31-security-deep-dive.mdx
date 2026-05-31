@@ -1,0 +1,884 @@
+---
+title: "스크린 LLM 에이전트 보안 — 사용자 우려부터 Local-first 결정까지 (ScreenBridge 회고)"
+date: "2026-05-31"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge 박는 1개월 동안 사용자가 박은 보안 우려 8개, 빅테크 사고 분석 (Manus SilentBridge CVE / Microsoft Recall plaintext SQLite / Claude CU 'not production-ready'), 5-layer 보안 architecture, Local-first 결정 흐름. 다른 사람이 비슷한 vision-LLM agent 박을 때 reference."
+tags: ["screenbridge", "security", "local-llm", "privacy", "vision-llm", "macOS", "retro", "deep-dive"]
+---
+
+## 1. 시작 — 사용자 quote
+
+ScreenBridge는 *AI가 시키는 추상적 지시를 사용자 화면에 박는 번역기*. 1인 개발 + 어머님 dogfooding + 글로벌 시장 목표. 박는 동안 사용자가 박은 보안 우려 quote가 있다 — 시간순.
+
+```
+[2026-05-29] "근데 이거 진짜 보안문제되겠는데 제미나이가 다 볼거아니냐"
+[2026-05-30] "이거는 출시무리인가 로컬 llm 안 쓰는 이상"
+[2026-05-30] "계좌 번호가 보이자나 ai한테 비번이나"
+[2026-05-30] "은행업무 같은건 못하게 막아야하나"
+[2026-05-30] "내 컴터에 각종 은행정보나 오만가지가 있을텐데 나는 왜 아무의심없이 맥북을 쓴걸까"
+[2026-05-30] "Claude Computer Use 이런것도 얘네가 어찌 출시한거지 보안 이슈 없었나"
+[2026-05-31] "로컬 llm이 비서가 될 수 있을까 성능 병신일거같은데 최신 내용도 모를거아냐"
+[2026-05-31] "내가 모르는게 너무 많은데 프로젝트 로그들은 너무 적어보여"
+```
+
+이 8 quote가 박힌 *진짜 질문* 3개:
+
+1. **Target user trust** — 어머님/시니어/기업이 이 product에 자기 화면 맡길 수 있나?
+2. **Personal risk audit** — 1인 개발자가 출시 후 *책임* 어떻게 지나?
+3. **빅테크 비교 정당성** — Operator / Claude CU / Manus는 같은 architecture로 어떻게 ship했나?
+
+이 문서는 8 quote + 3 질문에 1개월 동안 박은 답을 시간순 + architecture 단으로 정리.
+
+---
+
+## 2. 진짜 문제 — 화면 capture가 무엇을 cloud로 보내나
+
+ScreenBridge v0.1 architecture:
+
+```
+[사용자 ⌥+Space]
+   ↓
+[ScreenCaptureKit fullscreen capture] → PNG ~2MB
+   ↓
+[Vision OCR (VNRecognizeTextRequest)] → OCRBox[]
+   ↓
+[AXService (AXUIElement traversal)] → AXElement[]
+   ↓
+[GeminiDispatcher.analyze(png, instruction)] ←──── HTTPS POST
+   ↓                                              generativelanguage.googleapis.com
+[AnalysisResult JSON]
+   ↓
+[HUD red box + 한글 bubble]
+```
+
+3번째 줄에 PNG 통째가 Google 서버로 간다. 그 PNG 안에 *우연히* 박혀있을 수 있는 것:
+
+| 시나리오 | 화면에 있는 것 | Gemini가 보는 것 |
+| --- | --- | --- |
+| Cursor 켜놓고 `.env` 열림 | `ANTHROPIC_API_KEY=sk-ant-xxx` | 전부 |
+| Slack 옆에 띄움 | 회사 NDA 채팅 / 친구 카톡 | 전부 |
+| 카카오뱅크 frontmost | 잔액 / 거래내역 / 계좌번호 | 전부 |
+| 1Password 열림 | password vault | 전부 |
+| Mail compose 중 | 작성 중인 메일 본문 | 전부 |
+| 의료/법무 문서 | 환자/의뢰인 정보 | 전부 |
+
+사용자가 *의도하지 않은* 데이터가 전부 외부 vendor TLS 너머로 박힌다. Vendor TLS는 transport만 보장, server-side storage/training opt-out은 별도 — *애초에 박지 않는 것*이 유일한 결정적 보호.
+
+이게 사용자 quote 1번 ("제미나이가 다 볼거 아니냐") 의 *literal* 답: **그렇다, 다 본다**.
+
+---
+
+## 3. 사용자 우려 시간순 (전체 timeline)
+
+박는 동안 우려가 어떻게 진화했나. 18 entry 중 보안 관련 5 entry만 시간순.
+
+### 2026-05-26 — Project bootstrap (보안 미인식)
+
+Tauri 2.0 + Rust + Anthropic API 결정. 당시엔 cross-platform + 빠른 개발만 박았다. **보안을 명시적으로 고려 X**. 누구나 v0.0에서 박는 함정 — 보안은 ship 직전이 아니라 v0.0 architecture 단에서 박혀야 함 (이게 GDPR Art.25 "Privacy by Design").
+
+### 2026-05-29 23:43 — Vision Update: 5-layer 보안 명문화 (commit `5897394`)
+
+사용자가 청사진 확대: 한국 → 글로벌, 시니어 → 전부. 이 시점에 *보안 = 빅테크 대비 결정적 차별*로 인식. 5 layer 박음:
+
+| Layer | 내용 | 박힘 |
+| --- | --- | --- |
+| 1 | Secret regex masking | v0.2 박힘 (`2ffc163`) |
+| 2 | App exclusion (1Password/카카오뱅크) | v0.2 다음 |
+| 3 | Sensitive region opt-out | v0.3+ |
+| 4 | **Local-first LLM** ⭐ | v0.3-v0.4 |
+| 5 | Audit log | Phase 7.3 박힘 (`a54b121`) |
+
+이 시점엔 비전 레벨, 코드 변경 X. memory `product-vision-global-multi-platform`에 박힘.
+
+### 2026-05-30 — Pragmatic Ship Mode 결정 (commit `b5828c3`)
+
+빅테크 agent (Claude Computer Use, OpenAI Operator, Apple Intelligence)가 1-2년 내 흡수 가능 → 그 전에 user base/수익 확보 필수. v0.2 minimum viable 박음: secret masking 5-10 regex + clipboard auto. 보안 layer A/B만 v0.2, C/D/E는 v0.3-0.4.
+
+핵심 결정: **100% local-first 기다리면 빅테크 흡수**. Cloud-first ship + local-first migration path가 정답.
+
+### 2026-05-31 01:13-01:15 — SecretMasker + SessionAuditLog 박음
+
+Layer 1 + Layer 5 첫 구현. 자세한 코드는 §6에서.
+
+- `SecretMasker.swift` (10 regex pattern, commit `2ffc163`)
+- `SessionAuditLog.swift` (per-session JSON, commit `a54b121`)
+
+### 2026-05-31 12:55 — Local-first 로드맵 확정 (commit `4d57513`)
+
+사용자 quote ("출시무리인가 로컬 llm 안 쓰는 이상") → workflow `wiy4w4h3y` 5-agent local-vision-LLM survey → 3-tier Hybrid 박음:
+
+```
+v0.2 (2-4주):  Cloud Gemini + SensitivityRouter deny-list
+v0.3 (1-3개월): + Qwen2.5-VL-3B 4-bit via mlx-swift-lm
+v0.4 (WWDC26):  + Apple FM vision swap (conditional)
+```
+
+→ **v0.2 Router만으로도 Mac App Store submission 가능** 선언. ship blocker 해소.
+
+---
+
+## 4. 빅테크 사고 사례 (왜 이게 진짜 문제인지)
+
+사용자 quote 6번 ("Claude Computer Use 이런것도 얘네가 어찌 출시한거지") 의 답. 2024 말 ~ 2026 동안 박힌 사고를 정리. 5 incidents.
+
+### 4.1. Claude Computer Use — 출시 *2일 후* HiddenLayer prompt injection PoC
+
+**날짜:** 2024-10-24 (public beta는 2024-10-22)
+
+**사고:** HiddenLayer가 *indirect prompt injection*을 시연. 외부 content (파일/이메일/검색 결과)에 박힌 악성 instruction이 agent를 redirect → 사용자 권한으로 공격자 의도 행동 실행.
+
+**소스:**
+- https://hiddenlayer.com/innovation-hub/indirect-prompt-injection-of-claude-computer-use/
+- https://www.anthropic.com/news/3-5-models-and-computer-use
+
+**lesson:** Anthropic — Constitutional AI 만든 회사 — 도 day-of-launch에 PoC 박혔다. ScreenBridge는 OCR로 읽은 *모든 화면 텍스트가 적대적 input*이라고 가정해야. **화면 content는 data, never instruction**.
+
+### 4.2. Claude Code — CVE-2025-54794 (path traversal) + CVE-2025-54795 (RCE)
+
+**날짜:** 2025-08
+
+**사고:** Cymulate의 'InversePrompt' 연구:
+- CVE-2025-54794 (CVSS 7.7): path 검증 flaw — prefix matching으로 directory restriction 우회
+- CVE-2025-54795 (CVSS 8.7): command injection → 임의 코드 실행
+
+**소스:**
+- https://nvd.nist.gov/vuln/detail/CVE-2025-54794
+- https://cymulate.com/blog/cve-2025-547954-54795-claude-inverseprompt/
+
+**lesson:** "starts with" 식 string prefix는 sandboxing이 아니다. ScreenBridge의 path/permission gate는 *canonical path 비교 + deny-by-default allowlist*로 박혀야 함.
+
+### 4.3. Manus SilentBridge — CVSS 9.8 critical zero-click
+
+**날짜:** 2025
+
+**사고:** Aurascape AuraLabs disclosure. SilentBridge-Doc (CVSS 9.8): *benign* "이 문서 요약해줘" 요청이 → "zero-click agent compromise, arbitrary code execution, root-level control inside agent sandbox, high-sensitivity connector access" → Gmail 데이터 절도 + API key/secret 절도 + agent runtime root shell.
+
+**Manus waitlist 2026 기준 500,000+ 사용자** — blast radius 거대.
+
+**소스:** https://aurascape.ai/resources/auralabs-research/silentbridge-zero-click-agent-takeover-meta-manus/
+
+**lesson:** Sandbox는 깨진다. Connector (Gmail 등) 가 blast radius를 "agent did a weird thing"에서 "공격자가 내 inbox + API key 가져감"으로 증폭. **ScreenBridge v0.1은 mail/messages에 인증된 read access 통합 절대 금지** — "guide user to click" lane에만 머물러야.
+
+### 4.4. Manus credit-drain — operational 사고
+
+**사고:** runaway-loop credit drain. "Agent Mode가 monthly allocation을 *분 단위로* 다 태움". 3,200 task 분석: credit waste 72.4%가 3 패턴 (kitchen-sink prompts 31.2% / retry loops 23.8% / wrong model routing 17.4%). Trustpilot 불만 박힘. No refund.
+
+**소스:**
+- https://www.eesel.ai/blog/manus-ai-pricing
+- https://dev.to/rafsilva85/i-analyzed-10000-manus-ai-tasks-and-found-73-of-credit-waste-comes-from-just-3-patterns-iip
+
+**lesson:** Token/credit metering + hard cap on agent loop iteration은 *product safety feature*. ScreenBridge는 (a) action 당 LLM call hard-cap, (b) real-time cost meter, (c) N step 동일 state면 abort 박아야.
+
+### 4.5. Microsoft Recall — plaintext SQLite + 6개월 출시 지연
+
+**날짜:** 2024-05-30 (Beaumont disclosure), 출시 6→10→12월 지연
+
+**사고:** Kevin Beaumont가 시연: "각 snapshot의 OCR data가 plaintext SQLite DB에 저장. 사용자가 로그인된 상태에서 readable, 암호화 안 됨." 추후 다른 연구자가 fix 우회 시연 ("171 lines of code"). 소셜 미디어 "Hell no" / "Why would anybody want this feature?" 바이럴.
+
+**소스:**
+- https://doublepulsar.com/microsoft-recall-on-copilot-pc-testing-the-security-and-privacy-implications-ddb296093b6c
+- https://blogs.windows.com/windowsexperience/2024/06/07/update-on-the-recall-preview-feature-for-copilot-pcs/
+
+**결과:** Microsoft가 (a) 6월 → 10월 → 12월 launch 지연 (b) opt-in default로 재작성 (c) BitLocker at-rest 암호화 (d) Windows Hello 인증 필수. Copilot+ PC flagship launch narrative 망함.
+
+**lesson:** OCR'd screen content 저장한다면 *day one부터* encrypt at rest, biometric gate, opt-in, 공개 threat model. "we'll fix it later" 패턴은 6개월 + flagship narrative cost. **ScreenBridge: 스크린샷 default 영구 저장 X. 저장 시 Keychain-derived key로 encrypt.**
+
+### 4.6. OpenAI Operator / Atlas — "may never be fully solved" 공개 자백
+
+**날짜:** 2025-12-22
+
+**사고:** OpenAI Head of Preparedness + 공식 블로그: prompt injection은 "open challenge for agent security" / "**unlikely to ever be fully solved**". 데모: 공격자 이메일이 사용자 inbox에 들어가서 → agent가 out-of-office reply 대신 *resignation message* 전송.
+
+**소스:**
+- https://openai.com/index/hardening-atlas-against-prompt-injection/
+- https://techcrunch.com/2025/12/22/openai-says-ai-browsers-may-always-be-vulnerable-to-prompt-injection-attacks/
+
+**lesson:** OpenAI가 "fully solved 안 됨" 박았다면 ScreenBridge도 promise 못 함. **유일한 신뢰 가능 safety story = human-in-the-loop confirmation before destructive action** — 이미 ScreenBridge product thesis. *limitation*이 아니라 *feature*로 marketing.
+
+### 4.7. Apple Intelligence + PCC — *유일하게 사고 X* (대조)
+
+**Apple PCC 패턴:** stateless computation + enforceable guarantees + no privileged access + non-targetability + verifiable transparency. Custom Apple Silicon + Secure Enclave + E2E encrypted device → cloud + 요청 직후 데이터 삭제. **사전 공개 threat model + invited red team + bug bounty**.
+
+**소스:** https://security.apple.com/blog/private-cloud-compute/
+
+**lesson:** *공개 threat model + 사전 review 초대*가 Microsoft Recall "ship and patch" 의 반대. PR cost (Beaumont-style takedown) 거대 vs PR benefit (Matthew Green-style endorsement) 거대. **ScreenBridge는 public beta 전에 1-page threat model (데이터 flow / secrets / what leaves device) 박아야**.
+
+---
+
+## 5. 빅테크가 *왜 ship 가능*했나 — 4 pattern
+
+사용자 quote 6번에 대한 더 깊은 답. 빅테크 5개 product의 launch model을 비교하면 *공통 4 pattern*이 보임.
+
+### Pattern 1 — Gate by user population, not by capability
+
+| Product | Gate |
+| --- | --- |
+| Claude Computer Use | API-only + 개발자 beta flag |
+| OpenAI Operator | $200/월 ChatGPT Pro + US-only |
+| Manus | Waitlist (500k+) + credit metering |
+| Microsoft Recall | Copilot+ PC 하드웨어 + opt-in |
+| Apple Intelligence | iPhone 15 Pro+ / M-series 한정 |
+
+**모두 capability를 좁힌 게 아니라 *WHO*를 좁혔다**. 좁은 audience = manageable blast radius + concentrated telemetry + filterable abuse.
+
+**ScreenBridge implication:** open download 전에 *TestFlight 작은 beta cohort*로 ship. 사용자 식별 가능한 작은 집단에서 검증.
+
+### Pattern 2 — Pre-declare the limits in writing
+
+| Product | Label |
+| --- | --- |
+| OpenAI | "unlikely to ever be fully solved" |
+| Anthropic | "public beta" / "developer preview" |
+| Manus | "research preview" |
+| Microsoft | "preview for Insiders" |
+| Apple | "published threat model" |
+
+모든 shipper가 *사용자의 reasonable expectation of reliability*를 낮추는 라벨 박음 — 단일 가장 강한 legal + PR shield.
+
+**ScreenBridge implication:** launch label = "assistive preview, you confirm every click" — *autonomous agent* 아님.
+
+### Pattern 3 — Human-in-the-loop is the only defense everyone agrees on
+
+| Product | HITL 정도 |
+| --- | --- |
+| Google Mariner | default HITL |
+| OpenAI Atlas | hardening + admission "unsolvable" |
+| Claude CU | day-of-launch PoC, dev-only gate |
+| Manus | autonomous → SilentBridge sandbox 깨짐 |
+
+산업 합의 (revealed preference): **모델은 사용자 화면에서 unsupervised 행동 신뢰 불가**.
+
+**ScreenBridge implication:** "guide-and-confirm, never auto-click"이 *이미 산업이 검증한 safe mode* — feature로 marketing.
+
+### Pattern 4 — Persistence + plaintext = career-ending press cycle
+
+- Microsoft Recall = 스크린샷 캡처가 아니라 *plaintext SQLite*로 망함
+- Manus SilentBridge = persisted Gmail token + 공격자 도달 가능 → catastrophic
+- 라디오액티브 조합 = (a) 화면 content 저장 + (b) 공격자/타 사용자 도달 가능
+
+**ScreenBridge implication:** default로 스크린샷 disk 저장 X. 저장 시 Keychain-derived key encrypt + biometric read gate.
+
+### 4 pattern → ScreenBridge가 *같은 길 못 감*
+
+빅테크 4 pattern은 **legal/insurance/scale infrastructure가 있어야 박힘**:
+- API-only gate = Anthropic legal team이 ToS shield
+- $200/월 paywall = OpenAI가 user 식별 + arbitrage 가능
+- Sandbox VM = Operator는 cloud VM에서 격리 실행
+- Connector audit = Manus enterprise compliance review
+
+ScreenBridge = **1인 개발 + 어머님 target + Mac native**:
+- Legal team 없음 → ToS shield 약함
+- $200/월 paywall = senior 못 씀 (memory: target-user-senior-non-tech)
+- Sandbox VM = native macOS 앱 = 사용자 머신에 직접 박힘
+- Connector enterprise audit = 1인 review 불가
+
+→ **ScreenBridge는 빅테크 4 pattern 중 *어느 하나도 못 쓴다***. 다른 길 박아야. 그게 §6 5-layer 보안 architecture + §8 local-first.
+
+---
+
+## 6. ScreenBridge 5-layer 보안 architecture
+
+박힌 5 layer + 각각의 박힘/빠짐 상태.
+
+### Layer 1 — Text-level secret detection (regex) ✓ 박힘 (commit `2ffc163`)
+
+**file:** `Sources/ScreenBridge/SecretMasker.swift`
+
+10 pattern, *specific → generic* 순서 (sk-ant- 가 sk- 앞에):
+
+```swift
+// SecretMasker.swift
+static let patterns: [Pattern] = {
+    let raw: [(String, String, String)] = [
+        ("anthropic-key",      #"sk-ant-[a-zA-Z0-9_-]{20,}"#,    "[REDACTED:anthropic-key]"),
+        ("openai-project-key", #"sk-proj-[a-zA-Z0-9_-]{40,}"#,   "[REDACTED:openai-key]"),
+        ("openai-key",         #"sk-[a-zA-Z0-9]{20,}"#,          "[REDACTED:openai-key]"),
+        ("google-ai-key",      #"AIza[a-zA-Z0-9_-]{35}"#,        "[REDACTED:google-key]"),
+        ("aws-access-key",     #"AKIA[0-9A-Z]{16}"#,             "[REDACTED:aws-access-key]"),
+        ("github-pat-new",     #"github_pat_[a-zA-Z0-9_]{82}"#,  "[REDACTED:github-token]"),
+        ("korean-rrn",         #"\b\d{6}[-\s]\d{7}\b"#,          "[REDACTED:rrn]"),
+        ("credit-card",        #"\b(?:\d{4}[-\s]?){3}\d{4}\b"#,  "[REDACTED:card]"),
+    ]
+    return raw.compactMap { name, pattern, replacement in
+        guard let r = try? NSRegularExpression(pattern: pattern) else { return nil }
+        return Pattern(name: name, regex: r, replacement: replacement)
+    }
+}()
+```
+
+`AnalyzeCoordinator.run()` 경계에서 instruction + audit 양쪽 mask. *Email은 mask 제외* — 사용자 instruction "내 이메일 어디 입력?" 보존 필요.
+
+**ROI:** ~1ms regex, false positive (사용자 좌절) 영향 100배 가벼움 vs false negative (secret 유출).
+
+### Layer 2 — App-level routing (frontmost bundleID) ✗ 다음 박을 거
+
+**file (예정):** `Sources/ScreenBridge/SensitivityRouter.swift`
+
+deny-list (v0.2 박을 거):
+
+```swift
+static let defaultExcluded: Set<String> = [
+    // 비밀번호
+    "com.1password.1password7",
+    "com.1password.1password8",
+    "com.bitwarden.desktop",
+    "org.keepassxc.keepassxc",
+    "com.apple.keychainaccess",
+    // 한국 은행
+    "com.kakaobank.kakaobank",
+    "com.kbstar.kbbank",
+    "com.shinhanbank",
+    "com.kebhana.HanaOneQ",
+    "com.viva.toss",
+    "com.wooribank",
+    // 신용카드
+    "com.shinhancard",
+    "com.bccard",
+    "com.samsungcard",
+]
+
+@MainActor
+static func currentFrontmostExcluded() -> (bool: Bool, name: String?) {
+    guard let app = NSWorkspace.shared.frontmostApplication,
+          let bid = app.bundleIdentifier else { return (false, nil) }
+    return (isExcluded(bundleID: bid), app.localizedName)
+}
+```
+
+`AnalyzeCoordinator.run()` 진입 직후 호출. excluded면 early return + HUD "이 화면은 인터넷에 안 보내요". v0.2 SensitivityRouter는 *fail-closed* (불확실 시 차단) — 누락 1건 = 신뢰 영원 lose, 과차단 = 회복 가능.
+
+### Layer 2.5 — Content-level masking (OCR + AX) ✗ v0.3
+
+Layer 1/2 둘 다 통과한 case: 일반 Chrome에서 GitHub settings 페이지 열고 "내 PAT 어디?" — OCR이 `ghp_xxx` 박스 뽑아 Gemini에 보냄. Layer 2.5는 OCR 결과 각 box에 `SecretMasker.mask()` 적용 + *image pixel도 검은 사각형 fill*.
+
+```swift
+// ContentMasker.swift (v0.3 spec)
+static func apply(pngData: Data, ocrBoxes: [OCRBox], imageSize: CGSize) -> MaskedScreenInput {
+    var redactedRects: [CGRect] = []
+    let maskedBoxes: [OCRBox] = ocrBoxes.map { box in
+        let hits = SecretMasker.detect(box.text)
+        if !hits.isEmpty {
+            redactedRects.append(box.rectInSentImage)
+            return OCRBox(text: SecretMasker.mask(box.text), ...)
+        }
+        return box
+    }
+    // CGContext draw + black fillRect on redactedRects → re-encode PNG
+    ...
+}
+```
+
+`AXUIElement` 중 `role == "AXTextField" && subrole == "AXSecureTextField"`인 element는 results에 append X — secure field는 가치 0, 위험만.
+
+**Trade-off (DECISIONS.md 박을 사안):** PNG re-encode 추가 ~50-150ms latency. Latency-sensitive면 OCR text mask만, image 그대로.
+
+### Layer 3 — User-defined sensitive regions ✗ v0.3+
+
+사용자가 *주관적 민감 영역* (portfolio 위젯 / 캘린더 / 채팅 partner 이름)을 미리 박음. NSWindow drag overlay로 NSRect 그리고 UserDefaults에 저장.
+
+```swift
+struct BlackoutRegion: Codable, Hashable {
+    let id: UUID
+    let displayID: UInt32              // CGDirectDisplayID
+    let rectInDisplayPx: CGRect        // top-left origin, display px
+    let bundleIDContext: String?       // nil = 모든 앱; 값 있으면 그 앱 frontmost일 때만
+    let label: String                  // "portfolio 위젯"
+}
+```
+
+Senior 사용자한테 "빨간 박스 친 곳은 안 봐" 가 가장 직관적 trust UI. 추상적 "AI privacy" 설명보다 효과적.
+
+**Risk:** display ID는 monitor 재연결 시 변함. mitigation = displayID + display name + resolution fingerprint.
+
+### Layer 4 — Local LLM ⭐ ✗ v0.3 (Qwen2.5-VL-3B) / v0.4 (Apple FM)
+
+**가장 결정적 차별 layer**. §8에서 자세히.
+
+protocol 박혀있어 swap 30분-2일:
+
+```swift
+// LLMDispatcher protocol — Gemini / Claude / Local 동일 인터페이스
+protocol LLMDispatcher {
+    func analyze(imageData: Data, imageSize: CGSize, instruction: String)
+        async throws -> AnalysisResult
+}
+
+actor LocalDispatcher: LLMDispatcher {
+    enum Backend {
+        case appleFoundationModels   // macOS 18+
+        case mlxQwen25VL3B           // fallback
+    }
+    ...
+}
+```
+
+### Layer 5 — Audit log ✓ 박힘 (commit `a54b121`), v0.3에서 암호화
+
+**현재 박힌 형태:** per-session JSON file. `~/Library/Application Support/com.screenbridge.app/sessions/<uuid>.json`. atomic write. outcome + step summary 기록 — **screenshot 절대 X** (Phase 7.0 bounded growth 결정 일관).
+
+```swift
+// SessionAuditEntry.swift (현재)
+struct SessionAuditEntry: Codable {
+    let sessionID: UUID
+    let startedAt: Date
+    let endedAt: Date?
+    let outcome: Outcome   // inProgress / completed / cancelledByUser / cancelledByTimeout / error
+    let instruction: String  // SecretMasker.mask() 통과 후
+    let steps: [StepSummary]
+}
+```
+
+**v0.3 박을 거 — AES-GCM 암호화 + Keychain biometry:**
+
+```swift
+// EncryptedAuditLog.swift (v0.3 spec)
+enum AuditKeychain {
+    static func getOrCreateKey() throws -> SymmetricKey {
+        if let existing = try load() { return existing }
+        let key = SymmetricKey(size: .bits256)
+        try store(key)  // kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+                        // + biometryCurrentSet (Touch ID 변경 시 invalidate)
+        return key
+    }
+}
+
+enum EncryptedAuditLog {
+    static func save(_ entry: SessionAuditEntry) throws {
+        let key = try AuditKeychain.getOrCreateKey()
+        let plaintext = try JSONEncoder().encode(entry)
+        let sealed = try AES.GCM.seal(plaintext, using: key)
+        let path = dir.appendingPathComponent("\(entry.sessionID).json.enc")
+        try sealed.combined?.write(to: path, options: .atomic)
+        // iCloud sync 차단
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? path.setResourceValues(values)
+    }
+
+    static func rotate(olderThanDays days: Int = 7) {
+        // 7일 후 자동 삭제 — GDPR Art.5(1)(e) data minimization
+        ...
+    }
+}
+```
+
+**GDPR 정합:**
+- Art.5(1)(e) Storage Limitation → 7일 rotation
+- Art.17 Right to Erasure → Settings "전부 삭제" 버튼
+- Art.32 Security of Processing → AES-256-GCM + Keychain
+
+### 5-layer 정리 (v0.2 → v0.3 → v0.4)
+
+| Layer | v0.1 | v0.2 (지금) | v0.3 | v0.4 |
+| --- | --- | --- | --- | --- |
+| 1. SecretMasker regex | | ✓ `2ffc163` | (확장) | |
+| 2. SensitivityRouter | | ✗ 다음 commit | | |
+| 2.5. ContentMasker | | | ✓ 박을 거 | |
+| 3. BlackoutRegion | | | ✓ 박을 거 | |
+| 4. LocalDispatcher | | | ✓ Qwen | ✓ Apple FM swap |
+| 5. SessionAuditLog | | ✓ `a54b121` | ✓ encrypt | |
+
+---
+
+## 7. Apple 모델 따라가기 결정
+
+사용자 quote 5번 ("내 컴터에 각종 은행정보나 오만가지가 있을텐데 나는 왜 아무의심없이 맥북을 쓴걸까") 의 답.
+
+**사용자 자기 audit이 product target user trust model을 자기 자신에 dogfooding한 것**. 1인 개발자가 자기 의심 박은 순간 = ScreenBridge의 *진짜 fit* 검증 시작점.
+
+### 왜 맥북은 trust되나 — Apple 5 요소
+
+| 요소 | macOS | ScreenBridge 박을 path |
+| --- | --- | --- |
+| On-device 우선 | Foundation Model, Secure Enclave | Layer 4 Local LLM (v0.3 Qwen / v0.4 Apple FM) |
+| Private Cloud Compute | Apple 자사 PCC | Layer 7 Hybrid (image=local, knowledge=cloud opt-in) |
+| Encryption | FileVault / Keychain | Layer 5 AES-GCM + Keychain biometry |
+| Granular permission | TCC (Screen Recording / AX) | 기존 박힘 (Phase 3.1) |
+| App Store review | Privacy nutrition labels | Mac App Store submission (v0.2) |
+
+→ **ScreenBridge가 같은 5 요소 박는 path가 v0.2-v0.4 로드맵의 backbone**.
+
+### "data leaves device or not" 단일 축
+
+사용자 자기 audit 결론:
+- macOS = OS-level Apple sandbox + Secure Enclave + 검증된 chain (privacy nutrition labels, code signing, Gatekeeper). **데이터가 device 안에 머묾**.
+- 외부 SaaS LLM = 그 chain *밖*에 있는 새 trust 축. **데이터가 device 밖으로 명시적으로 나감**.
+
+ScreenBridge v0.4 Apple FM swap 시 → Apple 보안 인증 (privacy nutrition labels) 활용 가능 → *OS-level trust chain 안*으로 들어감.
+
+v0.3 Qwen local도 device 밖 X → 같은 분리.
+
+---
+
+## 8. 진짜 답 — Local-first
+
+사용자 quote 7번 ("로컬 llm이 비서가 될 수 있을까 성능 병신일거같은데") 의 답.
+
+### 5-agent local-vision-LLM survey (`wiy4w4h3y`)
+
+8 model option cross-reference:
+
+| Model | Vision | RAM | Disk | M1 8GB | Swift | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| Apple FM (~3B) | ❌ vision API 막힘 | ~2GB shared | 0 (system) | OK | native | **WWDC26 (~3주 후) 기다림** |
+| **Qwen2.5-VL-3B 4-bit** ⭐ | ✓ native | 3-4GB peak | 1.9-2.2GB | 빠듯 가능 | mlx-swift-lm | **현실 유일 path** |
+| Llama 4 Scout 17B | ✓ | **32GB+** | 55-67GB | ❌ | 없음 | 어머님 탈락 + EU license |
+| MiniCPM-V 2.6 8B | ✓ | 6-7GB | 4.5-5GB | ❌ | Python subprocess | M1 8GB 불가 |
+| Moondream 2/3 1.9B | ✓ | 2.5-3GB | 1.8GB | OK | Swift binding 없음 | binary 깨짐 |
+| Gemma 3 4B | ✓ (SigLIP) | 3.6-4.3GB | 2.1-2.8GB | 빠듯 | swift-gemma-cli | maintainer risk + responseSchema 부재 |
+| Florence-2 0.77B | classifier only | <1GB | 470MB | OK | Core ML | Q&A 안 됨 |
+| InternVL 2.5-4B | ✓ | 4-5GB | 2.5GB | 불가 | wrapper 약함 | M1 8GB 불가 |
+
+**결론: Qwen2.5-VL-3B 4-bit 1개**. 5 dimension 모두 통과: vision ✓ / Swift native ✓ / M1 8GB 가능 ✓ / disk 작음 ✓ / Probe D-prime week 1 GO/NO-GO.
+
+### "최신 내용 모름" 답
+
+ScreenBridge task는 *vision-to-structured-output* (좁은 domain) — chat assistant 아님. "screen capture + 'click 어디?' 응답" = Qwen2.5-VL-3B-Instruct fit. Vision OCR + AXUIElement deterministic source ("99% 정확도 architecture" DECISIONS.md)가 local LLM 부담 줄임 — 좌표는 LLM 추정 X.
+
+### 3-tier Hybrid 로드맵
+
+**v0.2 (오늘~2-4주, ship blocker 풀이)**
+
+```
+Cloud Gemini default + SensitivityRouter (Layer 2)
+  ↓ bundleID deny-list 매칭
+"이 화면은 인터넷에 안 보내요" alert + 차단 (fail-closed)
+  ↓ (v0.3까지 차단)
+사용자 보안 우려 즉시 부분 답 + Mac App Store submission 가능
+```
+
+**v0.3 (1-3개월, local 본격)**
+
+```
+SensitivityRouter 결정 → 민감 화면 진입 시
+  ↓
+"local mode 켜는 중..." (cold start 2-4s)
+  ↓
+QwenLocalDispatcher (mlx-swift-lm)
+  ↓
+Cloud egress 0 (sensitive class)
+```
+
+M1 8GB load-on-demand / 16GB+ resident. First-launch background download 2GB (resumable).
+
+**v0.4 (WWDC26 dependent, ~6월 중순)**
+
+```
+Apple FM vision API 발표 시
+  ↓
+FoundationModelDispatcher 12-24h swap
+  ↓
+0GB disk / 0GB RAM / 2-4s / offline / free
+  ↓
+어머님 fit 완벽
+```
+
+미발표면 Qwen 영구 path. **v0.2 timeline 결정 무영향** (vendor roadmap 미의존).
+
+### Hybrid Architecture — Local image + Cloud knowledge (opt-in)
+
+Layer 4만 쓰면 정확도/지식 천장 (~70-80%, 최신 앱 UI 모름). 두 단계 분리:
+
+```swift
+// HybridAnalyzeCoordinator.swift (model code)
+actor HybridAnalyzeCoordinator {
+    func run(maskedImage: Data, imageSize: CGSize, instruction: String) async throws -> HybridAnalysisOutput {
+        // Step (a) — local만. 사용자 데이터 전부 device 안.
+        let local = try await localDispatcher.analyze(...)
+
+        // Step (b) — optional cloud. *공개 식별자만* 보냄.
+        guard cloudKnowledgeEnabled,
+              let appLabel = local.detectedAppLabel,   // "Visual Studio Code"
+              let intent = local.normalizedIntent      // "open_settings"
+        else { return ... localOnly ... }
+
+        let publicQuery = """
+        앱: \(appLabel)
+        목적: \(intent)
+        일반적으로 어떻게 진행되는지 한 줄로 설명.
+        (사용자 식별자/스크린샷 X — 공개 매뉴얼만 참고.)
+        """
+        let enrichment = try await cloud.knowledgeQuery(text: publicQuery)
+        return HybridAnalysisOutput(
+            result: AnalysisResult.merge(local: local, cloudHint: enrichment),
+            localCalls: 1, cloudCalls: 1,
+            cloudPayloadDigest: "앱이름=\(appLabel), 의도=\(intent)"  // HUD 표시
+        )
+    }
+}
+```
+
+**Privacy receipt UX:** HUD에 "local 1회, cloud 0회" 매 분석마다 정직히 표시. 사용자 trust mental model 깨지면 신뢰 무너짐.
+
+### Cost 분석
+
+| Path | API cost | RAM | Latency | Accuracy |
+| --- | --- | --- | --- | --- |
+| v0.2 Cloud-only Gemini | $0 free 250 RPD | 0 | 8-15s | 85-90% |
+| v0.3 Qwen local | 0 | 3-4GB peak | cold 2-4s + 6-10s | ~70-80% target |
+| v0.4 Apple FM | 0 | shared | 2-4s | ~85% (예상) |
+| Hybrid (Qwen + cloud knowledge) | $0.001/call | 3-4GB | local + 2-5s | ~85%+ |
+
+---
+
+## 9. 박은 거 정리 (2026-05-31 현재)
+
+33 commits (Phase 0.0 ~ Phase 7.3) 누적.
+
+### 보안 관련 박힌 거
+
+| Commit | 박힘 | Layer |
+| --- | --- | --- |
+| `5897394` | Product vision 5-layer 명문화 (2026-05-29) | — vision |
+| `b5828c3` | Pragmatic ship mode 결정 (2026-05-30) | — strategy |
+| `a54b121` | SessionAuditLog per-session JSON (2026-05-31 01:13) | Layer 5 첫 구현 |
+| `2ffc163` | SecretMasker 10 regex pattern (2026-05-31 01:15) | Layer 1 첫 구현 |
+| `4d57513` | Local-first 로드맵 + 3-tier Hybrid 확정 (2026-05-31 12:55) | — roadmap |
+
+### 5 layer 중 박힌 거 vs 빠진 거
+
+| Layer | 상태 |
+| --- | --- |
+| 1. SecretMasker regex | ✓ v0.2 박힘 |
+| 2. SensitivityRouter | ✗ 다음 commit (1-2h) |
+| 2.5. ContentMasker (OCR/AX redact) | ✗ v0.3 |
+| 3. BlackoutRegion (user-defined) | ✗ v0.3+ |
+| 4. LocalDispatcher (Qwen / Apple FM) | ✗ v0.3 (Qwen) / v0.4 (Apple FM) |
+| 5. SessionAuditLog | ✓ Phase 7.3 박힘 (encrypt는 v0.3) |
+
+→ **2/5 박힘**. Layer 2 (SensitivityRouter)가 다음 *1-2h* 박을 거 — v0.2 ship blocker 즉시 풀이.
+
+### 보안과 직결되지 않지만 박힌 architectural 결정
+
+| Phase | 결정 | 보안 관련 효과 |
+| --- | --- | --- |
+| Phase 7.0 | Irreversible-action 2-layer gate (LLM `requires_confirmation` OR backend keyword) | 송금/결제/삭제 fail-closed |
+| Phase 7.0 | Bounded context growth (rolling text summary, 30 words × 3 step) | screenshot history 누적 X |
+| Phase 7.0 | Hotkey state-aware branching (same ⌥+Space) | session interrupt 차단 |
+| Phase 7.2 | Gemini 429 → Claude FallbackDispatcher | 서비스 안정성 |
+| Phase 7.2.1 | Hotkey 200ms throttle (Probe C race guard) | RPM burst 차단 |
+
+---
+
+## 10. 다음 박을 거 — roadmap
+
+### v0.2 Phase 8.0 (다음 commit, 1-2h)
+
+`SensitivityRouter.swift` 박을 거:
+
+```swift
+enum LLMRoutingDecision {
+    case cloud
+    case localOnly
+    case blockedLocalModelNotInstalled
+}
+
+struct SensitivityRouter {
+    static func decide(frontmostBundleID: String?) -> LLMRoutingDecision {
+        guard let bid = frontmostBundleID else { return .cloud }
+        if AppExclusionService.isExcluded(bundleID: bid) {
+            // v0.3 전까지는 blockedLocalModelNotInstalled
+            return .blockedLocalModelNotInstalled
+        }
+        return .cloud
+    }
+}
+```
+
+`AnalyzeCoordinator.run()` capture 후 dispatcher 호출 전 통과. blocked → UserMessage "이 화면은 인터넷에 안 보내요". 사용자 alert + 차단.
+
+### v0.2 Phase 9.0 Week 1 — Qwen Probe D-prime (GO/NO-GO)
+
+5장 fixture sanity check:
+1. Chrome settings 페이지
+2. VS Code preferences
+3. Finder window
+4. 카톡 desktop
+5. macOS Settings
+
+→ Qwen2.5-VL-3B accuracy <70%면 cloud-only fallback. ≥70%면 v0.3 진행.
+
+### v0.3 (1-3개월)
+
+- `QwenLocalDispatcher.swift` (mlx-swift-lm)
+- Model download UX (2GB resumable background, SettingsView 진행률)
+- M1 감지 (8GB load-on-demand / 16GB+ resident)
+- ContentMasker (Layer 2.5) — OCR result에 SecretMasker 재적용 + image pixel redact
+- BlackoutRegion (Layer 3) — NSWindow drag overlay UI
+- EncryptedAuditLog (Layer 5 v0.3) — AES-GCM + Keychain biometry + 7일 rotation
+- SettingsView "Privacy mode: Local only / Hybrid / Cloud OK" 3-state
+
+### v0.4 (WWDC26 dependent, ~6월 중순)
+
+WWDC26 (~3주 후) keynote 기다림:
+
+- Apple FM vision API 발표 → `FoundationModelDispatcher.swift` 12-24h swap
+- 미발표 → Qwen 영구 path
+- v0.2 일정 0 영향
+
+### Hedge
+
+Apple FM 발표 안 되면? → Qwen2.5-VL-3B + v0.3 Phase 9.0 GO/NO-GO 결과대로. v0.4 timeline은 *bonus* — 영향 X.
+
+---
+
+## 11. 다른 사람을 위한 lesson
+
+비슷한 vision-LLM agent 박을 사람을 위한 transferable lesson.
+
+### 1. Local-first가 진짜 답 (그러나 *cloud-first ship + migration* 박아라)
+
+100% local 기다리면 빅테크 흡수 (1-2년 윈도우). Cloud-first ship + local migration path 박는 게 정답.
+
+protocol-based dispatcher 박혀있어야 swap 30분-2일에 박힘:
+
+```swift
+protocol LLMDispatcher {
+    func analyze(imageData: Data, imageSize: CGSize, instruction: String)
+        async throws -> AnalysisResult
+}
+```
+
+### 2. Cloud-first ship 위험 — Fail-closed routing이 필수
+
+Cloud-first ship 시 *deny-list + audit log* 없이 출시하면:
+- 1Password / 카카오뱅크 / Mail compose 화면이 통째 외부 vendor 서버에
+- enterprise pilot 불가
+- senior 사용자 trust 0
+
+**Fail-closed routing > 100% local** (감사 가능성 측면). 기업 컴플라이언스: "deny-list 매치 시 무조건 on-device, fail-closed"가 더 강함.
+
+### 3. Apple 모델 따라가기 (5 요소)
+
+- On-device 우선 (Foundation Model)
+- Private Cloud Compute (Apple 자사)
+- Encryption (FileVault / Keychain)
+- Granular permission (TCC)
+- App Store review (Privacy nutrition labels)
+
+ScreenBridge의 5-layer 보안이 이 5 요소를 미러링.
+
+### 4. 빅테크 사고 학습
+
+| 사고 | Lesson |
+| --- | --- |
+| Claude CU day-of-launch PoC | 화면 content = data, never instruction |
+| Claude Code CVE prefix matching | canonical path 비교 + deny-by-default |
+| Manus SilentBridge CVSS 9.8 | Connector = blast radius multiplier |
+| Manus credit-drain | Hard cap on loop + cost meter |
+| Microsoft Recall plaintext | Day-one encrypt + biometric + opt-in |
+| OpenAI Atlas "unsolvable" | HITL = 유일 신뢰 가능 safety story |
+| Apple PCC | 공개 threat model + invited red team |
+
+### 5. Conservative bias
+
+**False positive (사용자 좌절) < False negative (secret 유출) × 100**.
+
+의심 시 차단/redact. 매주 자동 fuzz test로 누락 monitor. 누락 1건 = 신뢰 영원 lose.
+
+### 6. Privacy receipt UX
+
+"무엇이 어디 갔나" 매 분석마다 사용자에게 정직히 표시:
+
+```
+HUD: local 1회, cloud 0회 (이번 분석)
+     보낸 거: 앱이름=Visual Studio Code, 의도=open_settings
+```
+
+사용자 trust mental model 깨지면 신뢰 무너짐. Hybrid는 *boundary clarity*가 핵심.
+
+### 7. Data minimization (GDPR Art.5(1)(c)/(e))
+
+- audit log 7일 rotation
+- screenshot disk 영구 저장 X
+- instruction raw 보존 X
+
+"필요 이상 가지지 않는다"가 보안의 절반.
+
+### 8. Privacy by design (GDPR Art.25)
+
+5-layer는 v1.0 ship *전*에 모두 박혀야 함. v1.0 후 add-on 박으면 already-shipped data 처리 분쟁 (마이그레이션 비용 폭발).
+
+ScreenBridge에서 v0.0에 보안 미인식 → v0.2 시점에 박기 시작 = *늦은 편*. 다른 사람은 v0.0에 5-layer skeleton 박고 시작 권장.
+
+---
+
+## 12. 박을 거 — Reference
+
+### ScreenBridge 내부 doc
+
+- `docs/playbooks/security-for-screen-llm-agents.md` (박을 거, v0.3) — 7-stage transferable playbook
+- `DECISIONS.md` — 박힌 trade-off 결정들
+- `TROUBLESHOOTING.md` — 박힌 디버그 narrative
+- `PROJECT_TIMELINE.md` — 시간순 전체 history
+- `content/logs/jarvis-pc/2026-05-31-local-first-roadmap.mdx` — 3-tier Hybrid 결정 상세
+- `content/logs/jarvis-pc/2026-05-30-multi-target-overlay.mdx` — 95% effective accuracy
+- `content/logs/jarvis-pc/2026-05-29-99-percent-accuracy-architecture.mdx` — deterministic source
+
+### 빅테크 사고 source URL
+
+- Claude Computer Use prompt injection (HiddenLayer)
+  - https://hiddenlayer.com/innovation-hub/indirect-prompt-injection-of-claude-computer-use/
+- Claude Code CVE
+  - https://nvd.nist.gov/vuln/detail/CVE-2025-54794
+  - https://cymulate.com/blog/cve-2025-547954-54795-claude-inverseprompt/
+- Manus SilentBridge
+  - https://aurascape.ai/resources/auralabs-research/silentbridge-zero-click-agent-takeover-meta-manus/
+- Manus credit-drain
+  - https://www.eesel.ai/blog/manus-ai-pricing
+  - https://dev.to/rafsilva85/i-analyzed-10000-manus-ai-tasks-and-found-73-of-credit-waste-comes-from-just-3-patterns-iip
+- Microsoft Recall
+  - https://doublepulsar.com/microsoft-recall-on-copilot-pc-testing-the-security-and-privacy-implications-ddb296093b6c
+  - https://blogs.windows.com/windowsexperience/2024/06/07/update-on-the-recall-preview-feature-for-copilot-pcs/
+- OpenAI Atlas "unsolvable"
+  - https://openai.com/index/hardening-atlas-against-prompt-injection/
+  - https://techcrunch.com/2025/12/22/openai-says-ai-browsers-may-always-be-vulnerable-to-prompt-injection-attacks/
+- Apple PCC
+  - https://security.apple.com/blog/private-cloud-compute/
+  - https://security.apple.com/blog/pcc-security-research/
+
+### 표준 / 법적 reference
+
+- OWASP Cryptographic Storage Cheat Sheet
+  - https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
+- GitHub Secret Scanning patterns
+  - https://docs.github.com/en/code-security/secret-scanning/secret-scanning-patterns
+- GDPR Art.5 (principles), Art.17 (erasure), Art.25 (privacy by design), Art.32 (security)
+  - https://gdpr-info.eu/
+- 한국 개인정보보호법 제21조 (파기) / 제23조 (민감정보)
+- NIST SP 800-38D (GCM mode spec)
+  - https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38d.pdf
+
+### Apple SDK
+
+- Foundation Models (WWDC25, vision API WWDC26 dependent)
+  - https://developer.apple.com/documentation/foundationmodels
+- CryptoKit AES-GCM
+  - https://developer.apple.com/documentation/cryptokit/aes/gcm
+- Keychain Services
+  - https://developer.apple.com/documentation/security/ksecattraccessiblewhenunlockedthisdeviceonly
+- Vision VNRecognizeTextRequest
+  - https://developer.apple.com/documentation/vision/vnrecognizetextrequest
+- NSWorkspace.frontmostApplication
+  - https://developer.apple.com/documentation/appkit/nsworkspace/1532097-frontmostapplication
+
+### Local LLM
+
+- MLX Swift — https://github.com/ml-explore/mlx-swift
+- MLX Swift Examples (VLMEval) — https://github.com/ml-explore/mlx-swift-examples
+- Qwen2.5-VL — https://qwenlm.github.io/blog/qwen2.5-vl/
+- Llama 4 Scout — https://ai.meta.com/blog/llama-4-multimodal-intelligence/
+- Gemma 3 — https://ai.google.dev/gemma
+
+---
+
+## 한 줄 마무리
+
+**사용자 quote 8개가 박힌 진짜 질문 = "내가 이 product 출시 후 *책임* 어떻게 지나"**.
+
+답: 5-layer 보안 + 3-tier Hybrid 로드맵 + Apple 5 요소 따라가기 + Conservative bias + Privacy receipt UX. v0.2 SensitivityRouter (다음 1-2h commit) + 기존 Layer 1/5로 Mac App Store submission 가능. v0.3 Qwen + v0.4 Apple FM에서 *결정적 차별* (user-in-the-loop + local-first 두 축) 완성.
+
+빅테크는 같은 architecture로 ship했으나 *legal/insurance/scale*로 박았다. ScreenBridge = 1인 + 어머님 target → 다른 길 (5-layer + Apple 패턴 + local-first) 박아야. 그게 이 문서.
