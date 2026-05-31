@@ -136,4 +136,33 @@ struct GeminiDispatcherTests {
         #expect(result.targetText == "Add SSH key")
         #expect(result.nextAction.contains("여기"))
     }
+
+    // MARK: - Phase 7.1.5 — parseRetryAfterFromBody (429 quota respect)
+
+    @Test("parseRetryAfterFromBody — Gemini 실제 quota body extract")
+    func parseRetryAfterRealBody() {
+        let body = #"{"message": "Quota exceeded for metric: ... limit: 20, model: gemini-2.5-flash\nPlease retry in 29.667199528s.", "code": 429}"#
+        let result = GeminiDispatcher.parseRetryAfterFromBody(body)
+        #expect(result == 29.667199528)
+    }
+
+    @Test("parseRetryAfterFromBody — 정수 초")
+    func parseRetryAfterInt() {
+        let body = "Please retry in 30s"
+        #expect(GeminiDispatcher.parseRetryAfterFromBody(body) == 30.0)
+    }
+
+    @Test("parseRetryAfterFromBody — body에 없으면 nil (exp backoff fallback)")
+    func parseRetryAfterMissing() {
+        #expect(GeminiDispatcher.parseRetryAfterFromBody("Rate limit exceeded, try later") == nil)
+        #expect(GeminiDispatcher.parseRetryAfterFromBody("") == nil)
+        #expect(GeminiDispatcher.parseRetryAfterFromBody("{\"error\": \"unknown\"}") == nil)
+    }
+
+    @Test("parseRetryAfterFromBody — 짧은 wait (1.5초)")
+    func parseRetryAfterShort() {
+        let body = "Please retry in 1.5s"
+        let result = GeminiDispatcher.parseRetryAfterFromBody(body)
+        #expect(result == 1.5)
+    }
 }

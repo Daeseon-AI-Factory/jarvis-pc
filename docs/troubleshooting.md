@@ -370,3 +370,16 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Commit**: (Phase 7.0 — 다음 commit에 hash 갱신)
 - **Pattern**: 큰 architecture 변화는 *scaffold-first* — additive 필드 + enum만 commit, behavior wire는 다음 commit. revert 비용 작게 (15분 안). Workflow design (4 trigger model 비교 + research + synthesis)으로 *과도 design 회피* — 가장 큰 ROI 답 (X hybrid) 자연 박힘.
 
+---
+
+## Gemini 429 retry burst — exp backoff가 "Please retry in Xs" 무시 → quota burn 더 빨리
+
+- **Symptom**: 사용자 dogfooding 중 "여러 번 시도했지만 실패" error 반복. log show 박힌 retry body:
+  ```
+  body={"message": "Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20, model: gemini-2.5-flash\nPlease retry in 29.667199528s.", "code": 429}
+  ```
+- **Cause**: 우리 retry는 1/2/4s exp backoff (3 attempts) — Gemini가 *30초 기다리라* 명시했는데 7초 안에 3 retries 강행. *각 retry도 429* → 사용자 1 task당 4 calls burn (initial + 3 retries) → 20 RPM 더 빨리 도달. Gemini 2.5 Flash 무료 분당 한도 *20 RPM* (이전 추정 10 RPM은 부정확). 또 사용자 dogfooding 자주 재실행 + prewarm + multi-target overlay로 호출 자체가 많아짐.
+- **Fix**: GeminiDispatcher.sendWithRetry에 `parseRetryAfterFromBody(_:)` regex 추가 — body에서 `"Please retry in <num>s"` extract → 그 시간 + jitter wait (cap 60s). 429 시 exp backoff 안 함. maxAttempts 3 → 2 (Gemini 시간 기다린 후 1번 재시도만, 또 429면 fail). UserMessage.retriesExhausted lastStatus=429 분리 → "Gemini 무료 분당 한도(20회). 30초 후 다시 시도하거나 GCP 결제 활성화 (1달러 미만)". GeminiDispatcherTests에 4 parseRetryAfter tests.
+- **Commit**: (다음 commit hash 갱신)
+- **Pattern**: vendor가 *retry-after 명시*하면 *그 시간 respect 무조건*. exp backoff는 vendor 침묵 시 fallback. retry-after 무시는 vendor quota burn + 사용자 더 오래 막힘. Korean Gemini docs는 RPM 한도 자주 변경 (10→20→...) — 본 코드에서 hardcoded 한도 박지 X, error message에 *Gemini가 직접 알려준 시간* 사용. Universal: any rate-limited API의 first principle — "server tells you when, you listen".
+

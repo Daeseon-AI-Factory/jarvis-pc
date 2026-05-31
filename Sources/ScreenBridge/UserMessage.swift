@@ -33,6 +33,9 @@ enum UserMessage {
         case .maxTokens:
             return "응답이 너무 길어요. 화면이 복잡하면 좀 더 단순한 부분으로 다시 시도해주세요."
 
+        case .retriesExhausted(let lastStatus) where lastStatus == 429:
+            return "Gemini 무료 분당 한도(20회)에 도달했어요. 30초 후 다시 시도하거나,\nGCP Console에서 결제 활성화하면 풀려요 (실제 비용 1달러 미만)."
+
         case .retriesExhausted:
             return "여러 번 시도했지만 실패했어요. 잠시 후 다시 시도해주세요."
         }

@@ -121,11 +121,16 @@ actor GeminiDispatcher: LLMDispatcher {
         return result.withRaw(text)
     }
 
-    /// Exp backoff retry: 429/500/502/503/504 only. 1/2/4s + jitter. max 3 attempts.
-    /// 400/401/403 등은 fail fast (재시도 무의미).
+    /// Retry policy:
+    /// - 429: Gemini가 body에 `"Please retry in Xs"` 명시 → *그 시간* respect (cap 60s).
+    ///   exp backoff (1/2/4s)는 명시 시간 무시 → quota burn 더 빨리 (실제 dogfooding 발견).
+    /// - 5xx: exp backoff 1/2/4s (server-side issue).
+    /// - max 2 attempts (이전 3 → 2) — Gemini가 30s 기다리라 했는데 우리 retry burst가
+    ///   더 많은 429 발생. 첫 429 시 *시간 기다림 + 1번만 재시도*.
+    /// - 400/401/403 등은 fail fast.
     private func sendWithRetry(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let retryableStatuses: Set<Int> = [429, 500, 502, 503, 504]
-        let maxAttempts = 3
+        let maxAttempts = 2
 
         for attempt in 1...maxAttempts {
             let data: Data
@@ -151,17 +156,41 @@ actor GeminiDispatcher: LLMDispatcher {
             }
             if attempt == maxAttempts {
                 Log.dispatcher.error(
-                    "[gemini] retries exhausted last=\(httpResp.statusCode, privacy: .public)"
+                    "[gemini] retries exhausted last=\(httpResp.statusCode, privacy: .public) body=\(body.prefix(500), privacy: .public)"
                 )
                 throw DispatcherError.retriesExhausted(lastStatus: httpResp.statusCode)
             }
-            let backoffSec = pow(2.0, Double(attempt - 1)) + Double.random(in: 0...0.3)
-            Log.dispatcher.notice(
-                "[gemini] retry \(attempt, privacy: .public)/\(maxAttempts, privacy: .public) in \(String(format: "%.1f", backoffSec), privacy: .public)s (status=\(httpResp.statusCode, privacy: .public))"
-            )
-            try await Task.sleep(nanoseconds: UInt64(backoffSec * 1_000_000_000))
+            // Retry wait: 429는 Gemini 명시 시간 / 5xx는 exp backoff.
+            let waitSec: Double
+            if httpResp.statusCode == 429, let geminiWait = Self.parseRetryAfterFromBody(body) {
+                waitSec = min(geminiWait + Double.random(in: 0...0.5), 60.0)
+                Log.dispatcher.notice(
+                    "[gemini] 429 quota — Gemini가 명시한 시간 wait: \(String(format: "%.1f", waitSec), privacy: .public)s (raw=\(String(format: "%.1f", geminiWait), privacy: .public)s) body=\(body.prefix(200), privacy: .public)"
+                )
+            } else {
+                waitSec = pow(2.0, Double(attempt - 1)) + Double.random(in: 0...0.3)
+                Log.dispatcher.notice(
+                    "[gemini] retry \(attempt, privacy: .public)/\(maxAttempts, privacy: .public) in \(String(format: "%.1f", waitSec), privacy: .public)s (status=\(httpResp.statusCode, privacy: .public)) body=\(body.prefix(200), privacy: .public)"
+                )
+            }
+            try await Task.sleep(nanoseconds: UInt64(waitSec * 1_000_000_000))
         }
         throw DispatcherError.retriesExhausted(lastStatus: 0)
+    }
+
+    /// Gemini 429 response body의 `"Please retry in X.Xs"` parse.
+    /// 예: "Please retry in 29.667199528s." → 29.67
+    /// nil이면 caller가 exp backoff fallback.
+    static func parseRetryAfterFromBody(_ body: String) -> Double? {
+        // Regex: "Please retry in <number>s"
+        let pattern = #"Please retry in\s+([0-9]+(?:\.[0-9]+)?)s"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsBody = body as NSString
+        let range = NSRange(location: 0, length: nsBody.length)
+        guard let match = regex.firstMatch(in: body, options: [], range: range),
+              match.numberOfRanges >= 2 else { return nil }
+        let numStr = nsBody.substring(with: match.range(at: 1))
+        return Double(numStr)
     }
 
     // MARK: - Request body construction
