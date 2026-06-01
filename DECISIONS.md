@@ -1059,6 +1059,10 @@ short text false positive 차단 (wrong-box 위험 가장 큼 — bubble UX 직�
 
 **[fixtures/sensitive_screens/ .gitignore *.png + README + instructions.json]**: 사용자 본인 dogfooding fixture (1Password / 카카오뱅크 / Mail / Slack / Notion 5장)는 *개인정보* — git commit 안 됨. 옵션 = (a) 모두 commit (synthetic fake 만들기) / (b) 모두 commit X (fixture 없음) / (c) **README + instructions.json만 commit, *.png는 .gitignore**. 선택 (c) — 사용자가 *실제 본인 화면*에서 박음 (Probe D-prime 진짜 정확도), instructions.json은 expected target + role + irreversible flag 박힘, README는 박는 방법 + GO/NO-GO criteria. *되돌리기 비용*: fixtures/sensitive_screens/ directory 삭제 — 1분.
 
+**[QwenLocalDispatcher.analyze() mid-level path over ChatSession]**: MLXVLM 두 inference API = (a) ChatSession high-level (simpler, instructions: + respond(to:)) / (b) **mid-level container.perform + MLXLMCommon.generate(...)** (explicit GenerateParameters + .info event 직접 access). 선택 (b) — Phase 9 Probe D-prime GO/NO-GO에 *tokens/sec + token count 측정 필수* (ChatSession은 streamDetails(...) 안에 숨김), GenerateParameters를 *property assignment*로 정확 박음 (temperature 0.0, topP 0.001, maxTokens 512 — greedy-ish JSON). API drift 박은 거 4개 fix: (1) `images:` parameter 없음 → `Chat.Message.user(_:images:)` 안 박음 (2) `topK` 없음 → temperature 0 + topP 0.001로 effective greedy (3) `GenerateCompletionInfo.stopReason` 없음 → tokensPerSecond + tokens count만 log (4) `Memory.cacheLimit` 없음 → `MLX.GPU.set(cacheLimit:)` 사용. *되돌리기*: ChatSession path로 swap 30분.
+
+**[Direct mlx-swift dep — transitive resolve X]**: mlx-swift-examples 박았는데 *MLX product re-export X* (transitive only). 옵션 = (a) `Memory.cacheLimit` (cache cap) 박지 X — OOM risk M1 8GB / (b) **mlx-swift 직접 dep 추가 + `.product(name: "MLX", package: "mlx-swift")`**. 선택 (b) — 5MB resolve 추가 비용, cache cap 박을 수 있음 (OOM 방지 critical). 또: MLX.GPU.set(cacheLimit:) API path 확인 후 wire. *되돌리기*: Package.swift 2줄 — 1분.
+
 ---
 
 (다음 trade-off는 여기에 append. crate/모듈/패턴/dependency 선택은 5분짜리도 다 기록.)

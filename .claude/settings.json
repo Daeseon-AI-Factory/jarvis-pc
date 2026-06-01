@@ -3,27 +3,11 @@
   "hooks": {
     "Stop": [
       {
-        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "echo '⚑ R8/R9 check — 이번 세션에서 디버그/이슈가 있었으면 TROUBLESHOOTING.md, 두 개 이상 선택지 사이에서 결정했으면 DECISIONS.md에 엔트리 추가했는지 확인. 없다면 그게 정말 맞는지 한 번 더 점검.' >&2"
-          },
-          {
-            "type": "command",
-            "command": "recent=$(git log --since=\"2 minutes ago\" --oneline 2>/dev/null | head -1); [ -z \"$recent\" ] && exit 0; jq -n --arg c \"$recent\" '{systemMessage: (\"⚠ Recent commit: \" + $c + \"\\n\\nLog this in docs/troubleshooting.md + content/logs/jarvis-pc/<YYYY-MM-DD>-<slug>.mdx (Symptom + Cause + Fix + Commit hash from git rev-parse HEAD). Skip via [no-log] in commit message for routine.\")}'",
-            "timeout": 5
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '⚑ 파일 수정됨 — 디버그 narrative 또는 trade-off 결정이 동반되면 TROUBLESHOOTING.md / DECISIONS.md에 같은 commit에 박을 것 (R8/R9). 사후 정리 금지.' >&2"
+            "command": "bash .claude/hooks/stop-check.sh",
+            "timeout": 10
           }
         ]
       }

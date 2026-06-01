@@ -12,9 +12,11 @@ let package = Package(
     ],
     dependencies: [
         // Phase 9.0 — Local vision LLM (Qwen2.5-VL-3B 4-bit via MLXVLM).
-        // ml-explore/mlx-swift-examples: MLX (Metal), MLXLLM, MLXVLM, MLXLMCommon.
-        // Apple-official ML framework, M1+ Metal GPU. ~1-2GB build artifact 첫 resolve 시.
+        // mlx-swift-examples: MLXLLM, MLXVLM, MLXLMCommon (VLM library + chat session).
+        // mlx-swift: MLX core (Memory.cacheLimit), MLXNN, MLXRandom — Apple-official ML framework.
+        // 둘 다 명시 dep — mlx-swift-examples가 mlx-swift를 *transitive*만 박음 (product re-export X).
         .package(url: "https://github.com/ml-explore/mlx-swift-examples", from: "2.21.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift", from: "0.29.0"),
     ],
     targets: [
         .executableTarget(
@@ -22,7 +24,9 @@ let package = Package(
             dependencies: [
                 // Phase 9.0 — Qwen2.5-VL-3B local inference.
                 // MLXVLM: vision-language models (Qwen2.5-VL, SmolVLM, Idefics3).
-                // MLXLMCommon: shared types (Tokenizer, Generation, etc.).
+                // MLXLMCommon: shared types (Tokenizer, Generation, GenerateParameters).
+                // MLX: core (Memory.cacheLimit — 20MB cap to prevent cache OOM on long streams).
+                .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXVLM", package: "mlx-swift-examples"),
                 .product(name: "MLXLMCommon", package: "mlx-swift-examples"),
             ],
