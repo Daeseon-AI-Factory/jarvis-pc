@@ -1,0 +1,154 @@
+---
+title: "MAX_TOKENS hit + 스크롤 영역 visible-only — 사용자 dogfooding 첫 진짜 발견"
+date: "2026-06-01"
+project: "jarvis-pc"
+kind: "troubleshoot"
+visibility: "public"
+language: "ko"
+summary: "사용자 'github 알림 끄기' multi-step prompt 시도 중 step 5에서 응답 끊김 + '화면 안에서만 찾는다' 좌절. log 분석으로 maxOutputTokens 2048 부족 (Phase 7.0 schema 추가 후 갱신 안 됨) + SYSTEM_PROMPT에 스크롤 안내 clause 없음 발견. 2 fix 박음."
+tags: ["screenbridge", "gemini", "prompts", "max-tokens", "scroll", "dogfooding"]
+---
+
+## 문제
+
+사용자 본인 dogfooding — landing page 박은 후 *매끄러운 use case* 확인 시도. Prompt:
+
+```
+"github 알림 끄러 가자. 프로필 아이콘부터 시작해서
+ settings의 notifications 페이지로"
+```
+
+⌥+Space 박은 후 step 1-4까지 작동 — 사용자가 *다음 step* 가려고 ⌥+Space 재누름 → step 5에서 *응답 끊김*.
+
+사용자 quote:
+> "중간에 응답이 너무 길어요 하고 씹힌다.. 이게 스크롤해서 새롭게 메뉴를 찾고해야되는데 무조건 화면안에서만 찾으려해서그런가"
+
+→ **2개 별도 문제**.
+
+## 진단 (log show)
+
+```
+14:35:05 step=1 instruction 62 chars → ok 9.5s — target_text="showep12" (사용자 아바타)
+14:35:20 step=4 begin continuation=true
+14:35:23 ok 2.4s — target_text="Settings" matches=2 → OCR
+14:35:29 step=5 begin continuation=true  ← Settings 페이지 진입 후
+14:35:41 [gemini] finishReason=MAX_TOKENS — response truncated, fail loud
+```
+
+→ **step 5 (Settings 페이지)에서 MAX_TOKENS hit**. 큰 화면 = 사이드바 + 본문 + 메뉴 → LLM `reasoning` + 8 field JSON → 2048 token 초과.
+
+## 진짜 원인 — Phase 7.0 schema 박을 때 maxOutputTokens 갱신 *놓침*
+
+### 시점 분석
+
+```
+2026-05-30  Phase 6.1 speedup (commit d57a890)
+            maxOutputTokens: 8192 → 2048
+            ↑ 박힌 schema = 5 field (screen_state / next_action / target_text / coordinates / reasoning)
+            ↑ JSON 응답 ~200 token. 2048은 충분.
+
+2026-05-30  Phase 7.0 (commit 75a02ca)
+            schema에 3 field 박음:
+              - task_complete: Bool
+              - requires_confirmation: Bool
+              - step_action_summary: String?  (≤30 단어)
+            ↑ JSON 응답 ~280-350 token. 단 reasoning + step_action_summary가
+              *Settings-like 큰 화면*에서 길어짐.
+            ❌ maxOutputTokens 갱신 안 됨 — 2048 그대로
+
+2026-06-01  사용자 dogfooding step 5
+            Settings 페이지 = 사이드바 + 본문 메뉴 30+ items
+            LLM reasoning: "현재 페이지는 Settings. 사용자가 Notifications를
+                          찾는데 *왼쪽 사이드바* Account/Appearance/...
+                          Notifications가 *아래로 스크롤* 영역에 있을 수도..."
+            → reasoning 1000+ token + step_action_summary + JSON envelope
+            → 2048 초과
+            ❌ MAX_TOKENS finishReason
+```
+
+### 사용자 좌절 #2 — "화면 안에서만 찾는다"
+
+LLM이 *visible only* 답함. 박힌 SYSTEM_PROMPT에 *스크롤 안내* clause 없음 → LLM이 *현재 화면* 안에서만 매칭. 스크롤 필요 시 *empty response 또는 hallucinate*.
+
+## Fix 박음 (2 layer)
+
+### Fix 1 — maxOutputTokens 2048 → 4096
+
+`Sources/ScreenBridge/GeminiDispatcher.swift:222`:
+
+```diff
+- maxOutputTokens: 2048
++ maxOutputTokens: 4096
+```
+
+trade-off: 응답 짧으면 latency 동일 (Gemini가 *fits* 만큼만 사용). 응답 길면 *약간* ↑. MAX_TOKENS error 차단 = sustained quality.
+
+### Fix 2 — SYSTEM_PROMPT 2 new clause
+
+`Sources/ScreenBridge/Prompts.swift`:
+
+**A. 응답 *간결* 룰 (token budget)**:
+
+```
+- screen_state / reasoning 한 문장씩만. 두 문장 X.
+- next_action 한 문장. 친화 톤 유지.
+- step_action_summary ≤30 단어. 길어지면 자름.
+- JSON 필드 밖 텍스트 절대 X.
+→ 응답 token 초과 (MAX_TOKENS)는 *response truncated* error. 짧게.
+```
+
+**B. 화면에 *visible 안 보임* (스크롤 필요)**:
+
+```
+target이 현재 capture된 화면에 없음 (스크롤 / 탭 / 더 깊은 navigation 필요)일 때:
+
+1. target_text = 현재 visible 영역의 *가장 가까운 element* 박음.
+2. next_action = "여기 [X] 아래로 스크롤한 다음 다시 ⌥+Space 눌러주세요"
+   또는 "여기 [X] 탭 누르세요" 같은 navigation 안내.
+3. task_complete: false.
+4. step_action_summary = "스크롤 필요 (Settings → Notifications 사이드바)"
+   같은 다음 step 박을 hint.
+
+예시:
+- "GitHub Notifications 끄려는데 사이드바 아래쪽"
+  → target_text: "Sidebar Notifications 근처 영역"
+  + next_action: "여기 사이드바를 아래로 스크롤한 다음 다시 ⌥+Space 눌러주세요"
+
+절대 X: "Settings → Notifications → 끄기" 같은 *전체 path* 안내
+       (한 화면 = 한 동작 룰 위반).
+```
+
+### Fix 3 — Test budget 갱신
+
+`Tests/ScreenBridgeTests/PromptsTests.swift:45`:
+
+```diff
+- @Test("systemPrompt는 5KB 미만 (Gemini token budget 부담 최소)")
+- #expect(Prompts.systemPrompt.count < 5000)
++ @Test("systemPrompt는 7KB 미만 (Gemini token budget 부담 최소)")
++ // Phase 9.0 갱신: 5000 → 7000. Phase 7.0 (continuation + target_role + irreversible)
++ // + Phase 9.0 (간결 룰 + 스크롤 안내) clause 박힌 후 5869 byte. 7000 안.
++ #expect(Prompts.systemPrompt.count < 7000)
+```
+
+## 검증
+
+```
+swift build  9.15s ✓
+swift test   133/133 ✓
+```
+
+사용자 본인 재시도 시 기대:
+- step 5 Settings 페이지 진입 후 Notifications 안 보이면
+- LLM이 *명시적* 스크롤 안내 박음: "여기 사이드바를 아래로 스크롤한 다음 다시 ⌥+Space 눌러주세요"
+- MAX_TOKENS error 없음 (4096 margin)
+
+## 패턴
+
+- **Schema 추가 시 maxOutputTokens 같이 확인**: Phase 7.0에 3 field 박았는데 *maxOutputTokens 갱신 놓침* — 2주 후 사용자 dogfooding에서 발견. 새 schema field 박을 때 *expected JSON size × 2*가 안전 margin.
+- **사용자 좌절 = 진짜 학습 신호**: "화면 안에서만 찾으려고" 같은 *사용자 직관 표현*이 *prompt clause 빠짐* 진단의 핵심. log + 사용자 quote 둘 다 봐야.
+- **`finishReason=MAX_TOKENS` 명시 log가 진단 1-line**: 박혀있는 fail-loud log 덕분에 5분 안에 root cause 박힘. silent truncate는 박지 X (시간 lose 무한).
+
+## Commit
+
+`f35b9308d46d11c465e8967501457a5244546d5d` (2026-06-01)

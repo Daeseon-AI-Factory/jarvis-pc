@@ -450,3 +450,26 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Pattern**: Workflow research에서 박힌 *full code sketch*는 *최신 main branch source*인 경우 많음. 실제 `swift build` 전 `.build/checkouts/<pkg>/`에서 *pinned version source 직접 verify* 필수. 특히 빠르게 변하는 library (mlx-swift 2026 mlx-swift-lm split, MLXLMCommon API churn) 의존 시.
 <!-- skipped: cd136a4 docs: override-trigger 58e688c (dual-write의 dual-write 무한 loop 차단) [no-log] -->
 <!-- skipped: 1ec4e9d docs: override-trigger 9f2f43a (landing page asset, narrative 이미 박힘) [no-log] -->
+
+---
+
+## Gemini MAX_TOKENS hit + LLM "visible only" — Settings-like 큰 화면에서 step 끊김
+
+- **Symptom**: 사용자 dogfooding ("github 알림 끄러 가자. 프로필 → settings → notifications" prompt) step 5에서 응답 끊김 + 사용자 quote "중간에 응답이 너무 길어요 하고 씹힌다 무조건 화면안에서만 찾으려해서그런가". `log show` 박힘:
+  ```
+  14:35:29 step=5 instruction 62 chars continuation=true
+  14:35:29 [gemini] begin — image 212047 bytes (1024x662)
+  14:35:41 [gemini] finishReason=MAX_TOKENS — response truncated, fail loud
+  ```
+- **Cause**: 2 원인.
+  1. **maxOutputTokens 2048 부족** — Phase 6.1 speedup commit `d57a890`에서 8192→2048 줄였음. 단 Phase 7.0 `75a02ca`에서 `task_complete` + `requires_confirmation` + `step_action_summary` 3 schema field 박혔는데 *maxOutputTokens 갱신 안 됨*. Settings-like *큰 화면* (사이드바 + 본문 + 메뉴 동시) → LLM `reasoning` + `screen_state` + 8 field JSON → 2048 token 초과 → MAX_TOKENS error.
+  2. **SYSTEM_PROMPT에 *스크롤 안내* clause 없음** — LLM이 *현재 visible 영역만* 분석. target이 *스크롤 영역* (Settings 사이드바 Notifications 같은) 있어도 인식 X → 사용자 좌절 "화면 안에서만 찾으려고".
+  - Verified by: `/usr/bin/log show --last 10m --predicate 'subsystem == "com.screenbridge.app"' --info` 박힌 `finishReason=MAX_TOKENS` line + 사용자 quote 직접.
+- **Fix**: 
+  1. `Sources/ScreenBridge/GeminiDispatcher.swift:222` — `maxOutputTokens: 2048 → 4096` (2x margin). trade-off: 응답 짧으면 latency 동일, 길면 약간 ↑.
+  2. `Sources/ScreenBridge/Prompts.swift` — 2 new clause:
+     - **"응답 간결 룰"** (한 문장씩 / ≤30 단어 summary / JSON 밖 텍스트 X) — MAX_TOKENS 차단.
+     - **"화면에 visible 안 보임 (스크롤 필요)"** — target_text = 현재 visible 가장 가까운 element + next_action = "여기 [X] 아래로 스크롤한 다음 다시 ⌥+Space 눌러주세요" + task_complete: false 유지 + step_action_summary에 "스크롤 필요" hint.
+  3. `Tests/ScreenBridgeTests/PromptsTests.swift:45` — SYSTEM_PROMPT size budget 5000 → 7000 byte (5869 박힌 후).
+- **Commit**: `f35b930`
+- **Pattern**: Schema field 추가 시 *maxOutputTokens budget도 같이 확인*. Phase 7.0에 3 field 박았지만 maxOutputTokens 안 늘림 → 큰 화면에서 hit. 새 field 박을 때 *expected JSON size × 2*가 안전 margin.
