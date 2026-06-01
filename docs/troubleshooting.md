@@ -449,3 +449,4 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Commit**: `59cc0cb`
 - **Pattern**: Workflow research에서 박힌 *full code sketch*는 *최신 main branch source*인 경우 많음. 실제 `swift build` 전 `.build/checkouts/<pkg>/`에서 *pinned version source 직접 verify* 필수. 특히 빠르게 변하는 library (mlx-swift 2026 mlx-swift-lm split, MLXLMCommon API churn) 의존 시.
 <!-- skipped: cd136a4 docs: override-trigger 58e688c (dual-write의 dual-write 무한 loop 차단) [no-log] -->
+<!-- skipped: 1ec4e9d docs: override-trigger 9f2f43a (landing page asset, narrative 이미 박힘) [no-log] -->

@@ -40,8 +40,10 @@ struct PromptsTests {
         #expect(p.contains("AI가 시킨 게 정확히 뭔지 처 모르는 사람"))  // 타겟 명시
     }
 
-    @Test("systemPrompt는 5KB 미만 (Gemini token budget 부담 최소)")
+    @Test("systemPrompt는 7KB 미만 (Gemini token budget 부담 최소)")
     func systemPromptIsReasonablyShort() {
-        #expect(Prompts.systemPrompt.count < 5000)
+        // Phase 9.0 갱신: 5000 → 7000. Phase 7.0 (continuation + target_role + irreversible)
+        // + Phase 9.0 (간결 룰 + 스크롤 안내) clause 박힌 후 5869 byte. 7000 안.
+        #expect(Prompts.systemPrompt.count < 7000)
     }
 }

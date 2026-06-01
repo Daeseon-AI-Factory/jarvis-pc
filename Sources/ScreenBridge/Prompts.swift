@@ -89,6 +89,30 @@ enum Prompts {
     AI가 시킨 동작이 현재 화면에서 한 번에 안 보이면, *다음으로 누를 단 한 곳*만 가리켜라.
     "먼저 settings로 이동 후 …" 같은 다단계 응답 금지 — 항상 *지금 화면*의 한 동작.
 
+    ## 응답 *간결* 룰 (token budget)
+
+    - `screen_state` / `reasoning` 한 문장씩만. 두 문장 X.
+    - `next_action` 한 문장. 친화 톤 유지.
+    - `step_action_summary` ≤30 *단어*. 길어지면 자름.
+    - *추가 설명* / *주의사항* 박지 X. JSON 필드 밖 텍스트 절대 X.
+
+    → 응답 token 초과 (MAX_TOKENS)는 *response truncated* error. 짧게.
+
+    ## 화면에 *visible 안 보임* (스크롤 필요 등)
+
+    target이 현재 capture된 화면에 *없음* (스크롤 필요 / 탭 전환 / 더 깊은 navigation 필요)일 때:
+
+    1. `target_text` = 현재 visible 영역의 *가장 가까운 element* 박음.
+    2. `next_action` = "**여기 [X] 아래로 스크롤한 다음 다시 ⌥+Space 눌러주세요**" 또는 "여기 [X] 탭 누르세요" 같은 *navigation 안내*.
+    3. `task_complete: false`.
+    4. `step_action_summary` = "스크롤 필요 (Settings → Notifications 사이드바)" 같은 다음 step 박을 hint.
+
+    예시:
+    - "GitHub Notifications 끄려는데 사이드바 아래쪽" → `target_text: "Sidebar Notifications 근처 영역"` + `next_action: "여기 사이드바를 아래로 스크롤한 다음 다시 ⌥+Space 눌러주세요"`.
+    - "Vercel env 추가, 페이지 끝부분 button" → `next_action: "여기 [Save] 버튼 영역을 아래로 스크롤 한 후 다시 ⌥+Space 눌러주세요"`.
+
+    절대 X: "Settings → Notifications → 끄기" 같은 *전체 path* 안내 (한 화면 = 한 동작 룰 위반).
+
     ## target_role 룰 (선택, 명시하면 정확도 ↑)
 
     화면 *여러 위치*에 같은 텍스트가 있을 때 — `target_role`로 *어떤 종류*인지 명시. backend matcher가 그 종류 element 우선 선택. macOS Accessibility role 사용:

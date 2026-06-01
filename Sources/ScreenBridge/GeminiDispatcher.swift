@@ -219,7 +219,11 @@ actor GeminiDispatcher: LLMDispatcher {
                 responseMimeType: "application/json",
                 responseSchema: Self.responseSchema,
                 temperature: 0.2,
-                maxOutputTokens: 2048
+                // Phase 9.0 fix — 2048 → 4096. Phase 7.0에 schema field 박힘
+                // (task_complete + requires_confirmation + step_action_summary) → token usage ↑.
+                // Settings/Settings-like *큰 화면*에서 MAX_TOKENS hit 발생 (실측 step=5).
+                // 4096이면 거의 모든 case 안전. trade-off: latency 약간 ↑ (단 응답 짧으면 동일).
+                maxOutputTokens: 4096
             )
         )
     }
