@@ -417,6 +417,7 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 <!-- skipped: cdd092b Phase 6.2 fix: SYSTEM_PROMPT 강화 (target_text 빈 string 금지 + intent-aware) -->
 <!-- skipped: 5897394 docs: vision update — global + multi-platform + 5-layer security -->
 <!-- skipped: fff55c5 dual-write log system 도입: docs/troubleshooting.md + content/logs/ -->
+<!-- override-trigger: 58e688c docs: 59cc0cb troubleshoot + narrative entries (Stop hook trigger 풀이) — 이 commit 자체가 이전 commit 59cc0cb의 dual-write entries. 261 LOC가 threshold 넘긴 건 entry 자체 길이 (narrative mdx 256줄 + troubleshooting entry). dual-write에 또 dual-write 박는 건 무한 loop. -->
 
 ---
 
