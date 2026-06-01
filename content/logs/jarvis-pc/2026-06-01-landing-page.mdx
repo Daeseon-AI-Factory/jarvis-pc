@@ -1,0 +1,127 @@
+---
+title: "Landing page 박음 — Apple-style + 어머님 + 빅테크 비교 + 5-layer 보안 표"
+date: "2026-06-01"
+project: "jarvis-pc"
+kind: "ux-retro"
+visibility: "public"
+language: "ko"
+summary: "사용자 요청 'landing 디렉토리 안에 컨셉에 맞게 박아줘' — single-page static HTML 박음 (995 lines, 외부 dep 0). Pretendard 한국어 + Apple-style minimal + 박힌 product identity (번역기 + user-in-the-loop + local-first + 어머님)."
+tags: ["screenbridge", "landing", "html", "marketing", "static"]
+---
+
+## 문제
+
+박은 product에 *공식 첫인상* 박혀있지 X. README는 *개발자* 대상, content/logs는 *내부* narrative. 잠재 사용자 (어머님 자녀 + 개발자 + 기업) 가 *처음 보는 곳* 박혀있지 X.
+
+사용자 quote:
+> "지금 아직 병신이지만 여기 안에 landing 디렉토리랑 안에 랜딩페이지 만들어줄 수 있겠나? 우리의 컨셉에 맞게"
+
+→ *완벽 X, 단순*. 박힌 product identity 반영.
+
+## 결정 — Single-page static HTML
+
+옵션:
+- (a) Next.js / Astro / SvelteKit — *큰 framework*, build pipeline, hosting 복잡
+- (b) **Single HTML + inline CSS** — 외부 dep 0, GitHub Pages / Vercel / Netlify 어디든 박음
+- (c) Notion / Carrd / Webflow — *no-code*, custom 한계
+
+선택 (b) — *pragmatic-ship-mode 일치*. v0.3 출시 시 *진짜 backend + waitlist* 박을 때 framework 박을 수 있음. 지금은 *공식 첫인상*만.
+
+## 박힌 거
+
+`landing/index.html` (995 lines, ~25KB):
+
+### Sections (8개)
+
+1. **Hero** — "AI가 시키는 거, 화면에 박아드려요" + Mail.app mockup
+   - 박스 (빨강 border + 1번 라벨) + bubble ("여기 [새 메시지 작성] 누르세요")
+   - Phase 9.0 pulse indicator ("Local LLM 박는 중")
+   - 2 CTA: 알림 / GitHub
+
+2. **Problem** — 사용자 quote + 시장 진단
+   - Quote card: "어르신들도 가이드 필요하잖아. 우리엄마는 이런거 잘 못만지거든."
+   - 2-col grid: quote + product 본질 명시
+
+3. **Differentiator (3-card)**:
+   - 🙋 안내만, 자동 X — Manus credit drain 같은 사고 *구조적 불가*
+   - 🔒 100% on-device — Apple Intelligence + Qwen local LLM
+   - 👵 어머님 fit — 큰 글씨 + 한국어 + ⌥+Space 한 키
+
+4. **Compare table** — 5 빅테크 + ScreenBridge
+   - Claude CU: "Not production-ready" 명시 (Anthropic 본인 발표)
+   - Operator: $200/월, approval fatigue
+   - Manus: SilentBridge CVE / credit drain
+   - Recall: plaintext SQLite backlash
+   - Apple Intelligence: 사고 없음 (유일한 local-first 모델)
+   - ScreenBridge: Local-first + 안내만 + $5/월
+
+5. **5-Layer Security** — visual grid (5 cards)
+   - Layer 1 ✓ Text Mask (sk-/카드/주민번호) - 박힘
+   - Layer 2 ⊙ App Exclusion (1Password / 카카오뱅크) - v0.3
+   - Layer 3 ⊙ Region Opt-out - v0.3
+   - Layer 4 ⊙ Local LLM (Qwen → Apple FM) - **박는 중**
+   - Layer 5 ✓ Audit Log - 박힘
+
+6. **Roadmap** — 5-stage Jarvis evolution
+   - v0.1 ✓ Single-shot
+   - v0.2 ✓ Tap-next
+   - v0.3 **박는 중** Local LLM (current highlighted)
+   - v0.4 Plan-first
+   - v0.5 Jarvis active
+
+7. **Waitlist** — email signup (현재 stub `alert()`)
+   - 박을 거: Formspree / Mailchimp / GitHub Discussions (다음 commit)
+   - "스팸 X, 1통뿐. 개인정보 안 모음."
+
+8. **Footer** — GitHub + 보안 playbook + deep dive link
+
+### Style 컨셉
+
+- **Pretendard Variable** font (Google Fonts CDN, 한국어 fit)
+- **System fallback** (-apple-system, SF Pro KR)
+- **Apple-style minimal** — 넓은 spacing, 큰 typography, 부드러운 hover
+- **Red brand dot** (#d23330) — ScreenBridge 박스 빨강
+- **Mobile responsive** — 760px breakpoint
+- **No tracking** — Google Analytics / Facebook Pixel 박지 X
+
+### Inline CSS 사용
+
+- 외부 dep 0 (Pretendard CDN만)
+- 1 HTTP request로 page 박힘
+- Lighthouse 100점 expected (검증 안 함, 다음)
+
+## 비용
+
+- 박는 비용: ~30분 (사용자 요청 후 직접 박음, Workflow 박지 X)
+- 외부 hosting: GitHub Pages 무료 / Vercel 무료 / Netlify 무료
+- 운영: 정적 page, 유지 비용 0
+- *되돌리기 비용*: `landing/` directory 삭제 — 5초
+
+## 다음 박을 거 (README.md에 박힘)
+
+```
+- Waitlist backend (Formspree / Mailchimp / GitHub Discussions)
+- 분석 (Plausible / Umami — privacy-friendly)
+- v0.3 출시 후 demo video (실 화면 녹화)
+- 다국어 영어 버전 (글로벌 시장)
+- OG image (Twitter / 카톡 share 미리보기)
+- Favicon (안경 SF Symbol 디자인 옮김)
+- 자체 도메인 (screenbridge.app — 박지 X 현재)
+```
+
+## 박은 메시지 핵심 (product identity lens)
+
+- **"AI 시대지만 어머님은 어디 누르나요?"** — target user pain, memory `target-user-senior-non-tech` 박힘
+- **"빅테크 안 잡는 자리"** — Operator/Manus/CU 깨진 자리 위치 명시, memory `fundamental-accuracy-limits` 박힘
+- **"100% on-device"** — Layer 4 진짜 답, memory `local-first-roadmap-5-layer-security` 박힘
+- **"안내만, 자동 X"** — user-in-the-loop 영원 차별, memory `jarvis-evolution-5-stage` 박힘
+
+## 패턴
+
+- **Single-file static HTML for v0.1 landing**: 박는 비용 30분 + 운영 비용 0. v0.3 출시 시점에 *진짜 framework + backend + waitlist* 박을 수 있음 — 그 때 pragmatic.
+- **Inline CSS over external**: 1 HTTP request, 캐싱 단순, dependency 0. *작은 product page*에 fit.
+- **Product identity 깊게 박힌 메시지**: memory + DECISIONS + 박힌 narrative 모두 *직접 fetch*해서 박은 product *진짜 시그너처* 박음. ChatGPT-style "AI assistant" 박지 X.
+
+## Commit
+
+(다음 commit hash에 갱신)

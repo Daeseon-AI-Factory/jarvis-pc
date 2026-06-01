@@ -447,3 +447,4 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
   5. Sendable closure: `let params = paramsBuilder` (immutable capture) + `container.perform { context -> (String, GenerateCompletionInfo?) in ... return (localRaw, localInfo) }` (tuple return).
 - **Commit**: `59cc0cb`
 - **Pattern**: Workflow research에서 박힌 *full code sketch*는 *최신 main branch source*인 경우 많음. 실제 `swift build` 전 `.build/checkouts/<pkg>/`에서 *pinned version source 직접 verify* 필수. 특히 빠르게 변하는 library (mlx-swift 2026 mlx-swift-lm split, MLXLMCommon API churn) 의존 시.
+<!-- skipped: cd136a4 docs: override-trigger 58e688c (dual-write의 dual-write 무한 loop 차단) [no-log] -->
