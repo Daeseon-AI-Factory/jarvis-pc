@@ -1,0 +1,232 @@
+---
+title: "Qwen2.5-VL-3B MLXVLM wire — research synthesis vs pinned source 6 errors"
+date: "2026-05-31"
+project: "jarvis-pc"
+kind: "troubleshoot"
+visibility: "public"
+language: "ko"
+summary: "Phase 9.0 Week 2-3 QwenLocalDispatcher.analyze() wire 박는 동안 Workflow research synthesis가 박은 code sketch가 *최신 mlx-swift-lm 2026*에 맞춰져 있어 *pinned mlx-swift-examples 2.21*과 6개 API 충돌. .build/checkouts에서 pinned source 직접 grep하여 4 API drift + 2 Swift 6 strict concurrency fix. 결국 6.62s build pass + 133/133 tests."
+tags: ["screenbridge", "swift", "mlx", "qwen", "vision-llm", "phase-9", "troubleshoot"]
+---
+
+## 문제
+
+Phase 9.0 Week 2-3 wire 박는 직후 — Workflow `w02pv083c` (4-agent MLXVLM research, 167K tokens, 6분)가 박은 *full code sketch*를 그대로 박은 후 `swift build` 시도.
+
+```
+error: extra argument 'images' in call (UserInput init)
+error: value of type 'GenerateParameters' has no member 'topK'
+error: value of type 'GenerateCompletionInfo' has no member 'stopReason'
+error: cannot find 'Memory' in scope
+error: mutation of captured var 'raw' / 'info' in concurrently-executing code [#SendableClosureCaptures]
+error: reference to captured var 'params' (let needed)
+```
+
+→ **6 errors**, code 안 박힘.
+
+## 진짜 원인 — 시점 mismatch
+
+```
+Workflow research 박은 거 (Probe A):
+  "REPO: ml-explore/mlx-swift-lm (formerly ml-explore/mlx-swift-examples
+   Libraries/MLX{LMCommon,VLM,LLM}). MLXVLM 라이브러리는 2026년에 mlx-swift-lm에 split."
+
+→ Workflow가 *최신 main 2026 source*에서 API 박았음
+→ 단 우리 Package.swift는 *mlx-swift-examples 2.21+ pinned*
+→ 실제 박힌 API는 *2.21 시점 stale*
+```
+
+## 4 API drift + 2 Swift 6 concurrency
+
+### Drift 1 — UserInput.init(chat:images:)
+
+```swift
+// Workflow 박은 거 (최신 2026):
+let userInput = UserInput(
+    chat: chat,
+    images: [userImage],      // ← parameter 없음 (pinned 2.21)
+    processing: ...
+)
+
+// Pinned 2.21 실제 (.build/checkouts/mlx-swift-examples/.../UserInput.swift):
+public init(chat: [Chat.Message], processing: Processing = .init())
+public init(prompt: String, images: [Image] = [], ...)
+public init(messages: [Message], images: [Image] = [], ...)
+// → chat: 형식엔 images 별도 X
+```
+
+`Chat.Message.user(_:images:)` 안에 박는 게 *진짜 path* (.build/checkouts/.../Chat.swift):
+
+```swift
+public static func user(
+    _ content: String, images: [UserInput.Image] = [], videos: [UserInput.Video] = []
+) -> Self
+```
+
+### Drift 2 — GenerateParameters.topK
+
+```swift
+// Workflow 박은 거:
+params.topK = 1
+
+// Pinned 2.21 실제 (.build/checkouts/.../Evaluate.swift):
+public var maxTokens: Int?
+public var maxKVSize: Int?
+public var temperature: Float = 0.6
+public var topP: Float = 1.0
+public var repetitionPenalty: Float?
+// → topK 없음
+```
+
+해결: `temperature 0.0 + topP 0.001`로 effective greedy.
+
+### Drift 3 — GenerateCompletionInfo.stopReason
+
+```swift
+// Workflow 박은 거:
+Log "stop=\(info.stopReason)"
+
+// Pinned 2.21 실제:
+public struct GenerateCompletionInfo: Sendable {
+    public let promptTokenCount: Int
+    public let generationTokenCount: Int
+    public let promptTime: TimeInterval
+    public let generateTime: TimeInterval
+    public var promptTokensPerSecond: Double { ... }
+    public var tokensPerSecond: Double { ... }
+    // → stopReason 없음
+}
+```
+
+해결: `tokensPerSecond + generationTokenCount + promptTokenCount`만 log.
+
+### Drift 4 — MLX cache control namespace
+
+```swift
+// Workflow 박은 거:
+Memory.cacheLimit = 20 * 1024 * 1024
+
+// mlx-swift 0.29 실제 (.build/checkouts/mlx-swift/Source/MLX/GPU.swift):
+extension MLX.GPU {
+    public static func set(cacheLimit: Int)
+    public static var cacheLimit: Int { get }
+}
+```
+
+해결: `MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)`.
+
+추가 — `Package.swift`에 `mlx-swift 0.29.0+` 직접 dep 추가. `mlx-swift-examples`는 *transitive*만 resolve → MLX product *re-export X*.
+
+```swift
+.package(url: "https://github.com/ml-explore/mlx-swift", from: "0.29.0"),
+
+// + ScreenBridge target dependencies:
+.product(name: "MLX", package: "mlx-swift"),
+```
+
+### Swift 6 concurrency 1 — Sendable closure 외부 var mutation
+
+```swift
+// Workflow 박은 거:
+var raw = ""
+var info: GenerateCompletionInfo?
+try await container.perform { context in
+    for await event in stream {
+        case .chunk(let s): raw += s         // ← Sendable closure 안 mutation error
+        case .info(let i): info = i          // ← 동일
+    }
+}
+```
+
+`container.perform`은 `@Sendable` closure. *outer var mutation* 거부.
+
+해결: closure 안 *local var*로 박은 후 *tuple return*.
+
+```swift
+let result: (raw: String, info: GenerateCompletionInfo?)
+result = try await container.perform { context -> (String, GenerateCompletionInfo?) in
+    var localRaw = ""
+    var localInfo: GenerateCompletionInfo?
+    for await event in stream { ... }
+    return (localRaw, localInfo)
+}
+let raw = result.raw
+let info = result.info
+```
+
+### Swift 6 concurrency 2 — var 외부 capture
+
+```swift
+// Workflow 박은 거:
+var params = GenerateParameters()
+params.temperature = 0.0
+// ...
+try await container.perform { context in
+    let stream = try MLXLMCommon.generate(
+        parameters: params,  // ← var capture in @Sendable closure
+        ...
+    )
+}
+```
+
+해결: `let` immutable copy로 박은 후 capture.
+
+```swift
+var paramsBuilder = GenerateParameters()
+paramsBuilder.temperature = 0.0
+paramsBuilder.topP = 0.001
+paramsBuilder.maxTokens = 512
+let params = paramsBuilder
+// closure에서 params capture OK
+```
+
+## 진단 방식 — pinned source 직접 grep
+
+```bash
+# 박힌 거 확인:
+grep -A 12 "init(\\s*chat:" .build/checkouts/mlx-swift-examples/Libraries/MLXLMCommon/UserInput.swift
+
+# GenerateParameters 실제 field:
+grep -E "public var (temperature|topP|topK|maxTokens)" \
+  .build/checkouts/mlx-swift-examples/Libraries/MLXLMCommon/Evaluate.swift
+
+# Chat.Message API:
+grep -B 1 -A 5 "public static func user" \
+  .build/checkouts/mlx-swift-examples/Libraries/MLXLMCommon/Chat.swift
+
+# mlx-swift cache API:
+grep -rE "cacheLimit|setCacheLimit" .build/checkouts/mlx-swift/Source/
+```
+
+→ 4 grep 한 번에 *진짜 API* 박힘. Workflow 추측보다 *.build/checkouts source*가 *single source of truth*.
+
+## 결과
+
+```
+fix 후:
+  swift build  6.62s ✓
+  swift test   133/133 ✓
+```
+
+Phase 9.0 Week 2-3 wire complete. 실 inference는 *~2GB HF download 후* 가능 (사용자 환경에서 첫 호출 시 자동).
+
+## 패턴 — Workflow research 신뢰의 한계
+
+- **Workflow가 박은 full code sketch는 *최신 main source* 기반**일 때 많음 (LLM training cutoff + WebSearch가 *main* 표시).
+- **Pinned version과 다름** — 특히 빠르게 변하는 lib (mlx-swift 2026 mlx-swift-lm split, MLXLMCommon API churn) 의존 시.
+- **`.build/checkouts/<pkg>/`에서 pinned version source 직접 verify**가 *single source of truth*. Workflow synthesis는 *guidance*로만 사용, *실제 박는 코드*는 grep으로 검증.
+- **Swift 6 strict concurrency는 `swift build`가 박은 후만 명확** — Workflow agent는 *컴파일러 실행 X* — `@Sendable` capture 같은 issue는 *내가 박은 후 즉시 발견*.
+
+## 비용
+
+- Workflow research: 6분 (167K tokens, 4 agents) — 가치 큼 (전체 path + API surface + chat template + example 박힘)
+- API drift fix: 5분 (.build/checkouts grep 4 + code 6 edit)
+- Swift 6 concurrency fix: 5분 (tuple return + let params)
+- 첫 build pass: 6.62s
+- **총 박는 시간**: ~20분 (Workflow 6분 + fix 15분)
+
+→ 박혀있던 Workflow 박은 *full code sketch* + 4 API grep 결과 = 30분 안 박을 수 있음. 다음에는 *코드 박기 전 grep 먼저*가 더 빠를 수도. 또는 *Workflow에 grep까지 시키는 것*도 — 단 *.build/checkouts*는 *swift package resolve 후*만 박혀있음.
+
+## Commit
+
+`59cc0cbc6494158368619294dfd92f05e837dacd` (2026-05-31)

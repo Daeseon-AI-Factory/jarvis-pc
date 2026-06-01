@@ -417,3 +417,32 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 <!-- skipped: cdd092b Phase 6.2 fix: SYSTEM_PROMPT 강화 (target_text 빈 string 금지 + intent-aware) -->
 <!-- skipped: 5897394 docs: vision update — global + multi-platform + 5-layer security -->
 <!-- skipped: fff55c5 dual-write log system 도입: docs/troubleshooting.md + content/logs/ -->
+
+---
+
+## MLXVLM Swift API drift — Workflow research vs pinned source (4 errors + 2 Swift 6 issues)
+
+- **Symptom**: `swift build` 후 6 compile errors. workflow w02pv083c 박은 synthesis code sketch는 실제 mlx-swift-examples 2.21+ pinned source와 안 맞음:
+  ```
+  error: extra argument 'images' in call (UserInput init)
+  error: value of type 'GenerateParameters' has no member 'topK'
+  error: value of type 'GenerateCompletionInfo' has no member 'stopReason'
+  error: cannot find 'Memory' in scope (MLX module)
+  error: mutation of captured var 'raw'/'info' in concurrently-executing code (Sendable)
+  error: reference to captured var 'params' (let needed)
+  ```
+- **Cause**: 4 issues.
+  1. **API drift**: workflow synthesis 박은 *MLXLMCommon mlx-swift-lm 2026 변경* 박혀있음 — pinned mlx-swift-examples 2.21에서는 *images*는 `Chat.Message.user(_:images:)` 안에 박음 (UserInput.init은 images 별도 X).
+  2. **topK 미노출**: pinned 2.21 GenerateParameters는 temperature/topP/maxTokens/repetitionPenalty만. topK는 박혀있지 않음.
+  3. **GenerateCompletionInfo.stopReason 미노출**: pinned 2.21에는 promptTokenCount/generationTokenCount/promptTime/generateTime/tokensPerSecond/promptTokensPerSecond만.
+  4. **MLX cache control**: workflow synthesis는 `Memory.cacheLimit = ...` 박혔는데 mlx-swift 0.29 path는 `MLX.GPU.set(cacheLimit:)`. `Memory` namespace 미박힘.
+  + **Swift 6 strict concurrency**: container.perform { context in ... }은 *Sendable closure*. 외부 var (raw/info/params) mutation 또는 capture 모두 거부.
+  - Verified by: `.build/checkouts/mlx-swift-examples/Libraries/MLXLMCommon/UserInput.swift`, `Evaluate.swift`, `Chat.swift` source 직접 grep + `.build/checkouts/mlx-swift/Source/MLX/GPU.swift`에서 `cacheLimit` 실제 path.
+- **Fix**: `Sources/ScreenBridge/QwenLocalDispatcher.swift`에 4 fixes:
+  1. `Chat.Message.user(instruction, images: [userImage])` — image를 chat 안에. `UserInput(chat:processing:)` 만.
+  2. `topK` 삭제 — `temperature 0.0 + topP 0.001`로 effective greedy.
+  3. `stopReason` 삭제 — `info.tokensPerSecond + generationTokenCount + promptTokenCount`만 log.
+  4. `MLX.GPU.set(cacheLimit: 20 * 1024 * 1024)` + `Package.swift`에 `mlx-swift 0.29.0+` 직접 dep 추가 (`.product(name: "MLX", package: "mlx-swift")` — mlx-swift-examples는 transitive resolve만, MLX product re-export X).
+  5. Sendable closure: `let params = paramsBuilder` (immutable capture) + `container.perform { context -> (String, GenerateCompletionInfo?) in ... return (localRaw, localInfo) }` (tuple return).
+- **Commit**: `59cc0cb`
+- **Pattern**: Workflow research에서 박힌 *full code sketch*는 *최신 main branch source*인 경우 많음. 실제 `swift build` 전 `.build/checkouts/<pkg>/`에서 *pinned version source 직접 verify* 필수. 특히 빠르게 변하는 library (mlx-swift 2026 mlx-swift-lm split, MLXLMCommon API churn) 의존 시.
