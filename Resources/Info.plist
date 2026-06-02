@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key>
+    <string>com.screenbridge.app</string>
+
+    <key>CFBundleName</key>
+    <string>ScreenBridge</string>
+
+    <key>CFBundleDisplayName</key>
+    <string>ScreenBridge</string>
+
+    <key>CFBundleExecutable</key>
+    <string>ScreenBridge</string>
+
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <key>CFBundleShortVersionString</key>
+    <string>0.3.0</string>
+
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- macOS 14+ (Sonoma) — ScreenCaptureKit + MLXVLM 둘 다 OK -->
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+
+    <!-- Dock 안 보임 (menu-bar app) -->
+    <key>LSUIElement</key>
+    <true/>
+
+    <!-- High-resolution capable -->
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- App Transport Security: Hugging Face + Anthropic + Gemini HTTPS만 -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+
+    <!-- ⚠️ 권한 purpose strings (TCC) — *사용자가 dialog에서 보는 메시지* -->
+
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>ScreenBridge는 AI가 시킨 추상 지시를 화면에 박는 번역기예요. 현재 화면을 읽어 어디를 누르나 박스로 박아 안내합니다. ⌥+Space 누를 때만 캡처하고, 환경설정에서 보안 모드(local LLM)를 켜면 외부 서버에 안 보냅니다.</string>
+
+    <key>NSAccessibilityUsageDescription</key>
+    <string>ScreenBridge는 정확한 UI 요소 (Dock 아이콘 / 버튼 / 메뉴) 위치를 잡으려고 Accessibility API를 씁니다. AI가 아닌 macOS 표준 방식이라 100% 정확합니다.</string>
+
+    <!-- Apple Developer ID Notarization 시 hardened runtime 박는 entitlement -->
+
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+
+    <!-- 한국어 영어 둘 다 -->
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>en</string>
+        <string>ko</string>
+    </array>
+</dict>
+</plist>

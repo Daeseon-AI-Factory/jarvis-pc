@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTD/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Hardened runtime + Allow JIT (MLX Metal kernel compile) -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- MLX Metal GPU 접근 -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Hugging Face download / Anthropic / Gemini API -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Apple notarization 안 거치고 직접 dist 시 sandbox 박지 X.
+         Mac App Store SKIP (DECISIONS Workflow w99oanivx 결정) -->
+
+    <!-- Screen Recording / Accessibility는 *runtime TCC dialog*로 박힘 — entitlement X -->
+</dict>
+</plist>
