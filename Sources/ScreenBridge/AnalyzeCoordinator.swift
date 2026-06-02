@@ -94,6 +94,10 @@ actor AnalyzeCoordinator {
         Log.dispatcher.info("[session] cancel — reason=\(String(describing: reason), privacy: .public) prevID=\(prevID ?? "nil", privacy: .public) audit saved")
         // .cancelled → 다음 hotkey 시 .idle로 자동 복귀 (sentinel transition).
         sessionState = .idle
+        // v0.3 Inspector: cancel publish.
+        Task { @MainActor in
+            InspectorState.shared.finishCancelled()
+        }
     }
 
     /// idleDeadline 초과 시 호출 — AppDelegate가 timer로 check.
@@ -169,9 +173,25 @@ actor AnalyzeCoordinator {
                 outcome: .inProgress
             )
             Log.dispatcher.info("[session] new — sessionID=\(self.sessionID ?? "?", privacy: .public)")
+            // v0.3 Inspector: MainActor publish (별도 panel 봄).
+            let publishedID = sessionID!
+            let publishedInstr = maskedInstruction
+            Task { @MainActor in
+                InspectorState.shared.beginSession(
+                    id: publishedID,
+                    instruction: publishedInstr,
+                    dispatcherName: "auto",
+                    privacyMode: "cloud"
+                )
+            }
         }
         sessionState = .analyzing(stepIndex: history.count)
         idleDeadline = nil
+        // v0.3 Inspector — analyzing 진입 publish.
+        let stepIdx = history.count
+        Task { @MainActor in
+            InspectorState.shared.markAnalyzing(stepIndex: stepIdx)
+        }
 
         Log.dispatcher.info(
             "[analyze] begin — step=\(self.history.count + 1, privacy: .public) instruction \(maskedInstruction.count, privacy: .public) chars continuation=\(isContinuation, privacy: .public)"
@@ -339,6 +359,20 @@ actor AnalyzeCoordinator {
         )
         auditEntry?.steps.append(stepRecord)
 
+        // v0.3 Inspector: step publish (MainActor).
+        let inspectorStep = InspectorState.StepView(
+            stepNumber: stepNumber,
+            targetText: safeResult.targetText,
+            nextAction: safeResult.nextAction,
+            sourceTag: primarySource,
+            irreversible: safeResult.requiresConfirmation,
+            elapsedSec: totalElapsed,
+            timestamp: Date()
+        )
+        Task { @MainActor in
+            InspectorState.shared.appendStep(inspectorStep)
+        }
+
         // Phase 7.1: state transition + history 누적.
         if result.taskComplete {
             sessionState = .completed
@@ -348,6 +382,10 @@ actor AnalyzeCoordinator {
             auditEntry?.completedAt = Date()
             if let entry = auditEntry { SessionAuditLog.save(entry) }
             Log.dispatcher.info("[session] task complete — sessionID=\(self.sessionID ?? "?", privacy: .public) total steps=\(self.history.count + 1, privacy: .public) audit saved")
+            // v0.3 Inspector: 완료 publish.
+            Task { @MainActor in
+                InspectorState.shared.finishCompleted()
+            }
         } else {
             // step 누적: 이번 step의 *사용자 행동 요약*을 다음 call의 previousSteps에 박을 거.
             // LLM이 step_action_summary 박았으면 사용, 없으면 fallback ("step N 진행").

@@ -130,6 +130,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(cancelCurrentSession),
             keyEquivalent: "."
         ).keyEquivalentModifierMask = [.command]
+        // v0.3: Session Inspector — 별도 panel (자녀가 어머님 옆에서 봄 / 디버그)
+        menu.addItem(
+            withTitle: "세션 진행 보기",
+            action: #selector(toggleSessionInspector),
+            keyEquivalent: "i"
+        ).keyEquivalentModifierMask = [.command, .option]
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Open sessions folder",
@@ -334,6 +340,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.hud.dismiss()
             Log.app.info("[session] menu-bar cancel")
         }
+    }
+
+    /// v0.3: 별도 Session Inspector panel toggle (⌥⌘I 또는 menu-bar item).
+    @objc private func toggleSessionInspector() {
+        SessionInspectorPanel.shared.toggle { [weak self] in
+            // Inspector 안 "현재 세션 취소" button — 같은 path
+            self?.cancelCurrentSession()
+        }
+        Log.app.info("[inspector] toggle — visible=\(SessionInspectorPanel.shared.isVisible, privacy: .public)")
     }
 
     @objc private func openSessions() {
