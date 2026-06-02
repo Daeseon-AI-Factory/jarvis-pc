@@ -2,7 +2,52 @@
 
 AI가 시키는 추상적 지시를 사용자의 실제 화면에 맞는 구체적 지시로 실시간 번역하는 macOS 데스크톱 도구.
 
-상세: [PRODUCT.md](PRODUCT.md) (왜) / [SPEC.md](SPEC.md) (어떻게) / [STATE.md](STATE.md) (어디까지) / [PROJECT_TIMELINE.md](PROJECT_TIMELINE.md) (history) / [DECISIONS.md](DECISIONS.md) (왜 그렇게 결정) / [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (디버그 학습 자산).
+**v0.3 — 5-layer 보안 박힘 + Beta DMG ship 가능** (2026-06-02).
+
+## ⚡ 5분 안 시도
+
+```bash
+git clone https://github.com/Daeseon-AI-Factory/jarvis-pc.git
+cd jarvis-pc
+
+# DMG 박는 거 (ad-hoc signed Beta — 사용자 본인 build)
+./scripts/build-app.sh                    # swift build -c release + .app
+./scripts/build-dmg.sh                    # dist/ScreenBridge-0.3.0-Beta.dmg
+
+# 또는 dev 모드 (swift run + log show)
+./dev.sh                                  # cloud (Gemini/Claude)
+SCREENBRIDGE_USE_LOCAL=1 ./dev.sh         # 100% local (Qwen + 2GB download)
+```
+
+설치 후 hotkey:
+
+| 단축키 | 동작 |
+| --- | --- |
+| ⌥+Space | AI 지시 입력 → 화면에 박스 + 한국어 안내 |
+| ⌥+Space (재누름) | 다음 step 자동 (재입력 X — continuation) |
+| ⌘, | 환경설정 (Privacy mode + Local Model + 민감 영역) |
+| ⌥⌘I | Session Inspector 별도 panel (자녀가 어머님 옆에서 봄) |
+| ⌥⌘R | 민감 영역 편집 (드래그로 박음) |
+| menu-bar | 안경 아이콘 |
+
+## 🔒 5-layer 보안 (Apple Intelligence 모델 박음)
+
+| Layer | 박힘 | 어디 |
+| --- | --- | --- |
+| 1. SecretMasker text mask | ✓ | 11 pattern (sk-/AKIA/카드/주민/한국 PII 5개) |
+| 2. SensitivityRouter app exclusion | ✓ | 19 bundleID (1Password/카뱅/Toss/신한카드/Mail) |
+| 2.5. ContentMasker OCR/AX redact | ✓ | candidates 안 카드/주민/계좌 row 제외 |
+| 3. Region opt-out (image black box) | ✓ | 사용자가 드래그로 박은 영역 검은 사각형 (⌥⌘R) |
+| 4. Local LLM (Qwen2.5-VL-3B) | ✓ | mlx-swift-examples + setting toggle (off/auto/always-local) |
+| 5. Audit log per-session JSON | ✓ | ~/Library/.../sessions/<uuid>.json |
+
+→ **5/5 박힘**. 빅테크 (Operator/Manus/Claude CU) 사고 자리 안 들어감.
+
+## 📦 Mac App Store SKIP → Notarized DMG
+
+Workflow `w99oanivx` 결정 (2026-06-02). AXUIElement sandbox 충돌 fatal (Rectangle/Hammerspoon/BetterTouchTool 동일 이유). Apple Developer Program $99/년 + codesign + notarytool + staple + Sparkle. v0.3 Beta DMG ship target: **2026-06-27**.
+
+상세: [PRODUCT.md](PRODUCT.md) (왜) / [STATE.md](STATE.md) (어디까지) / [DECISIONS.md](DECISIONS.md) (왜 그렇게 결정) / [TROUBLESHOOTING.md](TROUBLESHOOTING.md) (디버그 학습 자산) / [content/logs/jarvis-pc/](content/logs/jarvis-pc/) (28+ narrative entries).
 
 ## 현재 stack: Swift macOS native
 
