@@ -487,3 +487,4 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 - **Commit**: `f35b930`
 - **Pattern**: Schema field 추가 시 *maxOutputTokens budget도 같이 확인*. Phase 7.0에 3 field 박았지만 maxOutputTokens 안 늘림 → 큰 화면에서 hit. 새 field 박을 때 *expected JSON size × 2*가 안전 margin.
 <!-- skipped: f58f1de docs: f35b930 troubleshoot + narrative entries (MAX_TOKENS + scroll fix dual-write) [no-log] -->
+<!-- skipped: 7f484b1 docs: ef81ae6 troubleshoot + narrative (Qwen AppDelegate 끼움 + 3-step 3번째 빠뜨림 pattern) [no-log] -->

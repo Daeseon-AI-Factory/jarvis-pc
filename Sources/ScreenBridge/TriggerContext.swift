@@ -13,6 +13,9 @@ struct TriggerContext: Sendable {
     let cursor: NSPoint        // 전역 좌표 (NSEvent.mouseLocation, bottom-left origin)
     let screen: ScreenSnapshot
     let timestamp: Date
+    // v0.3 Layer 2: hotkey 시점의 frontmost app bundle ID. Router가 *cloud vs local* 결정.
+    // hotkey *직전* 사용자가 본 앱 (TriggerPanel canBecomeKey=false라 panel 떠도 frontmost 유지).
+    let frontmostBundleID: String?
 
     struct ScreenSnapshot: Sendable {
         let frame: NSRect              // logical points, bottom-left origin
@@ -42,6 +45,9 @@ enum LastTriggerContext {
         let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
             ?? CGMainDisplayID()
 
+        // v0.3 Layer 2: frontmost bundle ID. hotkey 콜백 시점이라 사용자가 본 앱 정확.
+        let frontmostID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+
         current = TriggerContext(
             cursor: cursor,
             screen: TriggerContext.ScreenSnapshot(
@@ -49,11 +55,12 @@ enum LastTriggerContext {
                 backingScaleFactor: screen.backingScaleFactor,
                 displayID: displayID
             ),
-            timestamp: Date()
+            timestamp: Date(),
+            frontmostBundleID: frontmostID
         )
 
         Log.app.info(
-            "[trigger] cursor=(\(Int(cursor.x), privacy: .public),\(Int(cursor.y), privacy: .public)) screen=\(Int(screen.frame.width), privacy: .public)x\(Int(screen.frame.height), privacy: .public)@\(String(format: "%.1f", screen.backingScaleFactor), privacy: .public)x display=\(displayID, privacy: .public)"
+            "[trigger] cursor=(\(Int(cursor.x), privacy: .public),\(Int(cursor.y), privacy: .public)) screen=\(Int(screen.frame.width), privacy: .public)x\(Int(screen.frame.height), privacy: .public)@\(String(format: "%.1f", screen.backingScaleFactor), privacy: .public)x display=\(displayID, privacy: .public) app=\(frontmostID ?? "?", privacy: .public)"
         )
     }
 }

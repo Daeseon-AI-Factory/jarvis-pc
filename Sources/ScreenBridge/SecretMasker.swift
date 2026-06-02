@@ -54,6 +54,19 @@ enum SecretMasker {
             // email — non-specific하지만 *PII* 카테고리. 단 "support@example.com" 같은 public email도 잡힘.
             // → audit log에는 mask하지만 instruction에는 X (사용자가 "내 이메일 어디?" 시 인식 필요).
             // 현재는 *generic mask 안 함*. 단 specific call에 박을 수 있음 (maskForAudit).
+
+            // === v0.3: 한국 PII pattern 5개 추가 ===
+            // 한국 휴대폰: 010-XXXX-XXXX (또는 공백 / 무separator). 일반 번호 (02-XXX, 031- 등) 제외.
+            ("korean-mobile", #"\b01[016789][-\s]?\d{3,4}[-\s]?\d{4}\b"#, "[REDACTED:mobile]"),
+            // 한국 은행 계좌번호 — 다양한 format. 카뱅 (3333-XX-XXXXXXX) / 우리 (1002-XXX-XXXXXX) /
+            // 국민 (XXX-XX-XXXX-XXX) / 신한 (110-XXX-XXXXXX) 등. 일반화: 3-6 digit (-/공백/콤마) 반복 + 마지막 6-7 digit.
+            ("korean-bank-account", #"\b\d{3,6}[-\s]\d{2,3}[-\s]\d{6,8}\b"#, "[REDACTED:bank-account]"),
+            // 한국 사업자번호: XXX-XX-XXXXX (3-2-5)
+            ("korean-business-no", #"\b\d{3}-\d{2}-\d{5}\b"#, "[REDACTED:business-no]"),
+            // 한국 운전면허: XX-XX-XXXXXX-XX (지역 2 + 발급 2 + 일련 6 + checksum 2)
+            ("korean-driver-license", #"\b\d{2}-\d{2}-\d{6}-\d{2}\b"#, "[REDACTED:driver-license]"),
+            // 한국 여권: 1자 알파벳 + 8자리 숫자 (M12345678)
+            ("korean-passport", #"\b[MS]\d{8}\b"#, "[REDACTED:passport]"),
         ]
         return raw.compactMap { (name, pattern, replacement) -> Pattern? in
             guard let r = try? NSRegularExpression(pattern: pattern) else { return nil }

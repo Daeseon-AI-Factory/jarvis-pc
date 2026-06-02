@@ -230,7 +230,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // 1. loading HUD — 친화 메시지 + 예상 시간 (사용자 burden 작게).
         hud.presentLoading(message: "AI에 물어보는 중... (3~5초)", on: screen)
-        let req = AnalyzeRequest(instruction: instruction, triggeredAt: Date())
+        // v0.3 Layer 2: hotkey 시점 frontmost bundle ID 박음 — Router용.
+        let req = AnalyzeRequest(
+            instruction: instruction,
+            triggeredAt: Date(),
+            frontmostBundleID: LastTriggerContext.current?.frontmostBundleID
+        )
 
         Task { @MainActor in
             let stage = await coordinator.run(req)

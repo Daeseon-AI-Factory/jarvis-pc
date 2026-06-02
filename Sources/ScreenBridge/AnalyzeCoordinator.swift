@@ -115,6 +115,28 @@ actor AnalyzeCoordinator {
         isRunning = true
         defer { isRunning = false }
 
+        // v0.3 Layer 2: SensitivityRouter — 민감 앱 (1Password / 은행 / 카드 등) 검사.
+        // Qwen local 박힌 후 (v0.3+) → .localOnly로 swap. v0.2는 fail-closed 차단.
+        // 단 isContinuation는 router 통과 시 *이전 session* 그대로 — 매 step router 박지 X
+        // (사용자가 첫 trigger 시 안전한 앱이면 continuation 안에서 swap 안 함).
+        if !isContinuation {
+            let routerDecision = SensitivityRouter.decide(
+                frontmostBundleID: req.frontmostBundleID,
+                localModelAvailable: false   // v0.3 Qwen wire 후 dynamic check 박음
+            )
+            switch routerDecision {
+            case .cloud:
+                break  // 기존 흐름
+            case .localOnly:
+                Log.dispatcher.info("[router] sensitive app \(req.frontmostBundleID ?? "?", privacy: .public) → local model only")
+                // v0.3: Qwen dispatcher로 swap 박음. 현재는 cloud 그대로 (Qwen wire ef81ae6에 박혀있지만 routing X).
+                break
+            case .blockedLocalModelNotInstalled:
+                Log.dispatcher.notice("[router] sensitive app \(req.frontmostBundleID ?? "?", privacy: .public) BLOCKED — Qwen 미설치, cloud 차단")
+                return .failed(.invalidResponse("sensitive_app_blocked"))
+            }
+        }
+
         // v0.2: secret mask — instruction이 LLM에 가기 *전*, audit log에 박히기 *전*.
         // sk-/AKIA/ghp_/카드/주민번호 등 detect → redact.
         let maskedInstruction = SecretMasker.mask(req.instruction)

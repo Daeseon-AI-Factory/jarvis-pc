@@ -27,6 +27,13 @@ enum UserMessage {
         case .httpStatus:
             return "AI가 잠시 응답하지 않아요. 잠시 후 다시 시도해주세요."
 
+        case .invalidResponse(let reason) where reason == "sensitive_app_blocked":
+            return """
+            🔒 이 앱은 보호 중이에요.
+            계좌/비밀번호 화면은 다음 업데이트(v0.3)에서
+            on-device로 처리합니다.
+            """
+
         case .decoding, .invalidResponse:
             return "AI 응답을 알아볼 수 없어요. 다시 시도해주세요."
 

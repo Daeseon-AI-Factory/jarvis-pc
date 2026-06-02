@@ -14,17 +14,21 @@ struct AnalyzeRequest: Sendable {
     // Phase 7.0: continuation context. nil = single-shot (v0.1 동작 그대로).
     let sessionID: String?
     let previousSteps: [StepSummary]?
+    // v0.3 Layer 2: SensitivityRouter용. hotkey 시점 frontmost app bundle ID.
+    let frontmostBundleID: String?
 
     init(
         instruction: String,
         triggeredAt: Date,
         sessionID: String? = nil,
-        previousSteps: [StepSummary]? = nil
+        previousSteps: [StepSummary]? = nil,
+        frontmostBundleID: String? = nil
     ) {
         self.instruction = instruction
         self.triggeredAt = triggeredAt
         self.sessionID = sessionID
         self.previousSteps = previousSteps
+        self.frontmostBundleID = frontmostBundleID
     }
 }
 
