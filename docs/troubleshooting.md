@@ -453,6 +453,19 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 
 ---
 
+## Qwen 박힌 dispatcher가 AppDelegate에서 호출 안 됨 (skeleton만 박힘 2일)
+
+- **Symptom**: 2026-05-31 Phase 9.0 Week 1 skeleton (`26a1286`) + Week 2-3 wire (`59cc0cb`) 박혀있는데 *실제 호출 path X*. `AppDelegate.dispatcher` 결정 코드가 `GeminiDispatcher.fromEnvironment()` + `ClaudeDispatcher.fromEnvironment()` 만 보고 결정 — `QwenLocalDispatcher`는 *import만* 박혀있지 *생성 X*. 사용자 quote (2026-06-02): "존나 계속 가야지.. 페이즈9인데 아직도 제대로 안되네". 사용자가 *Phase 9 박힘 인식*하지만 *실제 작동 X* 인식.
+- **Cause**: Phase 9.0 박는 흐름이 *skeleton → wire → AppDelegate 끼움* 3 단계인데 Week 1-2가 *skeleton + wire*에서 멈춤. 3 단계 (AppDelegate 끼움)는 *별도 commit*인데 *진행 안 함* → 사용자 입장에서 *Phase 9 박혀있어도 작동 X*.
+- **Fix**: `Sources/ScreenBridge/AppDelegate.swift:18` — dispatcher 결정 갱신:
+  - `Env.string("SCREENBRIDGE_USE_LOCAL") == "1"` 시 `QwenLocalDispatcher.make()` primary + cloud fallback (Claude 우선, Gemini fallback).
+  - 그 외 = 기존 cloud-only path (Gemini + Claude fallback) 유지.
+  - `FallbackDispatcher`의 generic type union을 위해 `cloudFallback: (any LLMDispatcher)? = claude ?? gemini.map { $0 }` 형식 박음 (Optional<Claude> ?? Optional<Gemini> = type mismatch → any LLMDispatcher 추론).
+- **Commit**: `ef81ae6`
+- **Pattern**: Phase 박는 흐름 3-step (skeleton → wire → AppDelegate 끼움)에서 *3번째* 빠뜨림이 *사용자 좌절 신호*로 박힘. 새 dispatcher / 새 service 박을 때 *minimum end-to-end wire*까지 같은 commit 또는 *바로 다음 commit*에 박는 게 *사용자 진척 인식* 안 깨뜨림.
+
+---
+
 ## Gemini MAX_TOKENS hit + LLM "visible only" — Settings-like 큰 화면에서 step 끊김
 
 - **Symptom**: 사용자 dogfooding ("github 알림 끄러 가자. 프로필 → settings → notifications" prompt) step 5에서 응답 끊김 + 사용자 quote "중간에 응답이 너무 길어요 하고 씹힌다 무조건 화면안에서만 찾으려해서그런가". `log show` 박힘:

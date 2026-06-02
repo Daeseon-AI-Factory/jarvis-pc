@@ -1,0 +1,138 @@
+---
+title: "Qwen AppDelegate 끼움 — Phase 9 박혔는데 호출 path 빠진 2일 (사용자 좌절 신호)"
+date: "2026-06-02"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Phase 9.0 Week 1 skeleton (26a1286) + Week 2-3 wire (59cc0cb) 박혀있는데 AppDelegate가 Qwen 호출 안 함 — 사용자 'Phase 9인데 안 됨' 좌절. env var SCREENBRIDGE_USE_LOCAL=1 toggle 박음. 3-step (skeleton → wire → wire AppDelegate)의 3번째 빠뜨림 pattern."
+tags: ["screenbridge", "qwen", "phase-9", "wire", "dogfooding"]
+---
+
+## 문제
+
+사용자 quote (2026-06-02):
+> "존나 계속 가야지.. 페이즈9인데 아직도 제대로 안되네... 페이즈 한 100까지 가야하냐"
+
+→ *Phase 9 박혀있어도 *진짜 작동 X*. 사용자 인식 = "phase 박힘 ≠ 진척".
+
+진단:
+
+```
+2026-05-31 Phase 9.0 Week 1 (26a1286)
+  ✓ Package.swift mlx-swift-examples + mlx-swift dep
+  ✓ Sources/ScreenBridge/QwenLocalDispatcher.swift (skeleton, throw stub)
+  ✓ fixtures/sensitive_screens/ (README + .gitignore + instructions.json)
+
+2026-05-31 Phase 9.0 Week 2-3 (59cc0cb)
+  ✓ QwenLocalDispatcher.analyze() 실 wire (MLXVLM, ChatSession path)
+  ✓ ensureLoaded / runGeneration / decodeAnalysisResult
+  ✓ 4 API drift fix + 2 Swift 6 Sendable fix
+  ✓ swift build 6.62s, 133/133 tests pass
+
+❌ 빠진 거: AppDelegate.dispatcher 결정에서 Qwen 호출 X
+   - QwenLocalDispatcher import 박혔지만 *생성 X*
+   - dispatcher property가 GeminiDispatcher + ClaudeDispatcher만 봄
+   - 사용자 입장: ./dev.sh 박아도 *Qwen 안 호출* → "Phase 9 안 됨"
+```
+
+## 진짜 원인 — 3-step wire의 3번째 빠뜨림
+
+박는 흐름 3-step:
+1. **Skeleton** — dispatcher struct 박음 (throw stub) ✓ Week 1
+2. **Wire** — analyze() 실 구현 (MLXVLM call + parse) ✓ Week 2-3
+3. **AppDelegate 끼움** — 진짜 호출 path 박음 ❌ 빠짐
+
+2일 동안 1+2까지만 박힘. 3은 *별도 commit 박을 계획*이었는데 *진행 안 함*. 사용자 dogfooding 시 *Phase 9 commits 박혀있지만 작동 X* 인식.
+
+## Fix — env var toggle
+
+`Sources/ScreenBridge/AppDelegate.swift:18` dispatcher 결정 갱신:
+
+```swift
+private let dispatcher: (any LLMDispatcher)? = {
+    let useLocal = Env.string("SCREENBRIDGE_USE_LOCAL") == "1"
+    let gemini = GeminiDispatcher.fromEnvironment()
+    let claude = ClaudeDispatcher.fromEnvironment()
+
+    // Local 우선 모드
+    if useLocal {
+        let qwen = QwenLocalDispatcher.make()
+        let cloudFallback: (any LLMDispatcher)? = claude ?? gemini.map { $0 }
+        if let cloud = cloudFallback {
+            let cloudName = (claude != nil) ? "claude" : "gemini"
+            Log.dispatcher.info("AnalyzeCoordinator ready — Qwen LOCAL primary + \(cloudName) fallback")
+            return FallbackDispatcher(primary: qwen, primaryName: "qwen-local", fallback: cloud, fallbackName: cloudName)
+        }
+        return qwen
+    }
+
+    // 기존 cloud-only path
+    switch (gemini, claude) { ... }
+}()
+```
+
+### 미세 issue — Optional<Concrete> ?? Optional<Concrete> = type mismatch
+
+처음 박은 `claude ?? gemini` 컴파일 fail:
+
+```
+error: cannot use optional chaining on non-optional value of type 'GeminiDispatcher'
+note: arguments to generic parameter 'Wrapped'
+      ('GeminiDispatcher' and 'ClaudeDispatcher') are expected to be equal
+```
+
+→ `Optional<ClaudeDispatcher> ?? Optional<GeminiDispatcher>` = Swift가 type union 추론 못 함.
+
+해법: 명시적 protocol type:
+
+```swift
+let cloudFallback: (any LLMDispatcher)? = claude ?? gemini.map { $0 }
+```
+
+`.map { $0 }`로 type erasure → `any LLMDispatcher` 추론.
+
+## 비용
+
+- 박는 비용: 5분 (env var + toggle 박음)
+- *되돌리기 비용*: AppDelegate.dispatcher 결정 closure 26줄 → 12줄 — 2분 revert
+- *진짜 비용*: 2일 lose (Week 1 → Week 2-3 → 사용자 좌절 → AppDelegate 끼움)
+
+## 검증
+
+```
+swift build  5.76s ✓
+swift test   133/133 ✓
+```
+
+사용자 본인 시도:
+
+```bash
+SCREENBRIDGE_USE_LOCAL=1 ./dev.sh
+```
+
+```
+첫 ⌥+Space:
+  [qwen] cold start — loading mlx-community/Qwen2.5-VL-3B-Instruct-4bit
+  [qwen] download 10%/20%/.../100%  ~2분-5분 (~2GB HF Hub)
+  [qwen] loaded in X.Xms
+  → 화면 분석:
+  [qwen] primary tps=X tokens=Y prompt_tokens=Z
+  [qwen] analyze ok (primary) X.Xms
+  → 박스 + bubble
+```
+
+## 패턴 — Phase 박는 3-step에서 3번째 빠뜨림이 *사용자 진척 인식* 깨뜨림
+
+새 dispatcher / 새 service / 새 LLM 박을 때 박는 3-step:
+1. **Skeleton** — struct + throw stub
+2. **Wire** — 실 구현
+3. **AppDelegate (entry point) 끼움** — 진짜 호출 path
+
+*1+2* 박힌 상태로 commit + push 하면 *기술적*으로는 *Phase 박힘*이지만 *사용자 입장에서는 작동 X*. 박는 흐름 *minimum end-to-end*까지 같은 commit 또는 *바로 다음 commit*에 박는 게 *사용자 진척 인식*과 *코드 박힘* 일치.
+
+→ 이 pattern은 *Engineering Playbook*에 박을 가치 (memory: engineering-playbooks-index 갱신).
+
+## Commit
+
+`ef81ae6e6ff2b5a16a3c1f1371b7c37551da661a` (2026-06-02)
