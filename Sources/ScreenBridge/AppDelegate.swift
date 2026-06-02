@@ -168,6 +168,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(openSettings),
             keyEquivalent: ","
         ).keyEquivalentModifierMask = [.command]
+        // v0.3 Layer 3: Region drag UI (별도 hotkey 박지 X — menu-bar만)
+        menu.addItem(
+            withTitle: "민감 영역 편집...",
+            action: #selector(openRegionEditor),
+            keyEquivalent: "r"
+        ).keyEquivalentModifierMask = [.command, .option]
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Open sessions folder",
@@ -387,6 +393,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettings() {
         SettingsWindow.shared.showOrFocus()
         Log.app.info("[settings] window opened")
+    }
+
+    /// v0.3 Layer 3: Region drag editor 박음 (⌥⌘R 또는 menu-bar).
+    @objc private func openRegionEditor() {
+        RegionEditorWindow.shared.present()
+        Log.app.info("[region] editor opened")
     }
 
     @objc private func openSessions() {

@@ -16,6 +16,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     privacySection
+                    regionsSection
                     downloadSection
                     aboutSection
                 }
@@ -94,6 +95,40 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private var regionsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "rectangle.dashed")
+                    .foregroundStyle(.orange)
+                Text("민감 영역 (Layer 3)")
+                    .font(.headline)
+                Spacer()
+                Button("편집...") {
+                    RegionEditorWindow.shared.present()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            let total = settings.sensitiveRegionsAll.values.reduce(0) { $0 + $1.count }
+            if total == 0 {
+                Text("박힌 영역 없음 — '편집...' 박은 후 드래그로 박음.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("박힌 영역 \(total)개 — capture 시 검은 사각형으로 덮음, 외부 LLM 안 봄.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("모두 지우기") {
+                    settings.sensitiveRegionsAll.removeAll()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .foregroundStyle(.red)
+            }
+        }
     }
 
     private var downloadSection: some View {
