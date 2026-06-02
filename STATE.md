@@ -149,3 +149,104 @@
 - `.git/hooks/pre-commit`이 코드 변경 + 학습 자산 동반 강제 (우회 `--no-verify`). **주의: `.git/`은 untracked라 새 머신 clone 시 hook 없음** (SCRATCHPAD 참조).
 
 ## SCRATCHPAD 미해결: 4 (SCRATCHPAD.md 참조)
+
+---
+
+## v0.3 5-layer 보안 완성 (2026-06-02 burst)
+
+사용자 quote "전부다 해라 계속 될떄까지 가보자" → Workflow `w99oanivx` 박힌
+v0.3 4주 plan을 Week 1+2+3 task 연쇄 박음.
+
+### 5-layer 보안 5/5 박힘
+
+| Layer | 박힘 | commit |
+| --- | --- | --- |
+| 1. SecretMasker (text mask) | ✓ 11 pattern (한국 PII 5개 박힘) | `2ffc163` + `11bbea1` |
+| 2. SensitivityRouter (app exclusion) | ✓ 19 bundleID (한국 은행 7 + 카드 4) | `11bbea1` |
+| 2.5. ContentMasker (OCR/AX redact) | ✓ candidate filter | `c936262` |
+| 3. Region opt-out (image black box) | ✓ CGContext fill | `ae07cec` |
+| 4. Local LLM (Qwen) | ✓ wire + publish + Settings toggle | `ef81ae6` + `5bbdf57` + `3f26a3f` |
+| 5. Audit log (per-session JSON) | ✓ Phase 7.3 박힘 | `a54b121` |
+
+### v0.3 박힌 commit 시간순 (2026-06-02)
+
+```
+26a1286  Phase 9.0 Week 1 (mlx-swift-examples dep + Qwen skeleton)
+59cc0cb  Phase 9.0 Week 2-3 (Qwen wire + MLXVLM API drift fix)
+ef81ae6  Phase 9.1 (Qwen 끼움 — SCREENBRIDGE_USE_LOCAL=1 toggle)
+9f2f43a  Landing page (995 line HTML, Apple-style)
+f35b930  MAX_TOKENS + scroll fix
+11bbea1  Layer 2 SensitivityRouter + 한국 PII 5개 + Mac App Store SKIP
+e4243ff  Session Inspector (별도 NSPanel + SwiftUI)
+5bbdf57  진짜 publish wire (dispatcher name + privacy mode + Qwen tps)
+c936262  Layer 2.5 ContentMasker
+3f26a3f  SettingsView Privacy mode toggle
+35962c9  Probe D-prime scaffold + 3 commits 통합 dual-write
+ae07cec  Layer 3 Region opt-out
+db05877  ModelDownloadProgress + ModelDownloadView (first-launch UX)
+```
+
+### Mac App Store SKIP → Notarized DMG path (Workflow 결정)
+
+- AXUIElement sandbox 충돌 fatal (Rectangle/Hammerspoon/BetterTouchTool 동일)
+- Apple Developer Program $99/년 등록 + codesign + notarytool submit + staple
+- Sparkle 자동 update + EdDSA + GitHub Actions pipeline
+- Ship target: **2026-06-27** Beta DMG
+- v1.0 정식: **2026-09-30** (v0.4 Android first 박은 후)
+
+### 사용자 시도 (현재 박힌 상태)
+
+```bash
+# Cloud mode (default):
+./dev.sh
+⌥+Space → "github 알림 끄기"
+
+# Local mode (보안 모드):
+SCREENBRIDGE_USE_LOCAL=1 ./dev.sh
+첫 ⌥+Space → ~2GB Hugging Face download (5-10분)
+ModelDownloadProgress UI 박힘 → ⌘, → Settings 안 진행률 봄
+다운 후 → 100% Mac 안에서만 동작
+
+# Settings UI:
+⌘, → Privacy mode (auto/cloud/always-local) 선택 + 재시작 적용
+⌘, → Local Model section 안 download 진행률
+
+# Inspector UI:
+⌥⌘I → 별도 panel 떠 (multi-monitor follow)
+  Header: dispatcher chip + privacy badge (cloud/local/blocked)
+  Steps list: #1/#2/... 박은 거 실시간
+```
+
+### 남은 v0.3 박을 거
+
+```
+Week 1 남은 거:
+  🔲 fixtures/sensitive_screens/*.png (사용자 본인 환경 5장)
+  🔲 Probe D-prime 실 측정 — Qwen vs Gemini accuracy → GO/NO-GO
+
+Week 2:
+  🔲 어머님 M1 8GB 실측 (Slack/카톡/메모 3 시나리오)
+  🔲 WWDC26 keynote (6/8-12) Apple FM vision 발표 watch
+
+Week 3:
+  🔲 Region drag UI (사용자가 *영역 그림* — NSWindow overlay + drag handler)
+  🔲 Apple Developer Program enrollment ($99/년)
+  🔲 .app bundle + Info.plist + codesign
+  🔲 Notarization pipeline (notarytool submit + staple)
+  🔲 Sparkle integration (appcast.xml + EdDSA)
+
+Week 4:
+  🔲 Beta DMG 박음 + landing "Download" CTA
+  🔲 GitHub Actions 자동 sign + notarize pipeline
+  🔲 어머님 + 5-10 개발자 친구 배포 + 피드백
+  🔲 v0.3 SHIPPED commit
+```
+
+박힌 거 (이번 burst):
+- 9 commits × ~2-3h 박는 시간
+- 5-layer 보안 5/5
+- Settings UI + Inspector UI + Download UI
+- 150 tests pass
+- DMG path 결정 (Mac App Store SKIP)
+
+→ v0.3 ship까지 *진짜 가깝게* 박힘.

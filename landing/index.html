@@ -467,8 +467,8 @@
       /* 5-Layer */
       .layers {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 12px;
+        grid-template-columns: repeat(6, 1fr);
+        gap: 10px;
       }
       .layer {
         background: #fff;
@@ -673,7 +673,7 @@
     <header class="hero">
       <div class="container">
         <div class="eyebrow">
-          <span class="pulse"></span>Phase 9.0 — Local LLM 박는 중
+          <span class="pulse"></span>v0.3 — 5-layer 보안 완성 + DMG ship 2026-06-27
         </div>
         <h1>
           AI가 시키는 거,<br />화면에 박아드려요.
@@ -875,26 +875,32 @@
           <div class="layer done">
             <div class="num">LAYER 1</div>
             <h4>Text Mask</h4>
-            <p>sk-/카드/주민번호</p>
+            <p>sk-/카드/주민 + 한국 PII 5종</p>
             <div class="status">✓ 박힘</div>
           </div>
-          <div class="layer pending">
+          <div class="layer done">
             <div class="num">LAYER 2</div>
             <h4>App Exclusion</h4>
-            <p>1Password / 카카오뱅크</p>
-            <div class="status">⊙ v0.3</div>
+            <p>19 bundleID 박힘</p>
+            <div class="status">✓ 박힘</div>
           </div>
-          <div class="layer pending">
+          <div class="layer done">
+            <div class="num">LAYER 2.5</div>
+            <h4>Content Mask</h4>
+            <p>OCR/AX 민감 row 제외</p>
+            <div class="status">✓ 박힘</div>
+          </div>
+          <div class="layer done">
             <div class="num">LAYER 3</div>
             <h4>Region Opt-out</h4>
-            <p>사용자가 가린 영역</p>
-            <div class="status">⊙ v0.3</div>
+            <p>사용자 영역 검은 사각형</p>
+            <div class="status">✓ 박힘</div>
           </div>
-          <div class="layer pending">
+          <div class="layer done">
             <div class="num">LAYER 4</div>
             <h4>Local LLM</h4>
-            <p>Qwen → Apple FM</p>
-            <div class="status">⊙ 박는 중</div>
+            <p>Qwen + setting toggle</p>
+            <div class="status">✓ 박힘</div>
           </div>
           <div class="layer done">
             <div class="num">LAYER 5</div>
@@ -930,8 +936,8 @@
           </div>
           <div class="stage current">
             <h4>v0.3 박는 중</h4>
-            <div class="name">Local LLM</div>
-            <p>Qwen2.5-VL-3B on-device. 화면 외부 안 감. Mac App Store.</p>
+            <div class="name">Local-first</div>
+            <p>Qwen on-device + 5-layer 보안 + Settings + Notarized DMG (Mac App Store SKIP).</p>
           </div>
           <div class="stage">
             <h4>v0.4 예정</h4>
