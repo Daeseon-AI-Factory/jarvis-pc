@@ -310,7 +310,15 @@ actor AnalyzeCoordinator {
                 source: .ax(role: el.role)
             )
         }
-        let allCandidates = ocrCandidates + axCandidates
+        let rawCandidates = ocrCandidates + axCandidates
+
+        // v0.3 Layer 2.5: ContentMasker — OCR/AX 안 카드/주민/계좌 등 *민감 row* 제외.
+        // LLM이 "여기 카드번호 4111-... 누르세요" 안내 X. SecretMasker.patterns 재사용.
+        let maskResult = ContentMasker.filterSensitiveCandidates(rawCandidates)
+        let allCandidates = maskResult.filteredCandidates
+        if maskResult.redactedCount > 0 {
+            Log.dispatcher.notice("[content] \(maskResult.redactedCount, privacy: .public) candidates redacted (\(maskResult.categoriesHit.joined(separator: ","), privacy: .public))")
+        }
 
         // Spatial fusion: LLM coords → logical pt hint.
         let llmHintLogical: CGRect? = result.coordinates.flatMap { coords in
