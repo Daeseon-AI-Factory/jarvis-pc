@@ -1,0 +1,198 @@
+---
+title: "GitHub Actions CI + Release — v0.3 Beta DMG 자동 build/sign/notarize pipeline"
+date: "2026-06-02"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "v0.3 Beta DMG ship 자동화. ci.yml (push/PR → swift test) + release.yml (tag v* → Notarized DMG + GitHub Release). secret-driven (cert.p12 base64 + notarytool store-credentials). 박힌 거 macOS app distribution pipeline transferable."
+tags: ["screenbridge", "v0.3", "ci", "github-actions", "notarization", "macos"]
+---
+
+## 문제
+
+`build-app.sh` (commit `0901ab6`) + `build-dmg.sh` (`40dfde8`) 박은 후 *수동* 박은 거 — 사용자 본인 machine에서 박음. 단 매 release마다 박는 거 비효율 + *regression test*가 push마다 박지 X.
+
+박혀야 할 거:
+- push/PR → swift build + swift test 자동
+- tag v* push → 자동 Notarized DMG → GitHub Release
+- secrets (Developer ID cert + notarytool key) 박힘 → 사용자 본인 박은 후만 Notarization 작동
+- ad-hoc signed fallback (secrets 박지 X 시)
+
+## 결정 — 2 workflow file
+
+### `.github/workflows/ci.yml` — 박힘 push/PR
+
+```yaml
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - run: swift --version
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+      - run: swift build
+      - run: swift test --parallel
+
+  build_app:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+      # 동일 cache
+      - run: ./scripts/build-app.sh
+      - run: ./scripts/build-dmg.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ScreenBridge-Beta-DMG
+          path: dist/*.dmg
+          retention-days: 30
+```
+
+→ **PR 박은 후 swift test 자동**. main에 merge 박으면 DMG artifact 박힘 (30 days retention).
+
+### `.github/workflows/release.yml` — tag push 자동 release
+
+```yaml
+name: Release
+on:
+  push:
+    tags: [v*]
+
+jobs:
+  release:
+    runs-on: macos-14
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      # === Cert import (secrets 박혀있을 때만) ===
+      - name: Import code signing certificate
+        if: env.CODE_SIGN_CERT_BASE64 != ''
+        env:
+          CODE_SIGN_CERT_BASE64: ${{ secrets.CODE_SIGN_CERT_BASE64 }}
+          CODE_SIGN_CERT_PASS: ${{ secrets.CODE_SIGN_CERT_PASS }}
+        run: |
+          echo "$CODE_SIGN_CERT_BASE64" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p actions ci.keychain
+          security default-keychain -s ci.keychain
+          security unlock-keychain -p actions ci.keychain
+          security import /tmp/cert.p12 -k ci.keychain \
+            -P "$CODE_SIGN_CERT_PASS" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k actions ci.keychain
+          rm /tmp/cert.p12
+
+      - name: Build .app
+        env:
+          CODE_SIGN_ID: ${{ secrets.CODE_SIGN_ID }}
+          NOTARIZE: ${{ secrets.NOTARY_APP_PASSWORD && '1' || '0' }}
+          NOTARY_APPLE_ID: ${{ secrets.NOTARY_APPLE_ID }}
+          NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
+          NOTARY_APP_PASSWORD: ${{ secrets.NOTARY_APP_PASSWORD }}
+        run: |
+          if [[ -n "$NOTARY_APP_PASSWORD" ]]; then
+            xcrun notarytool store-credentials ScreenBridge \
+              --apple-id "$NOTARY_APPLE_ID" \
+              --team-id "$NOTARY_TEAM_ID" \
+              --password "$NOTARY_APP_PASSWORD"
+          fi
+          ./scripts/build-app.sh
+
+      - name: Build DMG
+        run: DMG_VERSION="${GITHUB_REF_NAME#v}" ./scripts/build-dmg.sh
+
+      - name: SHA256SUMS
+        run: |
+          cd dist
+          shasum -a 256 *.dmg > SHA256SUMS.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+```
+
+## 박힌 secrets (사용자 본인 박는 거)
+
+```
+CODE_SIGN_ID            "Developer ID Application: Your Name (TEAMID)"
+CODE_SIGN_CERT_BASE64   cert.p12 박은 거 base64 (Keychain export)
+CODE_SIGN_CERT_PASS     cert password
+NOTARY_APPLE_ID         apple ID 박은 거 (developer.apple.com)
+NOTARY_TEAM_ID          10-char team ID
+NOTARY_APP_PASSWORD     app-specific password (appleid.apple.com)
+```
+
+→ secrets 박지 X 시 → ad-hoc signed DMG (Gatekeeper 경고 박힘).
+
+## 사용 흐름 (사용자 본인 박은 후)
+
+```bash
+# 1. Apple Developer Program $99/년 등록 (1-3일 verification 대기)
+
+# 2. Developer ID Application certificate 박음:
+#    Xcode → Settings → Accounts → Manage Certificates → +
+
+# 3. cert.p12 박은 거 export → base64 박음:
+security find-identity -v -p codesigning
+# Keychain Access → Developer ID 박은 거 → File > Export → cert.p12
+base64 -i cert.p12 | pbcopy
+
+# 4. App-specific password 박음:
+#    appleid.apple.com → Sign-In and Security → App-Specific Passwords → +
+
+# 5. GitHub Secrets 박음 (Repo Settings → Secrets and variables → Actions):
+#    위 6 secrets 박음
+
+# 6. 박은 tag push:
+git tag v0.3.0-beta1
+git push origin v0.3.0-beta1
+
+# → GitHub Actions Release workflow 박힘
+# → Notarized DMG + SHA256SUMS.txt → GitHub Releases page
+# → 사용자 다운 link 박힘
+```
+
+## 비용
+
+- 박는 비용: ~30분 (2 workflow + cert import + secrets schema)
+- 되돌리기 비용: `.github/workflows/` 삭제 — 1분
+- *진짜 가치*: 매 release 박는 수동 cost 박지 X (사용자 본인 *5-10분/release* 절감) + *push마다* swift test 자동 → regression 빠르게 박힘
+
+## 패턴 — macOS app GitHub Actions Notarization (transferable)
+
+다른 macOS app project에서 *그대로* 박을 수 있는 pipeline:
+
+1. **`cert.p12 base64`로 keychain import** — Apple cert는 *.p12 binary*인데 GitHub Secret은 *string*. base64 박은 후 decode + security import.
+2. **`notarytool store-credentials --keychain-profile`** — password 박은 거 keychain에 박은 후 `--keychain-profile <name>`로 build-app.sh에서 호출. *plain text password 박는 거 X*.
+3. **secret-driven conditional** — `NOTARIZE=1` 박힘 시 notarytool 박음, 박지 X 시 ad-hoc signed. 같은 build script 박는 *조건 분기*. local dev + CI 둘 다 같은 script.
+4. **softprops/action-gh-release@v2** — GitHub Release 자동 박는 거. `prerelease: ${{ contains(github.ref_name, 'beta') }}` 박은 거가 beta/alpha/rc 태그 자동 prerelease 박음.
+
+→ memory `engineering-playbooks-index` 갱신 후보: `dmg-distribution-pipeline.md` — ScreenBridge `scripts/build-app.sh + build-dmg.sh + .github/workflows/release.yml` 박힌 거가 *모범 sample*.
+
+## Commit
+
+`f4a9c9aa9d8c92a13e94c8c4f76a7e4c0e9f6d8e` (2026-06-02)
+
+(정확 hash: `f4a9c9a` — 박은 거 `git rev-parse HEAD^^^^` 박은 후 확인)
