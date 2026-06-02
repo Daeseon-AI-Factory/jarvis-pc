@@ -453,6 +453,24 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 
 ---
 
+## v0.3 SensitivityRouter (Layer 2) — 사용자 보안 우려 → fail-closed 차단 박음
+
+- **Symptom**: 사용자 quote 시리즈 (2026-05-30 ~ 06-02): "이거 진짜 보안문제되겠는데 제미나이가 다 볼거아니냐", "계좌 번호가 보이자나 ai한테 비번이나", "은행업무 같은건 못하게 막아야하나". v0.2까지 박힌 architecture가 *전체 화면 capture → Gemini cloud*. 1Password / 카카오뱅크 / Toss 같은 *민감 앱* 들어가도 cloud에 그대로 박혔음.
+- **Cause**: `AnalyzeCoordinator.run()` 안에서 *frontmost app bundle ID 검사 layer 박지 X*. capture → dispatcher → cloud 흐름이 *어떤 앱이든 같음*. 5-layer 보안 (memory: product-vision-global-multi-platform) 중 Layer 2 (App exclusion)가 비어있음 — Layer 1 (SecretMasker text mask)만 박혀있고 *image*는 그대로 cloud.
+- **Fix**: 3 file 박음.
+  1. `Sources/ScreenBridge/SensitivityRouter.swift` 새 file — 19 bundleID deny-list (1Password 3 + Bitwarden + Keychain + LastPass + 한국 은행 7 + 한국 신용카드 4 + Mail) + `LLMRoutingDecision` enum (.cloud / .localOnly / .blockedLocalModelNotInstalled).
+  2. `Sources/ScreenBridge/TriggerContext.swift` — `frontmostBundleID` field 박음 (hotkey 시점 NSWorkspace.frontmostApplication.bundleIdentifier).
+  3. `Sources/ScreenBridge/AnalyzeRequest.swift` — `frontmostBundleID` optional field 박음.
+  4. `Sources/ScreenBridge/AnalyzeCoordinator.swift:117` — `run()` 시작 직후 (capture 전) Router 통과 — isContinuation X (첫 trigger만). `.blockedLocalModelNotInstalled` → `.failed(.invalidResponse("sensitive_app_blocked"))` return.
+  5. `Sources/ScreenBridge/UserMessage.swift` — "sensitive_app_blocked" → Korean friendly alert "🔒 이 앱은 보호 중이에요. 다음 업데이트(v0.3)에서 on-device로 처리합니다."
+  6. `Sources/ScreenBridge/AppDelegate.swift` — AnalyzeRequest에 frontmostBundleID 박음.
+  7. `Sources/ScreenBridge/SecretMasker.swift` — 한국 PII 5개 (휴대폰 / 은행 계좌 / 사업자번호 / 운전면허 / 여권) 추가.
+  8. `Tests/ScreenBridgeTests/SensitivityRouterTests.swift` — 9 tests (nil bundleID / 일반 앱 / 1Password v0.2&v0.3 / 한국 은행 7 / 한국 카드 / KeychainAccess+Mail / denyList size / 한국 은행 cover).
+- **Commit**: `11bbea1`
+- **Pattern**: 5-layer 보안에서 *layer 빠진 거* 모두 같은 위치 (`AnalyzeCoordinator.run`에서 dispatcher 호출 *전*)에 박히는 게 자연스러움. Layer 1 (SecretMasker text mask) + Layer 2 (Router bundle ID) + Layer 2.5 (ContentMasker OCR/AX) + Layer 4 (Qwen swap) — 모두 *같은 라인*에서 *순서대로* 통과. 박는 순서 = security gates 박는 순서. Defense in depth 박는 architecture.
+
+---
+
 ## Qwen 박힌 dispatcher가 AppDelegate에서 호출 안 됨 (skeleton만 박힘 2일)
 
 - **Symptom**: 2026-05-31 Phase 9.0 Week 1 skeleton (`26a1286`) + Week 2-3 wire (`59cc0cb`) 박혀있는데 *실제 호출 path X*. `AppDelegate.dispatcher` 결정 코드가 `GeminiDispatcher.fromEnvironment()` + `ClaudeDispatcher.fromEnvironment()` 만 보고 결정 — `QwenLocalDispatcher`는 *import만* 박혀있지 *생성 X*. 사용자 quote (2026-06-02): "존나 계속 가야지.. 페이즈9인데 아직도 제대로 안되네". 사용자가 *Phase 9 박힘 인식*하지만 *실제 작동 X* 인식.

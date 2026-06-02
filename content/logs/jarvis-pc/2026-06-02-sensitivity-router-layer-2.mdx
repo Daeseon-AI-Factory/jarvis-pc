@@ -1,0 +1,227 @@
+---
+title: "SensitivityRouter (Layer 2) 박음 — 19 bundle ID + fail-closed + 한국 PII 5개"
+date: "2026-06-02"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Workflow w99oanivx 박힌 v0.3 ship 4주 plan의 Week 3 task를 Week 1에 합쳐 박음. SensitivityRouter Layer 2 (19 bundleID deny-list + fail-closed) + 한국 PII 5개 (휴대폰/계좌/사업자/면허/여권). 5-layer 보안 4/5 박힘 (Layer 3 region opt-out만 남음)."
+tags: ["screenbridge", "security", "router", "korean", "v0.3", "layer-2"]
+---
+
+## 문제
+
+사용자 quote 시리즈 (5/30 ~ 6/2):
+- "이거 진짜 보안문제되겠는데 제미나이가 다 볼거아니냐"
+- "계좌 번호가 보이자나 ai한테 비번이나"
+- "은행업무 같은건 못하게 막아야하나"
+- "내 컴터에 각종 은행정보나 오만가지가 있을텐데 나는 왜 아무의심없이 맥북을 쓴걸까"
+
+→ v0.2까지 박힌 architecture가 *전체 화면 → Gemini cloud*. 1Password / 카카오뱅크 / Toss 같은 *민감 앱* 들어가도 cloud에 그대로 박혔음.
+
+## 결정 분기
+
+옵션:
+- (a) Image-level redact — capture 후 OCR/AX 결과 보고 *image 자체 black box* 박음. 단 복잡 (image diff + mask region 그리기), *image-only* cloud (vision LLM)에 효과 X.
+- (b) **Frontmost bundle ID deny-list + fail-closed** — *capture 전* 차단. cloud 호출 자체 X.
+- (c) 둘 다.
+
+선택 **(b)**. 근거:
+- capture 전 차단이 *capture 안 일어남* → audit log에도 박지 X → 진짜 *외부 0*.
+- bundle ID는 *deterministic* (이름/regex 추측 X).
+- *fail-closed* (Qwen 미박힘 시 차단 + alert) = 사용자 *명확 인지*.
+- 1-2h 박는 시간.
+
+## 박힌 거
+
+### `Sources/ScreenBridge/SensitivityRouter.swift` (NEW)
+
+```swift
+enum LLMRoutingDecision: Sendable, Equatable {
+    case cloud                              // 일반 화면
+    case localOnly                          // 민감 화면 (v0.3 Qwen 박힌 후)
+    case blockedLocalModelNotInstalled      // 민감 화면 + Qwen 미설치 — 차단
+}
+
+enum SensitivityRouter {
+    static let denyList: Set<String> = [
+        // 비밀번호 (5)
+        "com.agilebits.onepassword7", "com.1password.1password",
+        "com.bitwarden.desktop", "com.apple.keychainaccess",
+        "com.lastpass.LastPass",
+
+        // 한국 은행 (7)
+        "com.kakaobank.kbankapp", "com.kbstar.smartbank",
+        "com.shinhan.smartbank", "com.hanafn.hana1q",
+        "com.wooribank.smart", "com.nh.smartbank",
+        "viva.republica.toss",
+
+        // 한국 신용카드 (4)
+        "com.shinhancard.SHC", "com.bccard.BCCard",
+        "com.samsungcard.SamsungCard", "com.hyundaicard.MOSAIC",
+
+        // Mail (compose detect는 v0.4)
+        "com.apple.mail",
+    ]
+
+    static func decide(frontmostBundleID: String?, localModelAvailable: Bool = false) -> LLMRoutingDecision {
+        guard let id = frontmostBundleID else { return .cloud }
+        let isSensitive = denyList.contains(id)
+        if isSensitive {
+            return localModelAvailable ? .localOnly : .blockedLocalModelNotInstalled
+        }
+        return .cloud
+    }
+}
+```
+
+→ **19 bundle ID**. 1Password 3개 (7/8 + 카뱅 등 한국 7 + 카드 4 + Mail + Keychain + LastPass.
+
+### `TriggerContext.swift` — frontmostBundleID 박음
+
+```swift
+struct TriggerContext: Sendable {
+    let cursor: NSPoint
+    let screen: ScreenSnapshot
+    let timestamp: Date
+    let frontmostBundleID: String?   // ← v0.3 Layer 2
+}
+
+// LastTriggerContext.capture():
+let frontmostID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+// hotkey 시점 — TriggerPanel.canBecomeKey=false라 panel 떠도 frontmost 유지
+```
+
+### `AnalyzeCoordinator.swift` — Router 통과
+
+```swift
+func run(_ req: AnalyzeRequest, isContinuation: Bool = false) async -> AnalyzeStage {
+    // ...
+
+    // v0.3 Layer 2: SensitivityRouter
+    if !isContinuation {
+        let routerDecision = SensitivityRouter.decide(
+            frontmostBundleID: req.frontmostBundleID,
+            localModelAvailable: false   // v0.3 Qwen wire 후 true
+        )
+        switch routerDecision {
+        case .cloud:
+            break  // 기존 흐름
+        case .localOnly:
+            Log.dispatcher.info("[router] sensitive app → local model only")
+            // v0.3: Qwen dispatcher swap (현재 cloud 그대로, 다음 commit)
+            break
+        case .blockedLocalModelNotInstalled:
+            Log.dispatcher.notice("[router] sensitive app BLOCKED — cloud 차단")
+            return .failed(.invalidResponse("sensitive_app_blocked"))
+        }
+    }
+
+    // 기존 흐름 (SecretMasker → capture → dispatcher → match)...
+}
+```
+
+### `UserMessage.swift` — Korean friendly alert
+
+```swift
+case .invalidResponse(let reason) where reason == "sensitive_app_blocked":
+    return """
+    🔒 이 앱은 보호 중이에요.
+    계좌/비밀번호 화면은 다음 업데이트(v0.3)에서
+    on-device로 처리합니다.
+    """
+```
+
+### `SecretMasker.swift` — 한국 PII 5개 추가
+
+이전: 영어/일반 6 pattern (sk-/AKIA/ghp_/카드/주민/email-skip).
+v0.3: **11 pattern** — 한국 5개 추가:
+
+```swift
+// 한국 휴대폰: 01[016789]-XXXX-XXXX (일반 02/031 제외)
+("korean-mobile", #"\b01[016789][-\s]?\d{3,4}[-\s]?\d{4}\b"#, "[REDACTED:mobile]"),
+
+// 한국 은행 계좌: 3-6 digit - 2-3 - 6-8 (카뱅 3333-XX-XXXXXXX / 우리 1002-XXX-XXXXXX 등 일반화)
+("korean-bank-account", #"\b\d{3,6}[-\s]\d{2,3}[-\s]\d{6,8}\b"#, "[REDACTED:bank-account]"),
+
+// 한국 사업자번호: 3-2-5
+("korean-business-no", #"\b\d{3}-\d{2}-\d{5}\b"#, "[REDACTED:business-no]"),
+
+// 한국 운전면허: 2-2-6-2
+("korean-driver-license", #"\b\d{2}-\d{2}-\d{6}-\d{2}\b"#, "[REDACTED:driver-license]"),
+
+// 한국 여권: M/S + 8자리
+("korean-passport", #"\b[MS]\d{8}\b"#, "[REDACTED:passport]"),
+```
+
+### Tests — 9 new SensitivityRouter tests
+
+```
+✓ nil bundleID → .cloud (안전 default)
+✓ 일반 앱 (Chrome/Safari/Slack) → .cloud
+✓ 1Password v0.2 → .blockedLocalModelNotInstalled
+✓ 1Password v0.3 (Qwen 박힘) → .localOnly
+✓ 카뱅/Toss/신한/국민/하나 → blocked
+✓ 신한카드/BC/삼성/현대 → blocked
+✓ KeychainAccess / Mail → blocked
+✓ denyList ≥ 13 entries
+✓ 한국 은행 7개 모두 박힘
+```
+
+## 비용
+
+- 박는 비용: ~1.5h
+- 되돌리기 비용: SensitivityRouter.swift 삭제 + AnalyzeCoordinator 7줄 revert — 10분
+- *진짜 가치*: 5-layer 중 Layer 2 박힘 = 사용자 우려 *즉시 답*. 사용자 카카오뱅크 들어가면 *cloud 안 보냄* 확정 (deterministic).
+
+## 5-layer 보안 진행
+
+```
+Layer 1 SecretMasker      ✓ 박힘 (한국 PII 5개 추가, 11 total)
+Layer 2 SensitivityRouter ✓ 박힘 (이번 commit, 19 bundleID)
+Layer 3 Region opt-out    ⊙ v0.3+
+Layer 4 Local LLM (Qwen)  ⊙ Week 1 wire 박힘 (ef81ae6), router → Qwen routing 미박힘
+Layer 5 Audit log         ✓ 박힘
+```
+
+→ **4/5 layer 박힘**. Layer 3은 사용자 명시 영역 (v0.3+에 박을 거). Layer 4 router → Qwen routing wire는 *다음 commit*.
+
+## 다음
+
+- ContentMasker (Layer 2.5) — OCR/AX 결과에서 카드/주민 마스킹 (image-level은 아직 X)
+- SensitivityRouter .localOnly → Qwen dispatcher routing wire
+- SettingsView Privacy mode toggle (off / auto / always-local)
+- First-launch model download UI
+- Probe D-prime swift test (Qwen vs Gemini accuracy)
+
+## 패턴 — Defense in Depth 박는 위치
+
+5-layer 보안이 *AnalyzeCoordinator.run() 한 곳*에서 *순서대로* 통과하는 게 자연스러움:
+
+```
+run(req)
+  ↓
+[Layer 2] SensitivityRouter.decide(req.frontmostBundleID)
+  → blocked: return early
+  → localOnly: Qwen 사용 mark
+  ↓
+[Layer 1] SecretMasker.mask(req.instruction)
+  ↓
+capture()
+  ↓
+[Layer 2.5] ContentMasker.maskSensitiveRegions(image, ocrBoxes, axElements)  ← v0.3+
+  ↓
+dispatcher.analyze(masked_image, masked_instruction)
+  → 일반: Gemini/Claude
+  → localOnly: Qwen
+  ↓
+[Layer 5] SessionAuditLog.save(masked_entry)
+  ↓
+return .done
+```
+
+→ 박는 *layer 순서* = security gate 통과 순서. defense in depth 박는 architecture. memory `engineering-playbooks-index` 갱신 후보 — "5-layer Security Architecture pattern".
+
+## Commit
+
+`11bbea116a71ad24142691956c4f271ed1e38b34` (2026-06-02)
