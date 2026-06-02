@@ -545,3 +545,4 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 <!-- skipped: c391c97 docs: override-trigger 4158dab (dual-write의 dual-write 무한 loop 차단) [no-log] -->
 <!-- skipped: cd43cfd docs: override-trigger fa1b304 (dual-write의 dual-write 무한 loop 차단) [no-log] -->
 <!-- skipped: cce57cd docs: landing 갱신 (5-layer 5/5) + STATE burst summary [no-log] -->
+<!-- skipped: 3d198b5 docs: f4a9c9a troubleshoot + narrative (GitHub Actions CI + Release Notarization pipeline) [no-log] -->

@@ -29,15 +29,31 @@ final class SettingsWindow {
     }
 
     private func makeWindow() -> NSWindow {
-        let view = SettingsView()
-        let hosting = NSHostingController(rootView: view)
-        let win = NSWindow(contentViewController: hosting)
+        // styleMask는 *init 시점*에 박음 — 박은 후 갱신은 contentView invalidate.
+        let win = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
         win.title = "ScreenBridge 환경설정"
-        win.styleMask = [.titled, .closable, .miniaturizable]
-        win.setContentSize(NSSize(width: 520, height: 520))
         win.setFrameAutosaveName("ScreenBridge.Settings")
         win.isReleasedWhenClosed = false
         win.collectionBehavior = [.canJoinAllSpaces, .moveToActiveSpace]
+
+        // NSHostingView 박음 — NSHostingController + contentViewController 박은 거보다
+        // *NSHostingView로 contentView 직접 박는 게* layout race 차단.
+        let hosting = NSHostingView(rootView: SettingsView())
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        win.contentView = hosting
+        if let contentView = win.contentView {
+            NSLayoutConstraint.activate([
+                hosting.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+                hosting.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+                hosting.topAnchor.constraint(equalTo: contentView.topAnchor),
+                hosting.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+            ])
+        }
         return win
     }
 }
