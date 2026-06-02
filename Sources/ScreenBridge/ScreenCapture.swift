@@ -106,8 +106,23 @@ enum ScreenCapture {
         let downscaled = downscale(cgImage, maxDimension: maxDimension)
         let sentSize = CGSize(width: downscaled.width, height: downscaled.height)
 
+        // v0.3 Layer 3: Region opt-out — 사용자 박힌 민감 영역 검은 사각형 덮음.
+        // PrivacySettings.sensitiveRegions (nonisolated)는 UserDefaults 직접 읽음.
+        let redacted: CGImage = {
+            let regions = PrivacySettings.sensitiveRegions(displayID: info.displayID)
+            guard !regions.isEmpty else { return downscaled }
+            let result = ScreenCapture.redactRegions(
+                image: downscaled,
+                regions: regions,
+                screenFrame: info.frame,
+                sentSize: sentSize
+            )
+            Log.dispatcher.notice("[region] \(regions.count, privacy: .public) sensitive region(s) redacted")
+            return result
+        }()
+
         // 7. PNG encode
-        let pngData = try pngData(from: downscaled)
+        let pngData = try pngData(from: redacted)
         Log.dispatcher.info(
             "[capture] sent \(downscaled.width, privacy: .public)x\(downscaled.height, privacy: .public) (\(pngData.count, privacy: .public) bytes)"
         )
@@ -120,6 +135,49 @@ enum ScreenCapture {
             sentSize: sentSize
         )
         return (pngData, geometry)
+    }
+
+    /// v0.3 Layer 3: 박힌 image 위에 검은 사각형으로 영역 덮음.
+    /// regions는 *screen-logical pt* (사용자가 박은 거). screenFrame + sentSize로
+    /// 매핑 → CGContext에 black rect draw.
+    static func redactRegions(
+        image: CGImage,
+        regions: [CGRect],
+        screenFrame: CGRect,
+        sentSize: CGSize
+    ) -> CGImage {
+        let w = image.width
+        let h = image.height
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(
+            data: nil,
+            width: w, height: h,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return image }
+        ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+
+        // screen-logical → sent-image pt scale
+        let scaleX = sentSize.width / screenFrame.width
+        let scaleY = sentSize.height / screenFrame.height
+        for region in regions {
+            // screen-relative origin (top-left → AppKit bottom-left 변환 + 다운스케일)
+            let x = (region.origin.x - screenFrame.origin.x) * scaleX
+            // image origin top-left (CGImage) — screenFrame bottom-left → flip
+            let y = sentSize.height - (region.origin.y - screenFrame.origin.y + region.height) * scaleY
+            let mappedRect = CGRect(
+                x: x,
+                y: y,
+                width: region.width * scaleX,
+                height: region.height * scaleY
+            )
+            ctx.fill(mappedRect)
+        }
+
+        return ctx.makeImage() ?? image
     }
 
     /// 긴 변 maxDimension cap. 비율 유지. CGContext draw + .high interpolation.

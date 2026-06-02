@@ -54,11 +54,77 @@ final class PrivacySettings: ObservableObject {
         }
     }
 
+    /// v0.3 Layer 3: 사용자가 박힌 *민감 영역* (screen-logical pt, bottom-left).
+    /// Key: `screenbridge.sensitive.regions.<displayID>` — display별 박힘.
+    /// 박힌 거 capture 후 redact (ScreenCapture.redactRegions).
+    @Published var sensitiveRegionsAll: [UInt32: [CGRect]] = [:] {
+        didSet {
+            persistRegions()
+        }
+    }
+
+    private let regionsKey = "screenbridge.sensitive.regions"
+
     private init() {
         let raw = UserDefaults.standard.string(forKey: modeKey) ?? PrivacyMode.auto.rawValue
         self.mode = PrivacyMode(rawValue: raw) ?? .auto
+        // 박힌 region 로드
+        if let data = UserDefaults.standard.data(forKey: regionsKey),
+           let decoded = try? JSONDecoder().decode([UInt32: [CGRectCodable]].self, from: data) {
+            var map: [UInt32: [CGRect]] = [:]
+            for (k, v) in decoded {
+                map[k] = v.map { $0.rect }
+            }
+            self.sensitiveRegionsAll = map
+        }
     }
 
+    /// 특정 display의 박힌 region 가져옴.
+    func sensitiveRegionsForScreen(displayID: UInt32) -> [CGRect] {
+        sensitiveRegionsAll[displayID] ?? []
+    }
+
+    /// 박힘.
+    func addSensitiveRegion(_ rect: CGRect, displayID: UInt32) {
+        var current = sensitiveRegionsAll[displayID] ?? []
+        current.append(rect)
+        sensitiveRegionsAll[displayID] = current
+    }
+
+    /// 다 지움.
+    func clearSensitiveRegions(displayID: UInt32) {
+        sensitiveRegionsAll[displayID] = []
+    }
+
+    private func persistRegions() {
+        var encoded: [UInt32: [CGRectCodable]] = [:]
+        for (k, v) in sensitiveRegionsAll {
+            encoded[k] = v.map { CGRectCodable(rect: $0) }
+        }
+        if let data = try? JSONEncoder().encode(encoded) {
+            UserDefaults.standard.set(data, forKey: regionsKey)
+        }
+    }
+}
+
+/// CGRect Codable wrapper — UserDefaults JSON persist.
+private struct CGRectCodable: Codable {
+    let x: CGFloat
+    let y: CGFloat
+    let w: CGFloat
+    let h: CGFloat
+
+    var rect: CGRect { CGRect(x: x, y: y, width: w, height: h) }
+
+    init(rect: CGRect) {
+        self.x = rect.origin.x
+        self.y = rect.origin.y
+        self.w = rect.width
+        self.h = rect.height
+    }
+}
+
+extension PrivacySettings {
     /// Dispatcher 결정 시 호출 — env var + setting 조합.
     /// auto + env=1 → local / auto + env X → cloud
     /// cloud → 항상 cloud / alwaysLocal → 항상 local
@@ -71,5 +137,13 @@ final class PrivacySettings: ObservableObject {
         case .cloud: return false
         case .alwaysLocal: return true
         }
+    }
+
+    /// v0.3 Layer 3: ScreenCapture (nonisolated) 박힌 시점에 박힘 — UserDefaults 직접 읽음.
+    /// MainActor isolation 우회 — UserDefaults는 thread-safe.
+    nonisolated static func sensitiveRegions(displayID: UInt32) -> [CGRect] {
+        guard let data = UserDefaults.standard.data(forKey: "screenbridge.sensitive.regions") else { return [] }
+        guard let decoded = try? JSONDecoder().decode([UInt32: [CGRectCodable]].self, from: data) else { return [] }
+        return decoded[displayID]?.map { $0.rect } ?? []
     }
 }
