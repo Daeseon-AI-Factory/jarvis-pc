@@ -1,0 +1,197 @@
+---
+title: "SettingsWindow blank content fix — NSHostingView + init-time styleMask"
+date: "2026-06-02"
+project: "jarvis-pc"
+kind: "troubleshoot"
+visibility: "public"
+language: "ko"
+summary: "사용자 dogfooding (2026-06-02) ⌘, 박은 후 Settings window 박혔는데 *content blank*. NSWindow init *후* styleMask 갱신이 NSHostingController layout invalidate. NSHostingView + win.contentView 직접 박은 거 + init 시점 styleMask + Autolayout 4 constraint로 fix."
+tags: ["screenbridge", "swiftui", "nshostingview", "nswindow", "bug-fix", "dogfooding"]
+---
+
+## 문제
+
+사용자 dogfooding 직후 quote: "암것도 없다 ㅋㅋ".
+
+박힌 거 (screenshot):
+
+```
+┌─────────────────────────────────────┐
+│ ● ◯ ◯  ScreenBridge Settings       │   ← title bar 박힘
+├─────────────────────────────────────┤
+│                                     │
+│                                     │   ← content view 완전 *blank*
+│            (whitespace only)        │
+│                                     │
+└─────────────────────────────────────┘
+```
+
+- ⌘, 박음 → window 박힘
+- title "ScreenBridge Settings" 정확 박힘
+- 단 *content view 완전 비어있음* — SwiftUI body (privacySection + regionsSection + downloadSection + aboutSection) 박혀있는데 visible X
+
+## 진단 — 박은 거 file:line
+
+`Sources/ScreenBridge/SettingsWindow.swift:32-44` 박은 거:
+
+```swift
+private func makeWindow() -> NSWindow {
+    let view = SettingsView()
+    let hosting = NSHostingController(rootView: view)
+    let win = NSWindow(contentViewController: hosting)   // ← contentViewController 박음
+    win.title = "ScreenBridge 환경설정"
+    win.styleMask = [.titled, .closable, .miniaturizable]  // ← *박은 후* styleMask 갱신
+    win.setContentSize(NSSize(width: 520, height: 520))
+    // ...
+    return win
+}
+```
+
+문제: `NSWindow(contentViewController: hosting)` 박은 *후* `styleMask =` 박은 *변경*. AppKit:
+- `NSWindow(contentViewController:)` 호출 시 hosting controller view → win.contentView 박힘
+- styleMask 변경 시 window *frame + content area 재계산* 박힘
+- 단 NSHostingController는 *SwiftUI body 재구성* 박지 X (controller 박은 *생애주기 race*)
+- → win.contentView 박은 거 *zero-sized 또는 not laid out*
+- → SwiftUI body 박혀있는데 *invisible*
+
+비교 — 박은 거 정상 case:
+- `SessionInspectorPanel` (commit `e4243ff`) — init 시점에 `NSPanel(contentRect:styleMask:...)` 박음
+- `RegionEditorPanel` (commit `b768862`) — 동일
+- 둘 다 *blank bug 박지 X* — *init 시점 styleMask* 박은 게 key
+
+## Fix
+
+`Sources/ScreenBridge/SettingsWindow.swift:32-58` 박은 거 갱신:
+
+```swift
+private func makeWindow() -> NSWindow {
+    // styleMask는 *init 시점*에 박음 — 박은 후 갱신은 contentView invalidate.
+    let win = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
+        styleMask: [.titled, .closable, .miniaturizable, .resizable],
+        backing: .buffered,
+        defer: false
+    )
+    win.title = "ScreenBridge 환경설정"
+    win.setFrameAutosaveName("ScreenBridge.Settings")
+    win.isReleasedWhenClosed = false
+    win.collectionBehavior = [.canJoinAllSpaces, .moveToActiveSpace]
+
+    // NSHostingView 박음 — NSHostingController + contentViewController 박은 거보다
+    // *NSHostingView로 contentView 직접 박는 게* layout race 차단.
+    let hosting = NSHostingView(rootView: SettingsView())
+    hosting.translatesAutoresizingMaskIntoConstraints = false
+    win.contentView = hosting
+    if let contentView = win.contentView {
+        NSLayoutConstraint.activate([
+            hosting.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+            hosting.topAnchor.constraint(equalTo: contentView.topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+        ])
+    }
+    return win
+}
+```
+
+박힌 fix 3가지:
+
+### 1. Init 시점 styleMask
+
+`NSWindow(contentRect:styleMask:backing:defer:)` — designated initializer. styleMask는 *init 박은 때*만 박음. `.resizable` 추가 (사용자가 window 박은 거 size 갱신 가능).
+
+### 2. NSHostingController + contentViewController → NSHostingView + win.contentView
+
+```swift
+// 이전:
+let hosting = NSHostingController(rootView: view)
+let win = NSWindow(contentViewController: hosting)
+// → hosting.view 박힘 → win.contentView 박은 거 갱신 시점 race
+
+// 이후:
+let hosting = NSHostingView(rootView: SettingsView())
+win.contentView = hosting
+// → SwiftUI view 박은 거 NSView로 wrap, win.contentView 직접 박힘
+// → controller 박은 생애주기 race 없음
+```
+
+### 3. Autolayout 4 constraints
+
+```swift
+hosting.translatesAutoresizingMaskIntoConstraints = false
+NSLayoutConstraint.activate([
+    hosting.leadingAnchor.constraint(equalTo: contentView.leadingAnchor),
+    hosting.trailingAnchor.constraint(equalTo: contentView.trailingAnchor),
+    hosting.topAnchor.constraint(equalTo: contentView.topAnchor),
+    hosting.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
+])
+```
+
+hosting view가 *window content area 전체* 박힘.
+
+## 검증
+
+```
+swift build  5.66s ✓
+./scripts/build-app.sh  ok
+```
+
+사용자 재시도:
+```bash
+killall ScreenBridge 2>/dev/null
+./dev.sh
+# 또는
+open dist/ScreenBridge.app
+⌘,
+```
+
+기대 박는 거:
+```
+┌─────────────────────────────────────┐
+│ ⚙ 환경설정                    v0.3   │
+├─────────────────────────────────────┤
+│ 🔒 Privacy Mode                     │
+│ ⊙ 자동 (env)                        │
+│ ○ Cloud (빠름)                      │
+│ ○ Local only (안전)                 │
+│                                     │
+│ ⬜ 민감 영역 (Layer 3)    [편집...] │
+│                                     │
+│ ⬇ Local Model                      │
+│ [ProgressView block]                │
+│                                     │
+│ ⓘ About                             │
+└─────────────────────────────────────┘
+```
+
+## 패턴 — NSHostingView over NSHostingController (race-free)
+
+박은 거 *NSWindow + SwiftUI body* 박을 때 2 path:
+
+| Path | 박는 거 | Race |
+| --- | --- | --- |
+| (a) NSHostingController + `contentViewController =` | controller가 *view 라이프사이클* 박음 | styleMask / size 갱신 시 *SwiftUI body 재구성 안 함* |
+| (b) **NSHostingView + `contentView =`** | view 박은 거 *직접* 박음 | **race-free** |
+
+→ macOS app에서 *SwiftUI window* 박을 때 default는 **(b) NSHostingView**. (a)는 NSDocument/NSWindowController 박는 시점만.
+
+→ memory `engineering-playbooks-index` 갱신 후보: `nsapp-menu-bar-app-patterns.md`에 *NSHostingView vs NSHostingController* row 박음.
+
+## 패턴 — init-time styleMask
+
+NSWindow / NSPanel 박은 거 *init 시점에 contentRect + styleMask + backing 모두 박음*. 박은 후 styleMask 변경은 *layout race 위험*. 박은 거 정상 sample:
+
+- `SessionInspectorPanel` (e4243ff) — init 시점 styleMask ✓
+- `RegionEditorPanel` (b768862) — init 시점 styleMask ✓
+- `HUDOverlayWindow` (a51dc09) — init 시점 styleMask ✓
+- `SettingsWindow` (3f26a3f) — **init 후 styleMask** ✗ → 이번 fix
+
+## 비용
+
+- 박는 비용: 5분 (file:line 명확 박힘, fix 6줄 → 18줄)
+- 되돌리기 비용: 박지 X (regression 일 가능성 X)
+- *진짜 가치*: 사용자 첫 dogfooding bug → 빠른 fix → 신뢰 유지
+
+## Commit
+
+`2519e4f` (2026-06-02)

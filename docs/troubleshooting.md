@@ -546,3 +546,29 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 <!-- skipped: cd43cfd docs: override-trigger fa1b304 (dual-write의 dual-write 무한 loop 차단) [no-log] -->
 <!-- skipped: cce57cd docs: landing 갱신 (5-layer 5/5) + STATE burst summary [no-log] -->
 <!-- skipped: 3d198b5 docs: f4a9c9a troubleshoot + narrative (GitHub Actions CI + Release Notarization pipeline) [no-log] -->
+
+---
+
+## SettingsWindow blank content — styleMask 박은 후 갱신 시 contentView invalidate
+
+- **Symptom**: 사용자 dogfooding 박은 거 screenshot (2026-06-02):
+  ```
+  ┌─────────────────────────────────────┐
+  │ ● ◯ ◯  ScreenBridge Settings       │   ← title bar만 박힘
+  ├─────────────────────────────────────┤
+  │                                     │
+  │                                     │   ← content view 완전 비어있음
+  │              (blank)                │
+  │                                     │
+  └─────────────────────────────────────┘
+  ```
+  ⌘, 박은 후 Settings window 박힌 거 — title 정확 박힘, content view *zero render*. SwiftUI body (privacySection + regionsSection + downloadSection + aboutSection) 박혀있는데 *invisible*.
+- **Cause**: `Sources/ScreenBridge/SettingsWindow.swift:35` 박은 거 — `NSWindow(contentViewController: hosting)` 박은 *후* `styleMask = [.titled, .closable, .miniaturizable]` 박은 갱신. AppKit이 *contentViewController 박은 후 styleMask 변경 시* hosting controller's view를 *re-layout* 박는데 이 시점에 NSHostingController가 *SwiftUI body 재구성* 안 함. window content view 박은 거 *zero-sized* 또는 *not laid out*. SessionInspectorPanel / RegionEditorPanel 박은 거는 *init 시점에 styleMask 박음* → 같은 bug 없음.
+  - Verified by: 사용자 screenshot 박힌 거 직접 (title 박힘 + content blank) + SessionInspectorPanel / RegionEditorPanel 박은 거 *init 시점 styleMask*라 동일 path X.
+- **Fix**: `Sources/ScreenBridge/SettingsWindow.swift:32-58` — NSWindow 박는 방식 갱신:
+  1. `NSWindow(contentRect:styleMask:backing:defer:)` 박음 — **init 시점에 styleMask 박음** (.titled + .closable + .miniaturizable + .resizable 추가).
+  2. `NSHostingController` + `contentViewController` 박지 X → **`NSHostingView` + `win.contentView` 직접** 박음. NSHostingView는 *SwiftUI view를 NSView로 wrap* 하는 lower-level path — controller 박은 *view 라이프사이클 race* 없음.
+  3. `translatesAutoresizingMaskIntoConstraints = false` + Autolayout 4 constraints (leading/trailing/top/bottom) 박음 — content view 박은 거 full size.
+  4. `setContentSize` 박지 X — init `contentRect`에 박힘 (520×600).
+- **Commit**: `2519e4f`
+- **Pattern**: NSWindow 박는 거 *init 시점에 styleMask + contentRect 박는 게 안전*. `contentViewController =` 박은 후 styleMask 갱신은 hosting controller's SwiftUI body를 *invalidate*. *NSHostingView + Autolayout*가 *NSHostingController + contentViewController*보다 *layout race 적음*. 박는 정신: SwiftUI body 박은 view를 NSWindow에 박을 때 **NSHostingController 우회하고 NSHostingView 직접 박는 게 race-free**.
