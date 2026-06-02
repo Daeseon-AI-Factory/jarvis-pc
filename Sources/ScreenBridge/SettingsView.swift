@@ -16,6 +16,7 @@ struct SettingsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     privacySection
+                    downloadSection
                     aboutSection
                 }
                 .padding(20)
@@ -93,6 +94,19 @@ struct SettingsView: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    private var downloadSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.down.circle")
+                    .foregroundStyle(.purple)
+                Text("Local Model")
+                    .font(.headline)
+            }
+            ModelDownloadView()
+                .padding(.horizontal, -12)   // ModelDownloadView 자체 padding 24
+        }
     }
 
     private var aboutSection: some View {

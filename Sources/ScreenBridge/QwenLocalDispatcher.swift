@@ -126,6 +126,12 @@ actor QwenLocalDispatcher: LLMDispatcher {
         Log.dispatcher.notice("[qwen] cold start — loading \(self.modelID, privacy: .public)")
         let t0 = Date()
 
+        // v0.3: ModelDownloadProgress publish — SwiftUI ProgressView 표시.
+        let publishedModelID = modelID
+        await MainActor.run {
+            ModelDownloadProgress.shared.begin(modelID: publishedModelID)
+        }
+
         let cfg = ModelConfiguration(id: modelID)
         do {
             self.container = try await VLMModelFactory.shared.loadContainer(
@@ -135,14 +141,25 @@ actor QwenLocalDispatcher: LLMDispatcher {
                 if pct % 10 == 0 {
                     Log.dispatcher.info("[qwen] download \(pct, privacy: .public)%")
                 }
+                // v0.3: progress publish — 매 callback 박은 거.
+                let fraction = progress.fractionCompleted
+                Task { @MainActor in
+                    ModelDownloadProgress.shared.update(fraction: fraction)
+                }
             }
         } catch {
+            await MainActor.run {
+                ModelDownloadProgress.shared.fail(String(describing: error))
+            }
             throw DispatcherError.invalidResponse("qwen_load_failed: \(error)")
         }
 
         let dt = Date().timeIntervalSince(t0)
         Log.dispatcher.notice("[qwen] loaded in \(Int(dt * 1000), privacy: .public)ms")
         self.lastUsedAt = Date()
+        await MainActor.run {
+            ModelDownloadProgress.shared.finish()
+        }
     }
 
     // MARK: - Generation (mid-level path — exposes .info event for tokens/sec measurement)
