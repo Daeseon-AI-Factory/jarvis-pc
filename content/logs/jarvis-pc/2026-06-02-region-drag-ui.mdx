@@ -1,0 +1,239 @@
+---
+title: "Layer 3 Region drag UI — NSPanel canBecomeKey + NSView drag handler"
+date: "2026-06-02"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "Layer 3 API (commit ae07cec) 박은 후 사용자 박는 UI 박힘. NSPanel borderless + NSView mouseDown/Dragged/Up + keyDown. ESC/Return 종료 / Delete 마지막 제거. canBecomeKey override 박는 게 핵심. SettingsView regionsSection + menu-bar ⌥⌘R."
+tags: ["screenbridge", "v0.3", "layer-3", "region", "ui", "nspanel", "nsview"]
+---
+
+## 문제
+
+Layer 3 API (commit `ae07cec`) 박힘 — `ScreenCapture.redactRegions` + `PrivacySettings.sensitiveRegions(displayID:)`. 단 *사용자가 영역 박는 UI 박지 X* — menu-bar item에 박을 entry point만 있고 *어디 박나* 모름.
+
+진짜 박혀야 할 거:
+- 사용자가 ⌥⌘R 박은 후 *전체 화면 cover overlay* 박힘
+- *드래그*로 박스 그림
+- 박힌 후 영역 *시각화* (빨강 fill + 라벨)
+- 다시 박을 수 있음 (multiple regions)
+- ESC로 종료, Delete로 마지막 제거
+
+## 결정 분기
+
+옵션:
+- (a) **SwiftUI DragGesture + ZStack overlay** — 단 ESC/Delete key event 박는 게 awkward. `focused()` modifier로 가능하지만 key 박은 *handler*가 복잡.
+- (b) **NSPanel borderless + NSView mouseDown/Dragged/Up + keyDown** — macOS native, NSResponder chain 표준.
+- (c) Carbon CGEventTap — overkill (전역 입력 박음).
+
+선택 **(b)**. NSResponder chain이 *AppKit 박힌 거*라 *key event + mouse event 같이* 박는 게 자연.
+
+## 박힌 거
+
+### `RegionEditorWindow.swift` (NEW)
+
+#### 1. `RegionEditorPanel: NSPanel` — canBecomeKey override
+
+```swift
+final class RegionEditorPanel: NSPanel {
+    override var canBecomeKey: Bool { true }    // NSPanel default false
+    override var canBecomeMain: Bool { false }
+}
+```
+
+**핵심**: NSPanel default `canBecomeKey: false` — 박은 후 key event 안 받음. override 박아야 ESC handler 작동.
+
+#### 2. Window 박는 거
+
+```swift
+let win = RegionEditorPanel(
+    contentRect: screen.frame,
+    styleMask: [.borderless, .nonactivatingPanel],
+    backing: .buffered, defer: false
+)
+win.level = .floating                    // 다른 window 위
+win.isOpaque = false                     // 반투명 가능
+win.backgroundColor = .clear
+win.hasShadow = false
+win.acceptsMouseMovedEvents = true
+win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+```
+
+#### 3. `RegionEditorView: NSView`
+
+```swift
+override var acceptsFirstResponder: Bool { true }
+
+override func mouseDown(with event: NSEvent) {
+    dragStart = convert(event.locationInWindow, from: nil)
+    dragCurrent = dragStart
+    needsDisplay = true
+}
+
+override func mouseDragged(with event: NSEvent) {
+    dragCurrent = convert(event.locationInWindow, from: nil)
+    needsDisplay = true
+}
+
+override func mouseUp(with event: NSEvent) {
+    defer { dragStart = nil; dragCurrent = nil; needsDisplay = true }
+    guard let start = dragStart, let end = dragCurrent else { return }
+    let rectLocal = rect(from: start, to: end)
+    guard rectLocal.width > 10 && rectLocal.height > 10 else { return }
+
+    // local view pt → screen-global pt
+    let globalRect = NSRect(
+        x: rectLocal.origin.x + screenFrame.origin.x,
+        y: rectLocal.origin.y + screenFrame.origin.y,
+        width: rectLocal.width, height: rectLocal.height
+    )
+    Task { @MainActor in
+        PrivacySettings.shared.addSensitiveRegion(globalRect, displayID: self.displayID)
+        self.refresh()
+    }
+}
+
+override func keyDown(with event: NSEvent) {
+    if event.keyCode == 53 || event.keyCode == 36 {     // ESC / Return
+        onDone()
+    } else if event.keyCode == 51 || event.keyCode == 117 {  // Delete / forward delete
+        // 마지막 영역 제거
+        Task { @MainActor in
+            var current = PrivacySettings.shared.sensitiveRegionsAll[self.displayID] ?? []
+            _ = current.popLast()
+            PrivacySettings.shared.sensitiveRegionsAll[self.displayID] = current
+            self.refresh()
+        }
+    } else {
+        super.keyDown(with: event)
+    }
+}
+```
+
+#### 4. Draw — 박힌 영역 + 드래그 중
+
+```swift
+override func draw(_ dirtyRect: NSRect) {
+    let ctx = NSGraphicsContext.current!.cgContext
+
+    // 반투명 검은 background (alpha 0.25)
+    ctx.setFillColor(...black 25%...)
+    ctx.fill(bounds)
+
+    // 박힌 영역 빨강 + 라벨 #1/#2
+    for (idx, region) in saved.enumerated() {
+        let local = NSRect(x: region.x - screenFrame.x, y: region.y - screenFrame.y, ...)
+        ctx.setFillColor(...red 50%...)
+        ctx.fill(local)
+        ctx.setStrokeColor(...red 100%...)
+        ctx.stroke(local)
+        // label "#1" / "#2" white bold 14pt
+    }
+
+    // 드래그 중 주황 (alpha 0.35)
+    if let start = dragStart, let current = dragCurrent {
+        ctx.setFillColor(...orange 35%...)
+        ctx.fill(rect(from: start, to: current))
+    }
+
+    // 상단 안내: "드래그로 민감 영역 박음 · Delete: 마지막 제거 · ESC/Return: 닫기"
+}
+```
+
+### `SettingsView.regionsSection` (NEW)
+
+```swift
+private var regionsSection: some View {
+    VStack(alignment: .leading, spacing: 10) {
+        HStack {
+            Image(systemName: "rectangle.dashed")
+            Text("민감 영역 (Layer 3)")
+                .font(.headline)
+            Spacer()
+            Button("편집...") { RegionEditorWindow.shared.present() }
+        }
+        let total = settings.sensitiveRegionsAll.values.reduce(0) { $0 + $1.count }
+        if total == 0 {
+            Text("박힌 영역 없음 — 편집... 박은 후 드래그로 박음")
+        } else {
+            Text("박힌 영역 \(total)개 — capture 시 검은 사각형으로 덮음, 외부 LLM 안 봄")
+            Button("모두 지우기") { settings.sensitiveRegionsAll.removeAll() }
+        }
+    }
+}
+```
+
+### `AppDelegate.swift` — menu-bar + hotkey
+
+```swift
+menu.addItem(
+    withTitle: "민감 영역 편집...",
+    action: #selector(openRegionEditor),
+    keyEquivalent: "r"
+).keyEquivalentModifierMask = [.command, .option]   // ⌥⌘R
+
+@objc private func openRegionEditor() {
+    RegionEditorWindow.shared.present()
+}
+```
+
+## 시도 흐름
+
+```
+⌥⌘R (또는 menu-bar)
+  ↓
+화면 cover overlay 박힘 (반투명 검은 배경 25%)
+상단: "드래그로 민감 영역 박음 · Delete: 마지막 제거 · ESC: 닫기"
+  ↓
+드래그 (mouseDown → mouseDragged → mouseUp)
+  ↓
+주황 박스 그려지며 박힘 → mouseUp 시점에 빨강 fill로 *영구 박힘* + 라벨 #1
+  ↓
+다시 드래그 → 영역 #2 박힘
+  ↓
+ESC 또는 Return → 종료
+  ↓
+SettingsView 안 "박힌 영역 2개" 박힘
+  ↓
+⌥+Space → capture → log [region] 2 sensitive region(s) redacted
+LLM에 가는 image는 *검은 사각형 2개*로 덮인 거
+```
+
+## 비용
+
+- 박는 비용: ~1.5h
+- 되돌리기 비용: RegionEditorWindow.swift 삭제 + SettingsView regionsSection + AppDelegate 2줄 — 15분
+- *진짜 가치*: Layer 3 *완전 박힘* — API + UI 둘 다. 사용자가 *실제로* 영역 박을 수 있음.
+
+## 패턴 — NSPanel canBecomeKey override
+
+NSPanel default `canBecomeKey: false` — 박은 후 key event 안 받음. *floating utility panel*인데 *key handler 박아야 하면* override 박는 게 핵심.
+
+```swift
+final class MyPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }   // main window 아님
+}
+```
+
+같은 pattern: SessionInspectorPanel (commit `e4243ff`)도 `becomesKeyOnlyIfNeeded=false` 박은 거 — 단 *click 가능*만 박은 거. RegionEditor는 *key handler 박아야* → canBecomeKey override.
+
+→ memory `engineering-playbooks-index` 갱신 후보: "NSPanel canBecomeKey override for key event handlers".
+
+## NSResponder mouse + key handler 박는 순서
+
+```
+1. acceptsFirstResponder: Bool { true }
+2. mouseDown → dragStart 박음 + needsDisplay = true
+3. mouseDragged → dragCurrent + needsDisplay
+4. mouseUp → 결과 박은 후 reset + needsDisplay
+5. keyDown → keyCode 53(ESC)/36(Return)/51(Delete) 박음
+6. draw → state 박힌 거 시각화 (반투명 + 박힌 거 + 진행 중)
+```
+
+이게 *AppKit 박힌 표준 drag UI*. SwiftUI DragGesture는 *gesture event*만 박음 — key event 박는 게 별도 modifier 필요.
+
+## Commit
+
+`b7688627ebf2ea920d43261dc259adba0b1737ce` (2026-06-02)
