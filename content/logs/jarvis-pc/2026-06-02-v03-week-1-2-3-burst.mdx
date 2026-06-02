@@ -1,0 +1,169 @@
+---
+title: "v0.3 Week 1+2+3 task 연쇄 박음 — publish wire / ContentMasker / Settings / Probe scaffold"
+date: "2026-06-02"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "사용자 '전부다 해라 계속 될떄까지 가보자' 신호 — Workflow w99oanivx 박힌 4주 plan의 Week 1+2+3 task 4 commit 연쇄 박음. publish wire (Inspector 갱신) + ContentMasker (Layer 2.5) + Settings (Privacy mode toggle) + Probe D-prime scaffold. 5-layer 보안 4/5 + Phase 9 measure 박힘 + setting UI 박힘."
+tags: ["screenbridge", "v0.3", "burst", "content-masker", "settings", "probe", "phase-9"]
+---
+
+## 문제
+
+사용자 quote (2026-06-02):
+> "전부다 해라 그냥 멈추지말고 계속 그냥 될떄까지 가보자"
+
+→ Workflow `w99oanivx` 박힌 v0.3 4주 plan (Week 1+2+3 task) 연쇄 박음. 박힌 거 위에 *추상화 layer*가 박혀있어 *작은 commit 4개*로 큰 진척.
+
+## 4 Commits 연쇄
+
+### 1. `5bbdf57` — 진짜 publish wire
+
+```
+A. dispatcherName publish: env 키 + setting 조합 박힌 *진짜 이름*
+   "qwen-local→claude" / "gemini→claude" / 등
+B. privacyMode publish: Router 결정 ("cloud" / "localOnly" / "blocked")
+C. Qwen tokens/sec publish: QwenLocalDispatcher → InspectorState.lastTokensPerSecond
+E. Router → Qwen routing: SCREENBRIDGE_USE_LOCAL=1 시 localModelAvailable=true
+```
+
+`AnalyzeCoordinator(dispatcherName:localModelAvailable:)` init params 박음. AppDelegate가 env 박은 후 *진짜 name* 넘김. Inspector header가 *실제 흐름* 시각화.
+
+### 2. `c936262` — ContentMasker (Layer 2.5)
+
+```swift
+enum ContentMasker {
+    static func filterSensitiveCandidates(_ candidates: [MatchCandidate]) -> FilterResult {
+        // SecretMasker.detect 재사용
+        // OCR/AX row 중 카드/주민/계좌 박힌 row 제외
+        // LLM이 "여기 [4111-XXXX...] 누르세요" 안내 불가능
+    }
+}
+
+// AnalyzeCoordinator wire:
+let rawCandidates = ocrCandidates + axCandidates
+let maskResult = ContentMasker.filterSensitiveCandidates(rawCandidates)
+let allCandidates = maskResult.filteredCandidates
+if maskResult.redactedCount > 0 {
+    Log.dispatcher.notice("[content] N candidates redacted (...)")
+}
+```
+
+5-layer 보안 Layer 2.5 박힘. 6 tests.
+
+### 3. `3f26a3f` — Settings (Privacy mode toggle)
+
+```swift
+enum PrivacyMode: String, CaseIterable {
+    case auto         // env var SCREENBRIDGE_USE_LOCAL 따라
+    case cloud        // 항상 cloud
+    case alwaysLocal  // 항상 Qwen local
+}
+
+@MainActor
+final class PrivacySettings: ObservableObject {
+    @Published var mode: PrivacyMode  // UserDefaults persist
+
+    nonisolated static func effectiveUseLocal() -> Bool {
+        // env + setting 조합 박음
+    }
+}
+```
+
+박힌 UI:
+- **SettingsView** — SwiftUI mode picker (3 row, checkmark + 한국어 설명) + "재시작 필요" alert + about block
+- **SettingsWindow** — NSWindow wrapper, 단일 instance, ⌘, shortcut, menu-bar "환경설정..." item
+- AppDelegate dispatcher 결정에서 PrivacySettings 박힌 거 사용
+
+### 4. 이번 — Probe D-prime scaffold
+
+```swift
+@Suite("Phase 9.0 — Probe D-prime scaffold")
+struct ProbeDPrimeTests {
+    @Test("fixtures + instructions.json 박혀있나")
+    // ...
+    
+    @Test("Qwen vs Gemini accuracy 측정 (RUN_PROBE_D_PRIME=1 시만)")
+    // fixtures 박혀있고 env 박힘 시:
+    //   각 fixture로 Gemini + Qwen 호출
+    //   targetText 매칭 → hit count
+    //   GO/NO-GO 출력:
+    //     ≥ 80% → ✅ GO
+    //     70-80% → ⚠️ 다른 model 평가
+    //     < 70% → ❌ fallback (cloud 영구)
+}
+```
+
+CI에선 skip (fixtures 박지 X / env 박지 X). 사용자 본인 환경에서 *5 screenshot 박은 후* 실행.
+
+## 5-layer 보안 상태 (이번 commit 후)
+
+```
+Layer 1   SecretMasker        ✓  (11 pattern, 한국 PII 5개 박힘)
+Layer 2   SensitivityRouter   ✓  (19 bundleID 박힘)
+Layer 2.5 ContentMasker       ✓  (이번 commit 묶음)
+Layer 3   Region opt-out      ⊙  v0.3+ (사용자 명시 영역)
+Layer 4   Qwen local          ✓  (wire 박힘 ef81ae6 + publish 5bbdf57)
+Layer 5   Audit log           ✓  (Phase 7.3)
+```
+
+→ **4.5/5 layer 박힘**. Layer 3만 남음.
+
+## 박힌 거 박힘 — 추상화 layer 가치
+
+박은 거 *기존 추상화 위에* 자연스럽게 박힘:
+
+```
+LLMDispatcher protocol     Phase 2.3
+  ↓ 박힌 후 → FallbackDispatcher / ClaudeDispatcher / QwenLocalDispatcher / 모두 박을 수 있음
+
+InspectorState @Published   commit e4243ff
+  ↓ 박힌 후 → publish wire (5bbdf57) + 4개 field 박음
+
+PrivacySettings UserDefaults  commit 3f26a3f
+  ↓ 박힌 후 → SettingsView + SettingsWindow + AppDelegate 박힘
+
+SecretMasker.patterns      v0.2 + 한국 PII
+  ↓ 박힌 후 → ContentMasker가 *재사용* (11 pattern)
+
+SensitivityRouter         commit 11bbea1
+  ↓ 박힌 후 → AnalyzeCoordinator publish wire (5bbdf57)
+```
+
+→ *protocol/abstraction layer 박은 후* 새 feature *작은 commit*에 박힘. 
+
+## 다음 박을 거 (남은 거)
+
+```
+🔲 fixtures/sensitive_screens/*.png — 사용자 본인 환경 (10장)
+🔲 Probe D-prime 실 측정 → GO/NO-GO 결정
+🔲 First-launch model download UI (SwiftUI ProgressView)
+🔲 Notarized .app bundle (Info.plist + codesign + notarytool)
+🔲 Sparkle 자동 update (appcast.xml + EdDSA)
+🔲 Region opt-out (Layer 3) — 사용자가 *영역 그림*
+🔲 Mac App Store reviewer note (또는 DMG-only ship — Workflow 결정)
+```
+
+## 비용
+
+```
+박은 commit       LOC      파일       시간
+5bbdf57          62        4 modified   30분
+c936262          150       2 NEW + 1 mod 30분
+3f26a3f          259       3 NEW + 1 mod 1h
+Probe scaffold   170       1 NEW         30분
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+total            641       10 files      ~2.5h
+```
+
+박은 거 *진짜 진척* + *추상화 layer 가치 측정*.
+
+## 패턴
+
+- **연쇄 박는 거 = abstraction layer 가치 measure**: 박은 거 *protocol/observable/UserDefaults* 위에서 박힌 후 *새 feature 작은 commit*에 박음. 만일 abstraction layer가 *부족했다면* 같은 4 feature가 *각 5-10h 박는 거*였음. *2.5h*에 박은 게 architecture 박은 가치 직접 measure.
+- **사용자 신호 "전부다 해라" = batch task 압축**: 박는 *단위* 작아지면 (각 30분-1h) 한 turn 안 박을 수 있음. 단 각 commit *기존 test/build 통과* 박혀야 *안전 batch*.
+
+## Commits
+
+`5bbdf579e0180d2772ef742537852fcc68f49ad1` + `c9362627d09154d017deaea19b6365a6df3f5ea2` + `3f26a3f1ecc94469f290963a3a728d0772b26dd6` + 이번 (2026-06-02)

@@ -424,6 +424,25 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 
 ---
 
+## v0.3 진행 — Layer 2.5 ContentMasker + Settings + Probe D-prime scaffold (3 commits 묶음)
+
+- **Symptom**: 사용자 "전부다 해라 계속 그냥 될떄까지 가보자" (2026-06-02) — 4 commit 연쇄 박음 (5bbdf57 publish wire / c936262 ContentMasker / 3f26a3f Settings / 이번 Probe scaffold). 박는 거 *진짜 v0.3 ship 가까이*: 5-layer 4/5 + setting toggle + Phase 9 measure 박힘.
+- **Cause**: Workflow w99oanivx 박힌 4주 plan의 Week 1+2+3 task를 연쇄 박음. 박는 거 다 architecture 박힌 거 위에 — *LLMDispatcher protocol* (Phase 2.3) + *InspectorState publish* (e4243ff) + *PrivacySettings UserDefaults* — 박은 추상화 layer가 *진짜 가치 ↑*.
+- **Fix**:
+  1. `Sources/ScreenBridge/PrivacySettings.swift` (NEW, commit `3f26a3f`) — PrivacyMode enum + UserDefaults + nonisolated `effectiveUseLocal()` (env var + setting).
+  2. `Sources/ScreenBridge/SettingsView.swift` (NEW, 3f26a3f) — SwiftUI mode picker + "재시작 필요" alert + about block.
+  3. `Sources/ScreenBridge/SettingsWindow.swift` (NEW, 3f26a3f) — NSWindow wrapper, 단일 instance, `setFrameAutosaveName`.
+  4. `Sources/ScreenBridge/ContentMasker.swift` (NEW, commit `c936262`) — `filterSensitiveCandidates` → FilterResult. SecretMasker.detect 재사용. AnalyzeCoordinator wire — rawCandidates → ContentMasker → allCandidates.
+  5. `Sources/ScreenBridge/AnalyzeCoordinator.swift` (commit `5bbdf57`) — `dispatcherName` + `localModelAvailable` init params + publish wire. Router → publishedPrivacyMode publish ("cloud"/"localOnly"/"blocked"). `.blocked` 시 Inspector publish + fail.
+  6. `Sources/ScreenBridge/QwenLocalDispatcher.swift` (5bbdf57) — runGeneration info 박힌 후 `Task { @MainActor in InspectorState.shared.lastTokensPerSecond = ... }` publish.
+  7. `Sources/ScreenBridge/AppDelegate.swift` (3f26a3f) — `PrivacySettings.effectiveUseLocal()` 사용 + menu-bar "환경설정..." item + ⌘, shortcut.
+  8. `Tests/ScreenBridgeTests/ContentMaskerTests.swift` (c936262, 6 tests).
+  9. `Tests/ScreenBridgeTests/ProbeDPrimeTests.swift` (이번, 2 tests) — fixtures 박혀있나 + RUN_PROBE_D_PRIME=1 시 Qwen vs Gemini accuracy 측정. CI에선 skip.
+- **Commit**: `5bbdf57` (publish wire) + `c936262` (ContentMasker) + `3f26a3f` (Settings) + 이번 (Probe scaffold)
+- **Pattern**: 박은 *protocol/abstraction layer*가 진짜 가치 — LLMDispatcher (Phase 2.3) + InspectorState publish + PrivacySettings → 새 feature 박을 때 *추상화 위에서* 자연 박힘. 다음 박을 거 (region opt-out / first-launch download / Notarized DMG / Sparkle update)도 박은 layer 위에 박을 수 있음.
+
+---
+
 ## Session Inspector NSPanel + actor→MainActor publish (사용자 병렬 트래킹 요청)
 
 - **Symptom**: 사용자 quote (2026-06-02) "병렬로 뭔가 문맥 트래킹하는 기능을 따로 만들까 새로띄워서". 현재 HUD는 `ignoresMouseEvents=true` (click-through) — 사용자가 *클릭 못 함*. step 진행 시각화는 박힌 audit log JSON뿐. 자녀가 어머님 옆에서 *어디까지 박혔는지* 봄 X.
