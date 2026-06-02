@@ -54,7 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     /// v0.3: dispatcher 결정 흐름 — Inspector publish + Router routing 박는 거.
     private lazy var dispatcherName: String = {
-        let useLocal = Env.string("SCREENBRIDGE_USE_LOCAL") == "1"
+        let useLocal = PrivacySettings.effectiveUseLocal()
         let hasGemini = GeminiDispatcher.fromEnvironment() != nil
         let hasClaude = ClaudeDispatcher.fromEnvironment() != nil
         if useLocal {
@@ -68,9 +68,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return "?"
     }()
 
-    /// v0.3: localModelAvailable — SensitivityRouter가 .blocked vs .localOnly 결정 박음.
+    /// v0.3: localModelAvailable — env var + PrivacySettings 조합.
+    /// PrivacySettings.alwaysLocal → true / cloud → false / auto → env 따라.
     private lazy var localModelAvailable: Bool = {
-        Env.string("SCREENBRIDGE_USE_LOCAL") == "1"
+        PrivacySettings.effectiveUseLocal()
     }()
 
     private lazy var coordinator: AnalyzeCoordinator? = {
@@ -161,6 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(toggleSessionInspector),
             keyEquivalent: "i"
         ).keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(.separator())
+        menu.addItem(
+            withTitle: "환경설정...",
+            action: #selector(openSettings),
+            keyEquivalent: ","
+        ).keyEquivalentModifierMask = [.command]
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Open sessions folder",
@@ -374,6 +381,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.cancelCurrentSession()
         }
         Log.app.info("[inspector] toggle — visible=\(SessionInspectorPanel.shared.isVisible, privacy: .public)")
+    }
+
+    /// v0.3: 환경설정 window 박음 (⌘, 또는 menu-bar).
+    @objc private func openSettings() {
+        SettingsWindow.shared.showOrFocus()
+        Log.app.info("[settings] window opened")
     }
 
     @objc private func openSessions() {
