@@ -10,14 +10,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var triggerPanel: TriggerPanel?
     private let hud = HUDController()
 
-    /// Phase 7.2: dispatcher 결정.
-    /// - GEMINI_API_KEY + ANTHROPIC_API_KEY → FallbackDispatcher (Gemini primary, Claude fallback)
-    /// - GEMINI_API_KEY only → Gemini only (v0.1 동작)
-    /// - ANTHROPIC_API_KEY only → Claude only
-    /// - 둘 다 없음 → nil (HUD 에러)
+    /// Phase 9.0: dispatcher 결정 갱신.
+    /// - `SCREENBRIDGE_USE_LOCAL=1` → Qwen primary + cloud fallback (cloud key 있으면)
+    /// - 그 외:
+    ///   - GEMINI_API_KEY + ANTHROPIC_API_KEY → FallbackDispatcher (Gemini primary, Claude fallback)
+    ///   - GEMINI_API_KEY only → Gemini only (v0.1 동작)
+    ///   - ANTHROPIC_API_KEY only → Claude only
+    ///   - 둘 다 없음 → nil (HUD 에러)
     private let dispatcher: (any LLMDispatcher)? = {
+        let useLocal = Env.string("SCREENBRIDGE_USE_LOCAL") == "1"
         let gemini = GeminiDispatcher.fromEnvironment()
         let claude = ClaudeDispatcher.fromEnvironment()
+
+        // Local 우선 모드 — 첫 호출 시 ~2GB Qwen download (HF Hub).
+        if useLocal {
+            let qwen = QwenLocalDispatcher.make()
+            // Cloud fallback (있으면) — Qwen 실패 또는 retriesExhausted 시 swap.
+            let cloudFallback: (any LLMDispatcher)? = claude ?? gemini.map { $0 }
+            if let cloud = cloudFallback {
+                let cloudName = (claude != nil) ? "claude" : "gemini"
+                Log.dispatcher.info("AnalyzeCoordinator ready — Qwen LOCAL primary + \(cloudName, privacy: .public) fallback")
+                return FallbackDispatcher(primary: qwen, primaryName: "qwen-local", fallback: cloud, fallbackName: cloudName)
+            }
+            Log.dispatcher.info("AnalyzeCoordinator ready — Qwen LOCAL only (cloud key 없음 / fallback 비활성)")
+            return qwen
+        }
+
+        // 기존 cloud-only path (default).
         switch (gemini, claude) {
         case (let g?, let c?):
             Log.dispatcher.info("AnalyzeCoordinator ready — FallbackDispatcher (Gemini primary, Claude fallback)")
@@ -29,7 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Log.dispatcher.info("AnalyzeCoordinator ready — Claude only (GEMINI_API_KEY 없음)")
             return c
         case (nil, nil):
-            Log.dispatcher.error("API 키 없음 — GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 필요. .env 확인.")
+            Log.dispatcher.error("API 키 없음 — GEMINI_API_KEY 또는 ANTHROPIC_API_KEY 또는 SCREENBRIDGE_USE_LOCAL=1 필요.")
             return nil
         }
     }()
