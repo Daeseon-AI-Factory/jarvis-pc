@@ -52,9 +52,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
     }()
+    /// v0.3: dispatcher 결정 흐름 — Inspector publish + Router routing 박는 거.
+    private lazy var dispatcherName: String = {
+        let useLocal = Env.string("SCREENBRIDGE_USE_LOCAL") == "1"
+        let hasGemini = GeminiDispatcher.fromEnvironment() != nil
+        let hasClaude = ClaudeDispatcher.fromEnvironment() != nil
+        if useLocal {
+            if hasClaude { return "qwen-local→claude" }
+            if hasGemini { return "qwen-local→gemini" }
+            return "qwen-local"
+        }
+        if hasGemini && hasClaude { return "gemini→claude" }
+        if hasGemini { return "gemini" }
+        if hasClaude { return "claude" }
+        return "?"
+    }()
+
+    /// v0.3: localModelAvailable — SensitivityRouter가 .blocked vs .localOnly 결정 박음.
+    private lazy var localModelAvailable: Bool = {
+        Env.string("SCREENBRIDGE_USE_LOCAL") == "1"
+    }()
+
     private lazy var coordinator: AnalyzeCoordinator? = {
         guard let dispatcher else { return nil }
-        return AnalyzeCoordinator(dispatcher: dispatcher)
+        return AnalyzeCoordinator(
+            dispatcher: dispatcher,
+            dispatcherName: self.dispatcherName,
+            localModelAvailable: self.localModelAvailable
+        )
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {

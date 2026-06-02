@@ -41,16 +41,26 @@ actor AnalyzeCoordinator {
     // Phase 7.3: audit log entry — session 통째 박음. 매 step append + finalize 시 save.
     private var auditEntry: SessionAuditEntry?
 
+    // v0.3: Inspector publish용 — 어떤 dispatcher 사용 중인지 사용자 봄.
+    // FallbackDispatcher 박힌 경우 "gemini→claude" 또는 "qwen-local→gemini" 표시.
+    private let dispatcherName: String
+    // v0.3: SCREENBRIDGE_USE_LOCAL=1 시 Qwen 박혀있음 — Router .localOnly 시 cloud 차단 X.
+    private let localModelAvailable: Bool
+
     init(
         capture: ScreenCaptureService = LiveScreenCapture(),
         dispatcher: LLMDispatcher,
         ocr: OCRService = VisionOCRService(),
-        ax: AXService = LiveAXService()
+        ax: AXService = LiveAXService(),
+        dispatcherName: String = "auto",
+        localModelAvailable: Bool = false
     ) {
         self.capture = capture
         self.dispatcher = dispatcher
         self.ocr = ocr
         self.ax = ax
+        self.dispatcherName = dispatcherName
+        self.localModelAvailable = localModelAvailable
     }
 
     /// 외부 코드 (AppDelegate)가 state 읽을 때. await 강제 — race 차단 (synthesis risk #2).
@@ -120,23 +130,30 @@ actor AnalyzeCoordinator {
         defer { isRunning = false }
 
         // v0.3 Layer 2: SensitivityRouter — 민감 앱 (1Password / 은행 / 카드 등) 검사.
-        // Qwen local 박힌 후 (v0.3+) → .localOnly로 swap. v0.2는 fail-closed 차단.
-        // 단 isContinuation는 router 통과 시 *이전 session* 그대로 — 매 step router 박지 X
-        // (사용자가 첫 trigger 시 안전한 앱이면 continuation 안에서 swap 안 함).
+        // SCREENBRIDGE_USE_LOCAL=1 (localModelAvailable=true)인 경우 → .localOnly 통과
+        // (dispatcher가 이미 Qwen primary FallbackDispatcher). 단 routing 결정 자체는 publish.
+        // 단 isContinuation는 router 통과 시 *이전 session* 그대로.
+        var publishedPrivacyMode: String = "cloud"
         if !isContinuation {
             let routerDecision = SensitivityRouter.decide(
                 frontmostBundleID: req.frontmostBundleID,
-                localModelAvailable: false   // v0.3 Qwen wire 후 dynamic check 박음
+                localModelAvailable: localModelAvailable
             )
             switch routerDecision {
             case .cloud:
-                break  // 기존 흐름
+                publishedPrivacyMode = "cloud"
             case .localOnly:
-                Log.dispatcher.info("[router] sensitive app \(req.frontmostBundleID ?? "?", privacy: .public) → local model only")
-                // v0.3: Qwen dispatcher로 swap 박음. 현재는 cloud 그대로 (Qwen wire ef81ae6에 박혀있지만 routing X).
-                break
+                publishedPrivacyMode = "localOnly"
+                Log.dispatcher.info("[router] sensitive app \(req.frontmostBundleID ?? "?", privacy: .public) → local model (Qwen primary)")
+                // Qwen이 이미 primary (FallbackDispatcher 안에 박힘) — 그대로 진행.
             case .blockedLocalModelNotInstalled:
+                publishedPrivacyMode = "blocked"
                 Log.dispatcher.notice("[router] sensitive app \(req.frontmostBundleID ?? "?", privacy: .public) BLOCKED — Qwen 미설치, cloud 차단")
+                // Inspector에 blocked 표시 박은 후 fail.
+                Task { @MainActor in
+                    InspectorState.shared.privacyMode = "blocked"
+                    InspectorState.shared.finishFailed("sensitive_app_blocked")
+                }
                 return .failed(.invalidResponse("sensitive_app_blocked"))
             }
         }
@@ -176,12 +193,14 @@ actor AnalyzeCoordinator {
             // v0.3 Inspector: MainActor publish (별도 panel 봄).
             let publishedID = sessionID!
             let publishedInstr = maskedInstruction
+            let publishedDispatcher = dispatcherName
+            let publishedPrivacy = publishedPrivacyMode
             Task { @MainActor in
                 InspectorState.shared.beginSession(
                     id: publishedID,
                     instruction: publishedInstr,
-                    dispatcherName: "auto",
-                    privacyMode: "cloud"
+                    dispatcherName: publishedDispatcher,
+                    privacyMode: publishedPrivacy
                 )
             }
         }

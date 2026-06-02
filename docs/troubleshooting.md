@@ -524,3 +524,4 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 <!-- skipped: f58f1de docs: f35b930 troubleshoot + narrative entries (MAX_TOKENS + scroll fix dual-write) [no-log] -->
 <!-- skipped: 7f484b1 docs: ef81ae6 troubleshoot + narrative (Qwen AppDelegate 끼움 + 3-step 3번째 빠뜨림 pattern) [no-log] -->
 <!-- skipped: c391c97 docs: override-trigger 4158dab (dual-write의 dual-write 무한 loop 차단) [no-log] -->
+<!-- skipped: cd43cfd docs: override-trigger fa1b304 (dual-write의 dual-write 무한 loop 차단) [no-log] -->

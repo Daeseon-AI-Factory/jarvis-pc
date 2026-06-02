@@ -200,6 +200,11 @@ actor QwenLocalDispatcher: LLMDispatcher {
             Log.dispatcher.info(
                 "[qwen] \(attemptLabel, privacy: .public) tps=\(info.tokensPerSecond, privacy: .public) gen_tokens=\(info.generationTokenCount, privacy: .public) prompt_tokens=\(info.promptTokenCount, privacy: .public)"
             )
+            // v0.3 Inspector publish — 사용자가 *진짜 local 작동*인지 시각화.
+            let publishedTps = info.tokensPerSecond
+            Task { @MainActor in
+                InspectorState.shared.lastTokensPerSecond = publishedTps
+            }
         }
         return raw
     }
