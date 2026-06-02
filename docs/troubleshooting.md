@@ -423,6 +423,21 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 
 ---
 
+## Session Inspector NSPanel + actor→MainActor publish (사용자 병렬 트래킹 요청)
+
+- **Symptom**: 사용자 quote (2026-06-02) "병렬로 뭔가 문맥 트래킹하는 기능을 따로 만들까 새로띄워서". 현재 HUD는 `ignoresMouseEvents=true` (click-through) — 사용자가 *클릭 못 함*. step 진행 시각화는 박힌 audit log JSON뿐. 자녀가 어머님 옆에서 *어디까지 박혔는지* 봄 X.
+- **Cause**: HUD가 click-through 박힌 이유 (Phase 5.0 박힘) = 박스가 사용자 클릭 방해 안 함. 단 *진행 상황 봄* 필요는 *별도 window* 박아야 — HUD 박지 X.
+- **Fix**: 3 new file + 6 wire 호출.
+  1. `Sources/ScreenBridge/InspectorState.swift` — @MainActor ObservableObject singleton. @Published sessionID/instruction/steps/phase/dispatcherName/privacyMode/lastTokensPerSecond. Lifecycle 박힘 (beginSession/markAnalyzing/appendStep/finishCompleted/finishCancelled/finishFailed).
+  2. `Sources/ScreenBridge/SessionInspectorView.swift` — SwiftUI (header + phase + instruction + steps ScrollView + cancel button). Privacy badge 색/아이콘 매핑.
+  3. `Sources/ScreenBridge/SessionInspectorPanel.swift` — NSPanel wrapper (`.utilityWindow + .nonactivatingPanel`, `level=.floating`, `collectionBehavior=[canJoinAllSpaces, stationary, fullScreenAuxiliary]` — multi-monitor + fullscreen follow). `setFrameAutosaveName` — 사용자 위치 기억.
+  4. `Sources/ScreenBridge/AnalyzeCoordinator.swift` — actor → MainActor publish 4 곳 (run() new session, analyzing 진입, step success, taskComplete) + cancelSession 1곳. `let` immutable copy + `Task { @MainActor in ... }` Sendable closure.
+  5. `Sources/ScreenBridge/AppDelegate.swift` — menu-bar item "세션 진행 보기" + keyEquivalent "i" + cmdKey+optionKey (⌥⌘I) + `toggleSessionInspector()` 박음.
+- **Commit**: `e4243ff`
+- **Pattern**: actor 안에서 *MainActor UI binding* 박을 때 = `let publishedX = ...` immutable copy + `Task { @MainActor in InspectorState.shared.xxx(publishedX) }` Sendable closure. 외부 var capture 직접 X. 같은 pattern QwenLocalDispatcher Sendable fix (commit `59cc0cb`) + 이번 Inspector 4 publish 호출. → "Swift 6 actor → MainActor UI publish pattern" engineering-playbooks-index 갱신 후보.
+
+---
+
 ## MLXVLM Swift API drift — Workflow research vs pinned source (4 errors + 2 Swift 6 issues)
 
 - **Symptom**: `swift build` 후 6 compile errors. workflow w02pv083c 박은 synthesis code sketch는 실제 mlx-swift-examples 2.21+ pinned source와 안 맞음:

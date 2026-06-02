@@ -1,0 +1,264 @@
+---
+title: "Session Inspector — 별도 NSPanel + SwiftUI + actor→MainActor publish"
+date: "2026-06-02"
+project: "jarvis-pc"
+kind: "tech-retro"
+visibility: "public"
+language: "ko"
+summary: "사용자 요청 '병렬로 문맥 트래킹 새로 띄워서'. 별도 floating NSPanel + SwiftUI ObservableObject + actor→MainActor publish 박음. 3 가치: 자녀가 어머님 옆에서 봄 / 기업 audit / 본인 디버그. ⌥⌘I hotkey + menu-bar item."
+tags: ["screenbridge", "ux", "inspector", "swiftui", "actor", "v0.3"]
+---
+
+## 문제
+
+사용자 quote (2026-06-02):
+> "병렬로 뭔가 문맥 트래킹하는 기능을 따로 만들까 새로띄워서"
+
+현재 박힌 HUD는 *clickThrough* (NSPanel `ignoresMouseEvents=true`) — 사용자가 *클릭 못 함*. step 진행 상황 *시각화*는 박혀있는 audit log JSON뿐. 자녀가 어머님 옆에서 *어디까지 박혔는지* 봄 필요.
+
+## 3 가치 분석
+
+```
+자녀  어머님 옆에서 *진행 상황* 봄
+       Slack/카톡으로 멀리서도 "1단계 됐어요?" 물음 가능
+       
+기업  compliance audit (어떤 step 박혔는지 visible)
+       "사용자가 송금 button 박았는지" 외부 확인 가능
+       
+본인  디버그 + Phase 9 Probe D-prime 시각화
+       Qwen tps / Gemini latency / sourceTag / irreversible badge
+```
+
+## 결정 분기
+
+옵션:
+- (a) **HUD에 박음** — HUD는 click-through라 *사용자 클릭 못 함*. 새 NSWindow 박아야.
+- (b) Menu-bar에만 짧은 진행률 ("Step 3/?" badge) — 작음 단 *step 내용 X*.
+- (c) **별도 floating NSPanel + SwiftUI** — 사용자 클릭 가능, multi-monitor follow, hotkey toggle.
+
+선택 **(c)**. *진짜 가치*는 사용자가 *클릭 + 디테일 봄*.
+
+## 박힌 거 — 3 file + 5 wire
+
+### 1. `InspectorState.swift` (NEW) — @MainActor ObservableObject singleton
+
+```swift
+@MainActor
+final class InspectorState: ObservableObject {
+    static let shared = InspectorState()
+
+    enum Phase: Sendable, Equatable {
+        case idle
+        case analyzing(stepIndex: Int)
+        case waitingForUserClick(stepIndex: Int)
+        case completed
+        case cancelled
+        case failed(String)
+    }
+
+    struct StepView: Identifiable, Equatable {
+        let id = UUID()
+        let stepNumber: Int
+        let targetText: String
+        let nextAction: String
+        let sourceTag: String
+        let irreversible: Bool
+        let elapsedSec: Double
+        let timestamp: Date
+    }
+
+    @Published var sessionID: String?
+    @Published var instruction: String?
+    @Published var steps: [StepView] = []
+    @Published var phase: Phase = .idle
+    @Published var dispatcherName: String = "?"
+    @Published var privacyMode: String = "cloud"
+    @Published var lastElapsed: Double?
+    @Published var lastTokensPerSecond: Double?
+
+    func beginSession(...) { ... }
+    func markAnalyzing(stepIndex: Int) { ... }
+    func appendStep(_ step: StepView) { ... }
+    func finishCompleted() { ... }
+    func finishCancelled() { ... }
+    func finishFailed(_ reason: String) { ... }
+}
+```
+
+### 2. `SessionInspectorView.swift` (NEW) — SwiftUI
+
+박은 elements:
+- **Header**: title + privacy badge (cloud/local/blocked + 아이콘 ☁️/🔒/⛔) + dispatcher chip
+- **Phase indicator**: 색 dot + 한국어 label ("분석 중... step 1", "사용자 클릭 대기", "끝났어요 ✓")
+- **Instruction block**: textSelection 가능 (사용자 copy)
+- **Steps list (ScrollView)**:
+  - 번호 circle (accentColor 18%) + targetText (semibold) + irreversible ⚠️ + elapsed "X.Xs"
+  - nextAction 설명 (caption, lineLimit 2)
+  - sourceTag (caption2 monospaced — "AX:AXDockItem" / "OCR" / "Qwen" 등)
+- **"현재 세션 취소"** prominent button (analyzing/waitingForUserClick 시만 visible)
+
+### 3. `SessionInspectorPanel.swift` (NEW) — NSPanel wrapper
+
+```swift
+@MainActor
+final class SessionInspectorPanel {
+    static let shared = SessionInspectorPanel()
+    private var window: NSPanel?
+
+    private func makeWindow(onCancel: @escaping () -> Void) -> NSPanel {
+        let view = SessionInspectorView(state: InspectorState.shared, onCancel: onCancel)
+        let hosting = NSHostingController(rootView: view)
+
+        let panel = NSPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 440, height: 560),
+            styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel],
+            backing: .buffered, defer: false
+        )
+        panel.title = "Session Inspector"
+        panel.contentViewController = hosting
+        panel.isFloatingPanel = true
+        panel.becomesKeyOnlyIfNeeded = false
+        panel.hidesOnDeactivate = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        panel.level = .floating
+        panel.setFrameAutosaveName("ScreenBridge.SessionInspector")
+        return panel
+    }
+}
+```
+
+핵심 박힌 옵션:
+- `.utilityWindow` — 일반 main window와 *구별* (작은 title bar)
+- `.nonactivatingPanel` + `becomesKeyOnlyIfNeeded=false` — 사용자가 panel 안 박지만 *menu-bar app 활성* X
+- `.canJoinAllSpaces + .stationary + .fullScreenAuxiliary` — 어머님 *다른 Space* / *fullscreen 앱* 가도 follow
+- `setFrameAutosaveName` — 사용자 *panel 위치* 기억
+
+### 4. `AnalyzeCoordinator.swift` (publish wire, actor → MainActor)
+
+actor 안에서 *MainActor* binding 박은 거 (Swift 6 strict concurrency):
+
+```swift
+// run() new session 시작:
+let publishedID = sessionID!
+let publishedInstr = maskedInstruction
+Task { @MainActor in
+    InspectorState.shared.beginSession(
+        id: publishedID,
+        instruction: publishedInstr,
+        dispatcherName: "auto",
+        privacyMode: "cloud"
+    )
+}
+
+// run() analyzing 진입:
+let stepIdx = history.count
+Task { @MainActor in
+    InspectorState.shared.markAnalyzing(stepIndex: stepIdx)
+}
+
+// run() step success:
+let inspectorStep = InspectorState.StepView(...)
+Task { @MainActor in
+    InspectorState.shared.appendStep(inspectorStep)
+}
+
+// run() taskComplete:
+Task { @MainActor in
+    InspectorState.shared.finishCompleted()
+}
+
+// cancelSession:
+Task { @MainActor in
+    InspectorState.shared.finishCancelled()
+}
+```
+
+*let* immutable copy 박은 후 *Task closure capture* — Sendable 통과.
+
+### 5. `AppDelegate.swift` — menu-bar item + hotkey
+
+```swift
+// menu setUp:
+menu.addItem(
+    withTitle: "세션 진행 보기",
+    action: #selector(toggleSessionInspector),
+    keyEquivalent: "i"
+).keyEquivalentModifierMask = [.command, .option]   // ⌥⌘I
+
+// callback:
+@objc private func toggleSessionInspector() {
+    SessionInspectorPanel.shared.toggle { [weak self] in
+        self?.cancelCurrentSession()  // Inspector "현재 세션 취소" button
+    }
+}
+```
+
+## 비용
+
+- 박는 비용: ~2h (3 new file + 5 wire 호출 + menu-bar item)
+- 되돌리기 비용: 3 file 삭제 + AnalyzeCoordinator 6 wire 호출 + AppDelegate 2 menu — 20분
+- *진짜 가치*: 사용자 *실시간 진행 시각화* + 자녀 도움 + audit visible — 큰 dogfooding 가치
+
+## 시도 흐름
+
+```
+./dev.sh
+  ↓
+⌥⌘I → "Session Inspector" panel 떠
+  - 처음엔 "⌥+Space → instruction 입력 → 진행 봄" placeholder
+  ↓
+⌥+Space → instruction 입력 (예: "github 알림 끄기")
+  ↓
+Inspector 실시간 표시:
+  - Header: "분석 중... step 1" 오렌지 dot + "auto" dispatcher chip + "Cloud" badge
+  - Instruction: "github 알림 끄기"
+  - Steps list: 비어있음 (분석 중)
+  ↓
+박스 떠 + step 1 publish:
+  Inspector Steps list:
+    #1 GitHub 프로필 [AX:AXButton]  ← clickable not, 단 visible
+       "여기 [프로필 아이콘] 누르세요"
+       2.4s
+  Header: "step 1 — 사용자 클릭 대기" 파랑 dot
+  ↓
+사용자 클릭 → ⌥+Space → continuation
+  ↓
+step 2 publish, list에 박힘
+...
+  ↓
+taskComplete:
+  Inspector Header: "끝났어요 ✓" 초록 dot
+```
+
+## 패턴 — actor → MainActor publish via let-capture
+
+Swift 6 strict concurrency에서 *actor 안에서 외부 var capture* 못 함. 박은 pattern:
+
+```swift
+// 박는 거 (actor 안):
+let publishedID = sessionID!                  // ← immutable copy
+let publishedInstr = maskedInstruction
+Task { @MainActor in
+    InspectorState.shared.beginSession(
+        id: publishedID, instruction: publishedInstr, ...  // ← Sendable closure
+    )
+}
+```
+
+→ *let* immutable + *Sendable type only*. actor isolation 안 깨짐 + Inspector state는 MainActor에서 갱신 (UI thread).
+
+같은 pattern: QwenLocalDispatcher 박을 때 (commit `59cc0cb` MLXVLM Sendable closure) + 이번 commit 4곳 Inspector publish.
+
+→ memory `engineering-playbooks-index` 갱신 후보 — "Swift 6 actor → MainActor UI publish pattern".
+
+## 다음
+
+- Qwen tokens/sec publish (`InspectorState.lastTokensPerSecond`) — QwenLocalDispatcher analyze() 안에서 박음
+- dispatcherName publish — AppDelegate dispatcher 결정 시 박음 (현재 "auto"로만)
+- privacyMode publish from SensitivityRouter decision (현재 "cloud"로 static)
+- Inspector 안 audit log open button — TextEdit에 JSON 박음
+- 사용자 본인 dogfooding — ⌥⌘I로 panel 떠보기
+
+## Commit
+
+`e4243ff9451b28702e303c5262ab13c8edc1d506` (2026-06-02)
