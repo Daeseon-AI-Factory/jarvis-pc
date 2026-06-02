@@ -419,6 +419,7 @@ Concrete only. Numbers, file paths, commit hashes. No "lessons learned" essays.
 <!-- skipped: fff55c5 dual-write log system 도입: docs/troubleshooting.md + content/logs/ -->
 <!-- override-trigger: 58e688c docs: 59cc0cb troubleshoot + narrative entries (Stop hook trigger 풀이) — 이 commit 자체가 이전 commit 59cc0cb의 dual-write entries. 261 LOC가 threshold 넘긴 건 entry 자체 길이 (narrative mdx 256줄 + troubleshooting entry). dual-write에 또 dual-write 박는 건 무한 loop. -->
 <!-- override-trigger: 9f2f43a feat: landing page 박음 (Apple-style + 어머님 + 빅테크 비교 + 5-layer 보안) — 1190 LOC threshold 넘긴 건 landing page asset 자체 (995 line HTML + 67 line README + 128 line narrative mdx). 이미 content/logs/jarvis-pc/2026-06-01-landing-page.mdx narrative entry 박힘 (이 commit 안). landing page는 *publishable artifact*이지 *troubleshoot* 아님 — troubleshooting.md fit X. R8 dual-write 정신 (narrative)는 박힘. -->
+<!-- override-trigger: 4158dab docs: 11bbea1 troubleshoot + narrative (SensitivityRouter Layer 2 + 한국 PII 5개 + 5-layer 4/5) [no-log] — 이 commit 자체가 *이전 commit 11bbea1의 dual-write entries 박은 거*. 245 LOC가 threshold 넘긴 건 entry 자체 길이 (troubleshooting entry 20 line + narrative mdx 225 line). dual-write에 *또 dual-write 박는 건* 무한 loop. R8 정신은 박힘 — 11bbea1에 대해 narrative + troubleshooting 둘 다 박은 게 이 commit 4158dab. -->
 
 ---
 
