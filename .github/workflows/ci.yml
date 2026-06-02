@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: swift test (macOS 14 + Swift 6)
+    runs-on: macos-14
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-
+
+      - name: swift build
+        run: swift build
+
+      - name: swift test
+        run: swift test --parallel
+
+  build_app:
+    name: build-app.sh (release + ad-hoc sign)
+    runs-on: macos-14
+    needs: test
+    timeout-minutes: 25
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            .build
+            ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-release-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            swiftpm-release-${{ runner.os }}-
+            swiftpm-${{ runner.os }}-
+
+      - name: build-app.sh
+        run: ./scripts/build-app.sh
+
+      - name: build-dmg.sh
+        run: ./scripts/build-dmg.sh
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScreenBridge-Beta-DMG
+          path: dist/*.dmg
+          retention-days: 30
+          if-no-files-found: error
