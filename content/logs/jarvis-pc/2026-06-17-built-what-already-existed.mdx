@@ -1,0 +1,117 @@
+---
+title: "장애회고: 8일 동안 아무도 안 시킨 5,800줄을 짜고, 검증은 맨 마지막에 했다"
+date: "2026-06-17"
+project: "jarvis-pc"
+kind: "business"
+visibility: "public"
+language: "ko"
+summary: "ScreenBridge(jarvis-pc)를 2026-05-26~06-02 8일·122커밋 동안 풀빌드한 뒤, 핵심 기능이 빅테크·2인팀 Roger AI가 이미 출시한 commodity임을 마지막에야 확인한 장애회고. 스스로 적은 kill-gate('주 5회 자발적 사용')를 한 번도 측정 안 하고, Tauri 전량 폐기(~2,357줄)와 가장 공들인 OCR+AX 99% 좌표 레이어가 정작 제일 무가치했던 '낭비 장부'를 정량화하고, 같은 패턴이 지금 Talkak에서 반복 중임을 못박는다."
+tags: ["post-mortem", "validation", "solo-founder", "over-engineering", "macos", "swift", "tauri"]
+---
+
+반나절이면 끝났을 질문을 5,800줄 다 짜고 나서 했다. 순서가 정확히 거꾸로였다. 이건 그 장애의 회고다.
+
+이 글은 위로용이 아니다. ScreenBridge(jarvis-pc)를 8일 동안 만들면서 내가 한 모든 실수를, 실제 repo 기록으로 박아서, 낭비한 시간까지 숫자로 적는다. 추측은 [추정]으로 표시한다. 위로는 없다.
+
+---
+
+## 결론부터 (the cold thesis)
+
+**나는 "이거 이미 있나? 누가 돈 내나?"를 묻는 데 반나절이면 됐는데, 그 질문을 제품 5,800줄을 다 짜고 나서 했다.** 그 사이 8일 동안 122커밋을 박았고, Tauri로 풀 제품을 만들었다 버리고, Swift로 똑같은 걸 다시 짜고, 그 위에 5-layer 보안·로컬 LLM·notarization·CI까지 올렸다 — 전부 외부 사용자 0명, 유료 유저 0명, 반복 사용 검증 0인 상태에서. 핵심 기능(AI가 화면 보고 가리킴)은 OpenAI Codex / Anthropic computer use / Apple / MS가 다 출시한 commodity였고, 2인팀 Roger AI가 거의 동일한 macOS 오버레이를 이미 냈다. 내가 만든 건 기술적으로 진짜로 작동한다. 그게 문제의 본질이 아니다. **문제는 작동하는 걸 만든 게 아니라, 아무도 원하는지 확인 안 한 걸 잘 만든 거다.**
+
+---
+
+## 크로노로지 — 시간이 어디로 갔나 (start → end)
+
+전체 빌드 윈도우: **첫 커밋 `0c7283c` 2026-05-26T15:16:56 → 마지막 코드/docs 커밋 `feb43b3` 2026-06-02T17:04:31.** 달력으로 **8일.** 회고 narrative(`2026-06-17-built-what-already-existed.mdx`)는 15일 뒤에 썼다. 즉 5,808줄/41파일(당시 기준)/150+테스트짜리 제품 전체가 **8일 burst**로 지어졌다 — 몇 달이 아니다.
+
+총 노력 proxy: **122 git 커밋 + 44 narrative .mdx 로그.** 일별 커밋 분포(`git log %cI | uniq -c` 실측):
+
+| 날짜 | 커밋 | 그날 무슨 일 |
+|---|---|---|
+| 05-26 | **31** | Tauri v0.1 Phase 0→6 풀빌드 ("ready for daily use") |
+| 05-27 | 19 | Tauri HUD 함정 16개 발견 → stack swap 결정 |
+| 05-28 | 1 | — |
+| 05-29 | 11 | Swift 재작성: dispatcher/capture/OCR/HUD skeleton |
+| 05-30 | 17 | AX matcher / spatial fusion / bubble UI / multi-target |
+| 05-31 | 13 | SecretMasker / 429 fallback / Qwen MLX wire / 보안 블로그 |
+| 06-01 | 4 | 995줄 랜딩페이지 |
+| 06-02 | **26** | 5-layer 보안 / Inspector / DMG / CI — 하루에 26커밋, ~5시간 |
+
+두 개의 거대한 burst 날(05-26의 31, 06-02의 26)이 프로젝트를 책처럼 양 끝에서 감싼다. 둘 다 "달릴 수 있을 때까지 달린" 날이고, 둘 다 검증과 무관했다.
+
+**Phase 1 — Tauri v0.1 (05-26, ~2시간):** Initial commit 15:16 → `df5add2` "Phase 6 COMPLETE: ready for daily use" **17:07 같은 날.** `BUILD_REPORT.md` 3행 그대로: "세션: 2026-05-26 (첫 세션 + 최종 세션). 모든 Phase 단일 세션 내 완료." Phase 0~6 전체(scaffold→dispatcher→capture→hotkey→tray→trigger→overlay→sessions)를 2시간 안에, 26커밋으로.
+
+**Phase 2 — Tauri 함정 + stack swap (05-26 저녁~05-27):** macOS-native HUD 한계 16개를 Tauri 추상화 위에서 trial-and-error로 재발견(`PROJECT_TIMELINE.md` 24-49행, 16행짜리 표). 결과: `bcdc0ff` "stack swap 결정 기록: Tauri → Swift" 2026-05-27T18:53:53, `32929bd` "main reset to Swift base" 19:14. Tauri 코드 ~3000줄 / 30커밋 **전량 폐기.**
+
+**Phase 3 — Swift 재작성 코어 (05-29~05-30, 가장 길게 지속된 빌드):** 05-29(11커밋)에 Phase 2.1→6.1을 Swift로 다시 깔고, 05-30(17커밋)에 AX matcher·spatial fusion·bubble UI·multi-target·latency playbook을 올렸다. 이 2일 28커밋이, **Tauri가 05-26에 2시간에 한 걸 Swift로 다시 한 것.**
+
+**Phase 4 — 보안/로컬모델/인프라 오버빌드 (05-31~06-02):** 05-31(13커밋) = SecretMasker, Claude 429 fallback, Qwen MLX wire, 884줄 보안 블로그 + 1048줄 playbook. 06-02(**26커밋, 단일 최대 커밋 날**) = SensitivityRouter, ContentMasker, Region opt-out, .app 번들, DMG, GitHub Actions CI/notarization, Session Inspector, ModelDownload UI. `STATE.md` 246행: "9 commits × ~2-3h." 이게 "시체에 금칠한" 단계다 — 전부 pre-revenue, pre-validation 인프라.
+
+가장 노력 집중된 챕터 = **2026-06-02.** 하루 26커밋, 12:13→17:04 ~5시간. 동력은 `STATE.md` 156행의 내 발언: "전부다 해라 계속 될떄까지 가보자." 그날 5-layer 보안(5/5), Settings/Inspector/Download UI, notarized-DMG, CI를 다 냈다 — 회고가 말하듯 "유료 유저 0명, 신뢰할 만한 반복 사용 검증 0"인 제품에.
+
+---
+
+## 루트코즈 — 증상 말고 시스템 (왜 이게 가능했나)
+
+증상은 "오버빌드"다. 원인은 다섯 개고, 전부 연결돼 있다.
+
+**1. 빌드가 검증보다 먼저 (sequencing inversion).** 가장 싸고 가장 결정적인 단계(반나절짜리 "이거 이미 있나 / 누가 돈 내나" 경쟁·수요 스캔)를 맨 **마지막**에 놨다. `git log -- PRODUCT.md`는 정확히 한 줄(`7775b8e`, 2026-05-26T15:57:36) — PRODUCT.md는 부트스트랩 때 한 번 쓰고 다시 안 건드렸다. 빌드 시작 scaffold `600d430`은 16:08 — **비전 문서 쓴 같은 시간에 빌드가 시작됐고, 그 사이 스캔은 0.** `git log --until=2026-05-29` = 51커밋이 전부 경쟁이라는 단어가 repo에 처음 등장하기 전에 박혔다 (전체의 42%).
+
+**2. "어려운 것"을 "가치 있는 것"으로 착각.** 회고 5번 항목 그대로: "제일 공들인 부분(OCR+AX 융합, 99% 좌표, 로컬 LLM)이 정작 제일 가치 없었다. 내 앱 안에서라면 DOM이 좌표를 100% 알고, 남의 앱이라면 빅테크가 이미 한다." 가장 어렵게 엔지니어링한 레이어가, 양쪽에서 무가치한 바로 그 레이어였다. 엔지니어링이 *재밌는* 쪽으로 갔지 *가치 있는* 쪽으로 안 갔다.
+
+**3. 내가 적은 kill-gate를 내가 무시.** `PRODUCT.md` 55행: "진입 조건 → v0.2: 내가 일주일에 5번 이상 자발적으로 씀." 83행: "사용자 = 본인 (dogfooding): 매일 안 쓰면 출시 안 함." 86행: "v0.1: 일주일 5회 이상 자발적 사용." **명확하고, 측정 가능하고, 이진(binary)이다.** 그런데 측정 횟수 = 0. build.log 1,273줄 어디에도 "한 번 자발적으로 썼다"는 기록조차 없다. v0.3(5-layer + 로컬 Qwen + DMG + CI)이 다 나왔는데도 `STATE.md` 225/228/241행은 여전히 🔲 — "Probe D-prime 실 측정", "어머님 M1 8GB 실측", "어머님 + 5-10 개발자 친구 배포"가 전부 미체크. **gate가 binding이 된 날(2026-05-30, 쓸 만한 v0.1이 생긴 날)과 gate를 조용히 지운 날이 같은 날이다.** 그날 메모(`pragmatic-ship-mode.md`)에 내가 적었다: "어차피 나중에 대체되도 당장 출시하고 조금이라도 버는게 낫지." gate를 precondition("dogfood하고 ship")에서 postcondition("ship하고 dogfooding에서 fix")으로 바꿨고, 그 "나중"은 안 왔다. PRODUCT.md 55행은 안 고쳤다 — 이미 사적으로 폐기한 kill-gate를 문서에는 그대로 들고 다녔다.
+
+**4. 솔로 + 외부 신호 0.** PRODUCT.md 17행: "타겟 사용자 = 나 (제작자) ... 다른 사용자는 고려하지 않음." 사용자도, 동료도, 예정된 스캔도 없으니 "이미 존재함(Codex/Claude/Roger AI)"이 표면화될 메커니즘 자체가 없었다. 차별화 명제("LLM은 commodity, Context Pipeline이 moat", "Cluely 같은 답 받기 도구 아님, 번역 레이어")는 내부에서 만들어져 *맞는 것처럼 느껴진* 주장이었고, 실제 카테고리(computer-use)에 한 번도 적대적으로 부딪혀보지 않았다. 경쟁 인식의 첫 순간조차 reactive였다 — `PROJECT_TIMELINE.md` 515행, "빅테크 agent가 1-2년 내 대체"는 **사용자가 메시지로 밀어서** 나온 거지 내가 고개 들어서 본 게 아니다.
+
+**5. 과정(process)을 검증의 대체물로.** 솔로 미검증 제품에 dual-write 로깅 + git hook(`.git/hooks/pre-commit`) + 블로그 publish 파이프라인을 깔았다. 결정적 비대칭: **코드 품질 gate(R1-R9, pre-commit, Stop-hook dual-write)는 툴로 hard-block됐지만, 검증 gate("누가 원해?")는 markdown 속 soft note였다.** 빌드는 green test + 자동 강제되는 블로그 엔트리로 *보상*받았고, 검증은 툴이 인식하는 산출물이 없었다 — 그래서 빌드가 항상 이겼다. 회고 6번 항목 그대로: "검증 전에 과정을 깔았다 ... 병신짓은 *비율*이다 — '열심히 하는 느낌'으로 *무서운 질문을 회피한* 거다. 정교한 회피." 실제로 26/122커밋(21%)이 순수 `docs:`/backfill, 19커밋이 `[no-log]`/override-trigger 마커를 달았다 — `cd136a4` "override-trigger ... (dual-write의 dual-write 무한 loop 차단)" 같은 자기참조 로깅까지 포함해서. 5커밋 중 1커밋은 제품 행동 0, 과정 산출물만 냈다.
+
+---
+
+## 낭비 장부 (the waste ledger)
+
+honest하게, 가능한 한 정량화. 시간 추정은 전부 내 자신의 DECISIONS.md/mdx self-estimate지 측정 로그가 아니다 → [추정].
+
+**A. Tauri 전량 폐기 (검증된 sunk).** `tauri-archive` 브랜치(44커밋, `v0.1-tauri-attempt` 태그)에 보존. ~1,949줄 Rust(13파일: dispatcher.rs 695, lib.rs 376, ocr.rs 228) + ~408줄 TS/TSX(7파일) = **~2,357줄 앱 코드** + 전체 Cargo/npm 의존성 트리, 전부 폐기. 날짜: `0c7283c` 2026-05-26T15:16 → `ea7390e` 2026-05-27T16:21, ~25시간 wall-clock. "ready for daily use"(`df5add2` 17:07 day 1) 찍고 나서 **18커밋을 더** macOS-native 동작과 싸우는 데 태웠다. 16개 함정 각각이 Apple SDK에선 한두 줄짜리다 — Layer 1 투명창은 `NSWindow.isOpaque=false; .backgroundColor=.clear` 두 줄, Layer 8 click-through는 `ignoresMouseEvents=true` 한 줄. **수익: 0줄이 살아남음.** 내 회고 추정 "~3000줄 / 30커밋 sunk", 그리고 "Tauri 위에 재발견하는 게 우리 한 일의 80%, 진짜 product는 20%." **잔인한 진실:** v0.1 스펙은 `PRODUCT.md`에 "단일 macOS Space만 지원" = macOS-only인데, cross-platform 프레임워크를 고른 유일한 근거는 "Rust 학습 / React 익숙 / 미래 Windows·Linux 옵션 보존" — 전부 v0.1 요구사항이 아닌 이력서·취향·가정. 30분짜리 "cross-platform 웹 프레임워크가 native macOS HUD에 맞나?" 체크면 detour 전체를 건너뛰었다. 그 체크의 결론을 나는 swap 회고에서 정확히 적었다: "cross-platform 욕심이 native-only 제품에 비싼 trade-off다." 사후에 정답을 쓸 줄 알았으면, 사전에 물었어야 했다.
+
+**B. OCR/99%-좌표 재구축 — 가장 어렵게 지은 레이어, 가장 무가치 (검증된 sunk, 챕터 중 최악).** Phase 4.2 dogfooding에서 "Vision LLM 좌표 추정 ~70%, ±50-100px 어긋"을 발견하고 LLM이 픽셀 추측 못 하게 막고 deterministic source에서 좌표를 뽑기로 함(`DECISIONS.md` 2026-05-27, `cfd0b48`). 빌드가 스스로 추정한 비용: "박는 비용 ~16-20시간", "되돌리기 비용 매우 높음 ~24h", "revert 불가." 결과물: OCRService 103 + AXService 192 + ElementMatcher 429 + DisplayGeometry 82 = ~800줄 grounding 머신. 게다가 "완성" 후 **세 번 더 churn** — Phase 6.1 OCR matcher(`95d4c57`) → spatial fusion(`fcc95b0`, OCR이 어시스턴트 답변 속 "slack 못 찾았어" 텍스트를 Dock 아이콘 대신 매칭한 wrong-box 버그) → Phase 6.2 AX matcher(`d68746e`, OCR이 visible text만 잡아서 Dock 아이콘 못 풀음). 4커밋이 하나의 정확도 레이어를 진짜 작동하게 만드는 데 들었다. **수익:** 회고 5번 — "제일 공들인 부분이 정작 제일 가치 없었다. 내 앱 안이면 DOM이 100% 알고, 남의 앱이면 빅테크가 이미 한다." 양방향에서 죽은 레이어를 가장 어렵게 지었다.
+
+**C. Dispatcher churn — 같은 벤더 선택 문제를 두 스택에서 두 번.** Tauri 시절 Rust 한 파일에 4개(Anthropic/ClaudeCli/Groq/Gemini). Swift 재작성 후 별도 파일로 재구현: GeminiDispatcher 355 + ClaudeDispatcher 403 + QwenLocalDispatcher 281 + FallbackDispatcher 78 + LLMDispatcher 37 (실측 `wc -l`). 5-옵션 bake-off 돌려서 Groq를 #1로 추천("압도적 속도")했다가, 같은 DECISIONS.md 안에서 실측으로 죽였다("Groq 76초 ✗ coords=None, 15배 느림"). 선택한 Gemini는 free tier가 250→20 RPD로 silent 컷돼서 429에 막혔고, 그래서 paid Anthropic을 fallback으로 다시 끌어왔다 — "결제 마찰=치명적"이라며 Anthropic을 처음에 죽인 그 이유가, 결국 Anthropic을 fallback으로 부르며 한 바퀴 돌아왔다. 모델/정확도 레이어 합계 ≈ **2,009줄, 전체 5,808줄의 약 1/3.** [추정] 시간은 내 self-estimate.
+
+**D. 06-02 인프라 burst — 배포할 게 없는데 깐 배포 파이프라인.** .app skeleton(`0901ab6` 15:20) → DMG(`40dfde8` 15:24) → GitHub Actions notarize(`f4a9c9a` 15:27), **7분 안에 3커밋.** 이 파이프라인은 Apple Developer $99/yr 등록에 의존하는데 `STATE.md` 234행은 아직 🔲 미등록 — 즉 notarize 못 하는 DMG의 풀 sign/notarize/release 파이프라인을, 다운로드할 사용자도 0명인 채로. + 995줄 랜딩페이지(waitlist가 stub `alert()`), Session Inspector(~2h, 3파일, static placeholder로 ship), Region drag UI(~1.5h, API 먼저 짓고 UI 나중, 둘 다 사용자 전에).
+
+**E. 문서/playbook 오버빌드 — 가장 조용하고 LOC로는 가장 큼.** 7,235줄 MDX narrative(47파일) + 612줄 latency playbook + 1,048줄 보안 playbook + 884줄 보안 deep-dive 블로그. 전부 0-user 제품의 "transferable knowledge"·SEO 자산으로. R8/R9 + dual-write가 이걸 제도화해서 — 모든 non-trivial 커밋이 troubleshooting 엔트리 + dated narrative를 강제하니, polish-documentation이 미검증 코드와 lockstep으로 자랐다.
+
+**합산 (검증된 spans):** v0.1 "번역기 본질 완성"(`c003829`, 2026-05-30T11:04) 마일스톤 이후 ~60+커밋(마지막 3일)이 전부 post-MVP polish/infra를, 한 번도 체크 안 된 검증 gate 위에 쌓은 것. [추정] 만약 경쟁 스캔(회고: "몇 분 만에 다 찾아냈다")을 week 0에 돌렸다면, swap 이후 8일 Swift 재작성 + 보안 burst ~78커밋이 회피 가능했던 후보 지출이다. 5,808줄 / 41파일 / 150+테스트(당시 기준)는 **유료 유저 0, 검증 완료 0**으로 도달했다.
+
+---
+
+## 이건 과거형이 아니다
+
+회고 쓰고 나서도 빌드는 *계속 자랐다.* narrative는 "41파일 / 5,808줄"이라 적었지만, 오늘 live repo는 `find Sources Tests -name '*.swift' | wc -l` = **58파일 / 8,064줄**(실측). commodity로 이미 판명난 제품 위에 ~2,256줄 / 17파일이 더 붙었다. 맹점이 그만큼 구조적이라는 뜻이다.
+
+그리고 **같은 패턴이 지금 다음 제품 Talkak/ddalkkak에서 그대로 돌고 있다.** 검증 전에 짓기, 어려운 걸 가치 있는 걸로 착각하기, 스스로 적은 gate 무시하기 — 동일 시퀀스. 이 회고가 그 사실을 막지 못하면, 이 글 자체가 회고가 경고한 바로 그 "정교한 회피"의 또 다른 사례가 된다.
+
+---
+
+## 배울 점 (transferable rules)
+
+1. **검증을 맨 앞에, 빌드를 맨 뒤에.** "이거 이미 있나 / 누가 돈 내나"는 반나절(현실은 몇 분)이다. 0줄 짜기 전에 한다. week 0에. 예외 없음.
+2. **gate는 문서가 아니라 도구다.** kill-gate를 markdown에 적는 건 enforcement가 아니다. 측정 안 되면 gate가 아니라 소망이다. 측정 메커니즘 없는 gate는 만들지 마라 — 다음 phase를 막는 hook이거나, 아무것도 아니거나.
+3. **"어려움" ≠ "가치."** 가장 어려운 엔지니어링 레이어가 moat인지 commodity인지부터 묻는다. defensibility 체크 없이 hard problem에 들어가지 마라. 내 앱이면 DOM이 풀고, 남의 앱이면 빅테크가 푼다 — 둘 다 아니면 그때 짓는다.
+4. **솔로일수록 외부 신호를 강제로 주입.** 타겟 = "나" 한 명은 reality-check 메커니즘이 0이라는 뜻. 1주차에 사람에게 보여주는 걸 일정에 박는다.
+5. **과정이 검증을 흉내 내지 못하게.** 로깅·CI·notarization은 검증된 제품의 자산이지, 검증의 대체물이 아니다. "열심히 하는 느낌"을 주는 건 전부 무서운 질문의 회피일 수 있다 — 비율을 보라.
+6. **stack은 product 카테고리에 맞춘다.** cross-platform 욕심이 native-only 제품에 비싼 trade-off다. framework-to-category fit 30분 체크가 16개 함정을 막는다.
+
+---
+
+## 담에 다르게 (concrete next actions)
+
+- **Talkak에서 지금 당장: 0줄 더 짜기 전에 경쟁·수요 스캔 1회.** "이미 있나 / 누가 돈 내나 / 빅테크 로드맵에 있나." 산출물 = 한 페이지. 이게 안 끝나면 코드 금지.
+- **gate를 hook으로 박는다.** 다음 제품의 validation gate를 RESUME PROTOCOL 단계로, 측정값이 들어오기 전까지 다음 phase를 막게. PRODUCT.md 문장으로 두지 마라.
+- **1주차에 한 사람에게 보여준다.** 어머님이든 친구든. ScreenBridge는 이걸 끝내 안 했고 — `STATE.md` 225/228/241이 여전히 🔲 — 그래서 모든 게 가정 위에 섰다.
+- **ScreenBridge 자체:** 더 짓지 마라. 8,064줄로 충분히 짰다. 남은 단 하나의 실험 = 1주 dogfooding(비용: 내 시간, $0)을 돌리거나, 안 돌릴 거면 죽인다. 인프라 polish는 금지.
+
+---
+
+이 글을 쓴 게 배움이 아니다. **진짜 배움은 다음 제품에서 1주차에 사람한테 보여주는 거다.** 그걸 안 하면 이 글도 또 하나의 정교한 회피일 뿐이다. 기록은 여기서 끝나고, 다음은 행동이거나 아무것도 아니다.
